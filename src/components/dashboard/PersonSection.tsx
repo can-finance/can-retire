@@ -1,6 +1,5 @@
-import React from 'react';
 import { FinancialInput } from '../inputs/FinancialInput';
-import type { Person, AccountType } from '../../engine/types';
+import type { Person } from '../../engine/types';
 
 interface PersonSectionProps {
     title: string;
