@@ -3,10 +3,11 @@
 export function calculateEstimatedCPP(
     percentOfMax: number, // 0 to 1
     startAge: number,
-    _taxConstants: any // TaxRates unused for now as we hardcoded max
+    _taxConstants: any, // TaxRates unused for now as we hardcoded max
+    inflationFactor: number = 1.0
 ): number {
     // 2024 Max CPP at 65 is roughly $1364.60/month -> ~$16,375/year
-    const maxAnnualCPP = 16375 * (_taxConstants ? 1.0 : 1.0); // Simplified, but should be indexed if we had factor passed
+    const maxAnnualCPP = 16375 * inflationFactor;
 
     // Adjust for age
     // 65 is standard

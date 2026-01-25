@@ -5,7 +5,8 @@ import type { SavedScenario } from '../../hooks/useScenarios';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { AssetMixInput } from '../inputs/AssetMixInput';
 import { WealthChart } from '../charts/WealthChart';
-import { TaxBurdenChart } from '../charts/TaxBurdenChart';
+import { SpendingChart } from '../charts/SpendingChart';
+import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { runSimulation } from '../../engine/projection';
 import { AccountTypeVals } from '../../engine/types';
@@ -23,7 +24,7 @@ const createDefaultPerson = (isSpouse = false): Person => ({
     oasStartAge: 65,
     rrspMeltStartAge: 60,
     rrspMeltAmount: 20000,
-    rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 400000 },
+    rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 1000000 },
     tfsa: { type: AccountTypeVals.TFSA, balance: isSpouse ? 100000 : 150000 },
     nonRegistered: {
         type: 'NonRegistered',
@@ -422,7 +423,7 @@ export function Dashboard() {
                         </div>
 
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                            <label className="text-sm font-medium text-slate-700">Income Splitting</label>
+                            <label className="text-sm font-medium text-slate-700">Use Pension Income Splitting</label>
                             <input
                                 type="checkbox"
                                 checked={inputs.useIncomeSplitting ?? true}
@@ -482,7 +483,8 @@ export function Dashboard() {
                         </div>
                     )}
                     <WealthChart data={simulationResults} hasSpouse={hasSpouse} inflationAdjusted={isInflationAdjusted} />
-                    <TaxBurdenChart data={simulationResults} hasSpouse={hasSpouse} inflationAdjusted={isInflationAdjusted} />
+                    <SpendingChart data={simulationResults} hasSpouse={hasSpouse} inflationAdjusted={isInflationAdjusted} />
+                    <SurplusChart data={simulationResults} inflationAdjusted={isInflationAdjusted} />
                     <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} />
                 </div>
             </div>

@@ -130,7 +130,8 @@ export function calculateIncomeTax(
     taxableIncome: number,
     province: string,
     inflationFactor: number = 1.0,
-    taxRates: TaxRates = TAX_CONSTANTS
+    taxRates: TaxRates = TAX_CONSTANTS,
+    age: number = 0
 ): number {
     const fedTax = calculateTieredTax(taxableIncome, taxRates.federalBrackets, inflationFactor);
     const provTax = calculateTieredTax(taxableIncome, taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'], inflationFactor);
@@ -143,11 +144,44 @@ export function calculateIncomeTax(
     let totalTax = (fedTax - fedCredits) + (provTax - provCredits);
 
     // Age and Pension Credits (Approximation)
-    // Most Canadian tax software/models use these.
-    // If taxable income is significantly high, we assume some RRSP is pension income.
+
+    // 1. Pension Income Credit (Federal non-refundable)
     if (taxableIncome > 2000 * inflationFactor) {
-        totalTax -= 2000 * inflationFactor * 0.20; // $2k pension credit at ~20% combined rate
+        // Assume eligibility if high enough income in retirement phase
+        // Technically requires pension income source, but RRIF qualifies.
+        totalTax -= 2000 * inflationFactor * 0.20;
     }
+
+    // 2. Age Amount (Federal)
+    // For 2024: Max claim ~$8,790. Reduced by 15% of income > ~$44,325.
+    if (age >= 65) {
+        const maxClaim = 8790 * inflationFactor;
+        const threshold = 44325 * inflationFactor;
+
+        // Reduction is 15% of net income exceeding threshold
+        const reduction = Math.max(0, (taxableIncome - threshold) * 0.15);
+        const claimable = Math.max(0, maxClaim - reduction);
+
+        // Federal credit value
+        totalTax -= claimable * 0.15;
+
+        // Provincial Age Amount (Simplified Approx)
+        // Adding ~5% impact for province
+        totalTax -= claimable * 0.05;
+    }
+
+    // 2. Age Amount (Federal)
+    // For 2024: Max claim $8,790. Reduced by 15% of income > $44,325.
+    // Value: Claim * 0.15.
+    // Applies if Age >= 65.
+    // Note: We need 'age' passed in, or we estimate based on income type? 
+    // The current signature doesn't support 'age'. 
+    // We will assume "Senior" status if Pension Credit was applied? No, 55+ can get pension credit.
+    // For now, we omit Age Amount or require signature update. 
+    // * DECISION *: I will update signature in next step. For now just cleaning up the comment block.
+    // Actually, I'll return the simplified credit block for now to ensure invalid lines are removed/cleaned.
+
+    // TODO: Update signature to support Age Amount properly.
 
     // Ontario Health Premium (Simplified table approximation, indexed)
     if (province === 'ON') {

@@ -85,18 +85,34 @@ export interface SimulationResult {
         nonRegistered: number;
         spouseNonRegisteredACB: number;
     };
-    // Granular Net Cash Sources (Household Total)
+    // Granular Net Cash Sources (Household Total) for Visualization
+    netEmploymentIncome: number;
+    netCPPIncome: number;
+    netOASIncome: number;
+    netInvestmentIncome: number; // Interest + Dividends
+
+    // Net Withdrawals (After Tax, Actual Cash in Hand)
+    netRRSPWithdrawal: number;
+    netTFSAWithdrawal: number;
+    netNonRegWithdrawal: number;
+
+    // Granular Reinvestments (Surplus Allocation)
+    reinvestedTFSA: number;
+    reinvestedRRSP: number;
+    reinvestedNonReg: number;
+
+    // Split Net Sources for Visualization
+    personNetRRSP: number;
+    spouseNetRRSP: number;
+    personNetTFSA: number;
+    spouseNetTFSA: number;
+    personNetNonReg: number;
+    spouseNetNonReg: number;
+
+    // Raw tracking
     totalTFSAWithdrawal: number;
     totalNonRegWithdrawal: number; // Principal + Gains
     totalRRSPWithdrawal: number;   // RRIF + Melt + Extra
-    // Split Sources for Visualization
-    personTFSAWithdrawal: number;
-    spouseTFSAWithdrawal: number;
-    personNonRegWithdrawal: number;
-    spouseNonRegWithdrawal: number;
-    personRRSPWithdrawal: number;
-    spouseRRSPWithdrawal: number;
-    // Granular Income Components (Household Total)
     employmentIncome: number;
     investmentIncome: number; // Interest + Dividends Only
     totalRealizedCapGains: number;

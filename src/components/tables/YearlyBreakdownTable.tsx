@@ -35,9 +35,9 @@ const getColumns = (hasSpouse: boolean) => {
 
     const incomeColumns = [
         { key: 'total', label: 'Total Assets', tooltip: 'Sum of all account balances (yours + spouse if applicable)', align: 'right' },
-        { key: 'cpp', label: 'CPP', tooltip: 'Combined Canada Pension Plan benefits. Starts at your CPP start age (default 65).', align: 'right', color: 'blue' },
-        { key: 'oas', label: 'OAS', tooltip: 'Combined Old Age Security benefits. Starts at age 65. Subject to clawback if income exceeds threshold.', align: 'right', color: 'blue' },
-        { key: 'netIncome', label: 'Total Spend', tooltip: 'Household cash available for spending after taxes (Net Cash Flow)', align: 'right', color: 'green' },
+        { key: 'netCPP', label: 'Net CPP', tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).', align: 'right', color: 'blue' },
+        { key: 'netOAS', label: 'Net OAS', tooltip: 'Combined Old Age Security benefits (Net of Tax).', align: 'right', color: 'blue' },
+        { key: 'netIncome', label: 'Total Spend', tooltip: 'Household cash available for spending after taxes (Target Spend)', align: 'right', color: 'green' },
         { key: 'taxPaid', label: 'Tax Paid', tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback', align: 'right', color: 'red' }
     ];
 
@@ -92,8 +92,8 @@ export function YearlyBreakdownTable({ data, hasSpouse = false }: YearlyBreakdow
                                     </>
                                 )}
                                 <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(row.totalAssets)}</td>
-                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(row.cppIncome)}</td>
-                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(row.oasIncome)}</td>
+                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(row.netCPPIncome)}</td>
+                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(row.netOASIncome)}</td>
                                 <td className="px-3 py-2 text-right text-green-600">{formatCurrency(row.netIncome)}</td>
                                 <td className="px-3 py-2 text-right text-red-500">{formatCurrency(row.taxPaid)}</td>
                             </tr>

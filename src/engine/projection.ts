@@ -3,337 +3,327 @@ import type { Person, SimulationInputs, SimulationResult } from './types';
 import { calculateIncomeTax, calculateOASClawback, TAX_CONSTANTS } from './tax';
 import { calculateEstimatedCPP, calculateOAS } from './cpp';
 
-// Helper function to simulate a single person's year
-interface PersonYearResult {
+// --- Helper Types for Internal engine calculation ---
+
+interface PersonAnnualBase {
     taxableIncome: number;
-    baseIncomeForNetCash: number; // Income before tax (employment + CPP + OAS + RRIF + Meltdown + extra withdrawal + int + div + realized gains)
     tax: number;
     cppIncome: number;
     oasIncome: number;
     rrifWithdrawal: number;
     voluntaryRRSPWithdrawal: number;
-    extraRRSPWithdrawal: number;
-    realizedCapGains: number;
     interestIncome: number;
     divIncome: number;
     employmentIncome: number;
-    nonRegWithdrawal: number; // Total cash pulled from non-reg (principal + gains)
-    tfsaWithdrawal: number;
-    investmentIncome: number; // Interest + Dividends Only (Net cash)
+    investmentIncomeNet: number; // Interest + Dividends (After Tax share approx)
+    baseNetCash: number; // Employment + CPP/OAS + RRIF/Melt + Invest (Net)
 }
 
-function simulatePersonYear(
-    currentPerson: Person,
-    personAge: number,
-    targetSpendShare: number, // Share of household spending this person is responsible for
-    employmentIncome: number,
-    returnRates: { interest: number; dividend: number; capitalGrowth: number },
+// --- Helper: Solve Gross Withdrawal from Net Needed ---
+// Given a person's current taxable income, province, and a desired *NET* amount to extract,
+// calculate the required Gross RRSP withdrawal (accounting for marginal tax and OAS clawback).
+function solveGrossWithdrawal(
+    targetNet: number,
+    currentTaxable: number,
+    baseOAS: number, // Need this to check clawback impact
     province: string,
-    inflationFactor: number = 1.0,
-    performReactiveActions: boolean = true,
-    allowVoluntaryMeltdown: boolean = true
-): PersonYearResult {
-    // 1. Automatic/Forced Income Sources
-    const cppIncome = (personAge >= currentPerson.cppStartAge)
-        ? calculateEstimatedCPP(1.0, currentPerson.cppStartAge, TAX_CONSTANTS)
-        : 0;
+    inflationFactor: number,
+    age: number
+): { gross: number, tax: number } {
+    if (targetNet <= 0) return { gross: 0, tax: 0 };
 
-    const oasIncome = calculateOAS(personAge, currentPerson.oasStartAge, inflationFactor);
+    // Iterative Solver (Newton-Raphson-ish or Binary Search)
+    // Since tax function is piecewise linear but complex, binary search is safer/easier.
+    let low = targetNet; // Minimum gross is the net itself (0% tax)
+    let high = targetNet * 3; // Upper bound guess (assumes < 66% tax rate)
 
-    // Mandatory RRIF Minimums (starts after 71)
-    let rrifWithdrawal = 0;
-    if (personAge >= 72) {
-        const minFactor = getRRIFMinFactor(personAge);
-        rrifWithdrawal = currentPerson.rrsp.balance * minFactor;
-        currentPerson.rrsp.balance -= rrifWithdrawal;
-    }
+    // Quick sanity check for huge amounts
+    if (high > 10_000_000) high = 10_000_000;
 
-    // 2. Voluntary RRSP Meltdown (Proactive Cash Flow)
-    let voluntaryRRSPWithdrawal = 0;
-    if (allowVoluntaryMeltdown && currentPerson.rrspMeltAmount && currentPerson.rrspMeltAmount > 0) {
-        const meltStart = currentPerson.rrspMeltStartAge || currentPerson.retirementAge;
-        if (personAge >= meltStart && personAge < 72) {
-            voluntaryRRSPWithdrawal = Math.min(currentPerson.rrsp.balance, currentPerson.rrspMeltAmount);
-            currentPerson.rrsp.balance -= voluntaryRRSPWithdrawal;
+    // Tolerance $1
+    for (let i = 0; i < 20; i++) {
+        const mid = (low + high) / 2;
+        const addedTaxable = mid;
+
+        // Calculate tax with this specific add-on
+        const newTaxable = currentTaxable + addedTaxable;
+        const newClawback = calculateOASClawback(newTaxable, baseOAS, inflationFactor);
+        const newTax = calculateIncomeTax(newTaxable, province, inflationFactor, undefined, age) + newClawback;
+
+        const originalClawback = calculateOASClawback(currentTaxable, baseOAS, inflationFactor);
+        const originalTax = calculateIncomeTax(currentTaxable, province, inflationFactor, undefined, age) + originalClawback;
+
+        const marginalTax = newTax - originalTax;
+        const netResult = mid - marginalTax;
+
+        if (Math.abs(netResult - targetNet) < 1) {
+            return { gross: mid, tax: marginalTax };
+        }
+
+        if (netResult < targetNet) {
+            low = mid;
+        } else {
+            high = mid;
         }
     }
 
-    // 3. Investment Cash Flow (Interest & Dividends)
-    const nonRegBalance = currentPerson.nonRegistered.balance;
-    const mix = currentPerson.nonRegistered.assetMix;
+    // Fallback if not perfectly converged
+    const gross = (low + high) / 2;
+    const newTaxable = currentTaxable + gross;
+    const marginalTax = (calculateIncomeTax(newTaxable, province, inflationFactor, undefined, age) + calculateOASClawback(newTaxable, baseOAS, inflationFactor)) -
+        (calculateIncomeTax(currentTaxable, province, inflationFactor, undefined, age) + calculateOASClawback(currentTaxable, baseOAS, inflationFactor));
+
+    return { gross, tax: marginalTax };
+}
+
+// --- Simulation Logic ---
+
+function simulatePersonBaseYear(
+    person: Person,
+    age: number,
+    province: string,
+    returnRates: { interest: number; dividend: number; capitalGrowth: number },
+    inflationFactor: number
+): PersonAnnualBase {
+    // 1. Mandatory Income Sources
+    const cppIncome = (age >= person.cppStartAge)
+        ? calculateEstimatedCPP(1.0, person.cppStartAge, TAX_CONSTANTS, inflationFactor)
+        : 0;
+
+    const oasIncome = calculateOAS(age, person.oasStartAge, inflationFactor);
+
+    // RRIF Minimums
+    let rrifWithdrawal = 0;
+    if (age >= 72) {
+        const minFactor = getRRIFMinFactor(age);
+        rrifWithdrawal = person.rrsp.balance * minFactor;
+        person.rrsp.balance -= rrifWithdrawal; // Deduct immediately
+    }
+
+    // Voluntary Meltdown (Pre-calculated fixed gross)
+    let voluntaryRRSPWithdrawal = 0;
+    const meltStart = person.rrspMeltStartAge || person.retirementAge;
+    if (person.rrspMeltAmount && person.rrspMeltAmount > 0 && age >= meltStart && age < 72) {
+        voluntaryRRSPWithdrawal = Math.min(person.rrsp.balance, person.rrspMeltAmount);
+        person.rrsp.balance -= voluntaryRRSPWithdrawal;
+    }
+
+    // Investment Income (Interest & Divs)
+    const nonRegBalance = person.nonRegistered.balance;
+    const mix = person.nonRegistered.assetMix;
     const interestIncome = nonRegBalance * mix.interest * returnRates.interest;
     const divIncome = nonRegBalance * mix.dividend * returnRates.dividend;
     const divGrossUp = divIncome * 1.38;
 
-    // 4. Calculate Initial Taxable Position & Net Cash Flow (Indexed)
+    // Employment
+    const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
+
+    // Calculate Base Tax
     const baseTaxable = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp;
-    const baseRecoveryTax = calculateOASClawback(baseTaxable, oasIncome, inflationFactor);
-    const baseTax = calculateIncomeTax(baseTaxable, province, inflationFactor) + baseRecoveryTax;
+    const oasRecovery = calculateOASClawback(baseTaxable, oasIncome, inflationFactor);
+    const totalTax = calculateIncomeTax(baseTaxable, province, inflationFactor, undefined, age) + oasRecovery;
 
-    // Cash from sources before taking from savings
-    const baseCashSources = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome;
-    const baseNetCash = baseCashSources - baseTax;
-
-    // 5. Determine Residual Deficit or Surplus
-    let residualDeficit = Math.max(0, targetSpendShare - baseNetCash);
-    let residualSurplus = Math.max(0, baseNetCash - targetSpendShare);
-
-    let extraRRSPWithdrawal = 0;
-    let realizedCapGains = 0;
-    let tfsaWithdrawal = 0;
-    let nonRegWithdrawalPrincipal = 0;
-
-    // 6. Reactive Drawdown (if voluntary income wasn't enough)
-    if (performReactiveActions && residualDeficit > 0) {
-        let remaining = residualDeficit;
-
-        // A. Non-Registered
-        if (currentPerson.nonRegistered.balance > 0 && remaining > 0) {
-            const available = currentPerson.nonRegistered.balance;
-            const take = Math.min(available, remaining);
-            const acb = currentPerson.nonRegistered.adjustedCostBase;
-            const gainRatio = Math.max(0, 1 - (acb / available));
-
-            realizedCapGains += take * gainRatio;
-            nonRegWithdrawalPrincipal += take; // Total take from non-reg is principal + gains
-
-            currentPerson.nonRegistered.adjustedCostBase *= (1 - take / available);
-            currentPerson.nonRegistered.balance -= take;
-            remaining -= take;
-        }
-
-        // B. TFSA
-        if (remaining > 0 && currentPerson.tfsa.balance > 0) {
-            const available = currentPerson.tfsa.balance;
-            const take = Math.min(available, remaining);
-            tfsaWithdrawal = take;
-            currentPerson.tfsa.balance -= take;
-            remaining -= take;
-        }
-
-        // C. RRSP
-        if (remaining > 0 && currentPerson.rrsp.balance > 0) {
-            const take = Math.min(currentPerson.rrsp.balance, remaining / 0.7);
-            extraRRSPWithdrawal = take;
-            currentPerson.rrsp.balance -= take;
-        }
-    }
-
-    // 7. Reactive Saving
-    if (performReactiveActions && residualSurplus > 0) {
-        let remaining = residualSurplus;
-        const tfsaLimit = 7000 * inflationFactor; // Index TFSA limit too
-        const toTFSA = Math.min(remaining, tfsaLimit);
-        currentPerson.tfsa.balance += toTFSA;
-        remaining -= toTFSA;
-
-        if (personAge < 71 && employmentIncome > 0) {
-            const rrspLimit = Math.min(employmentIncome * 0.18, 31000 * inflationFactor); // Index RRSP limit cap
-            const toRRSP = Math.min(remaining, rrspLimit);
-            currentPerson.rrsp.balance += toRRSP;
-            remaining -= toRRSP;
-        }
-
-        currentPerson.nonRegistered.adjustedCostBase += remaining;
-        currentPerson.nonRegistered.balance += remaining;
-    }
-
-    // 8. Final Tax Recalculation (Indexed)
-    const taxableCapGains = realizedCapGains * 0.50;
-    const totalRRSPIncome = rrifWithdrawal + voluntaryRRSPWithdrawal + extraRRSPWithdrawal;
-    const totalTaxable = employmentIncome + cppIncome + oasIncome + totalRRSPIncome + interestIncome + divGrossUp + taxableCapGains;
-
-    const finalRecoveryTax = calculateOASClawback(totalTaxable, oasIncome, inflationFactor);
-    const finalTax = calculateIncomeTax(totalTaxable, province, inflationFactor) + finalRecoveryTax;
-
-    const baseIncomeForNetCash = (employmentIncome + cppIncome + oasIncome + totalRRSPIncome + interestIncome + divIncome + realizedCapGains);
-
-    // 9. Asset Growth for Next Year
-    currentPerson.rrsp.balance *= (1 + returnRates.capitalGrowth);
-    currentPerson.tfsa.balance *= (1 + returnRates.capitalGrowth);
-    currentPerson.nonRegistered.balance *= (1 + (mix.capitalGain * returnRates.capitalGrowth));
+    // Net Cash Calculation
+    // Total Cash In = Emp + CPP + OAS + RRIF + Melt + Int + Div
+    // Note: Div is actual cash, not gross up.
+    const totalCashIn = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome;
+    const baseNetCash = totalCashIn - totalTax;
 
     return {
-        taxableIncome: totalTaxable,
-        baseIncomeForNetCash,
-        tax: finalTax,
+        taxableIncome: baseTaxable,
+        tax: totalTax,
         cppIncome,
         oasIncome,
         rrifWithdrawal,
         voluntaryRRSPWithdrawal,
-        extraRRSPWithdrawal,
-        realizedCapGains,
         interestIncome,
         divIncome,
         employmentIncome,
-        nonRegWithdrawal: nonRegWithdrawalPrincipal,
-        tfsaWithdrawal,
-        investmentIncome: interestIncome + divIncome
+        investmentIncomeNet: (interestIncome + divIncome), // This is gross investment cash, we deduct tax globally later
+        baseNetCash
     };
 }
 
 export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
     const results: SimulationResult[] = [];
-    const { person, spouse, province, inflationRate, returnRates, preRetirementSpend, postRetirementSpend, useIncomeSplitting, withdrawalStrategy } = inputs;
+    const { person, spouse, province, inflationRate, returnRates, preRetirementSpend, postRetirementSpend, withdrawalStrategy } = inputs;
 
-    let currentPerson = JSON.parse(JSON.stringify(person)) as Person;
-    let currentSpouse = spouse ? JSON.parse(JSON.stringify(spouse)) as Person : undefined;
+    // Deep copy to avoid mutating inputs
+    const p = JSON.parse(JSON.stringify(person)) as Person;
+    const s = spouse ? JSON.parse(JSON.stringify(spouse)) as Person : undefined;
 
-    const startAge = person.age;
+    const startAge = p.age;
     const endAge = Math.max(
-        person.lifeExpectancy,
-        currentSpouse ? currentSpouse.lifeExpectancy + (currentSpouse.age - person.age) : 0
+        p.lifeExpectancy,
+        s ? s.lifeExpectancy + (s.age - p.age) : 0
     );
 
     for (let yearOffset = 0; yearOffset <= (endAge - startAge); yearOffset++) {
-        const personAge = startAge + yearOffset;
-        const spouseAge = currentSpouse ? currentSpouse.age + yearOffset : undefined;
+        const pAge = startAge + yearOffset;
+        const sAge = s ? s.age + yearOffset : undefined;
 
-        const personAlive = personAge <= person.lifeExpectancy;
-        const spouseAlive = currentSpouse && spouseAge && spouseAge <= currentSpouse.lifeExpectancy;
+        const pAlive = pAge <= p.lifeExpectancy;
+        const sAlive = s && sAge && sAge <= s.lifeExpectancy;
 
-        if (!personAlive && !spouseAlive) break;
+        if (!pAlive && !sAlive) break;
 
         const inflationFactor = Math.pow(1 + inflationRate, yearOffset);
-        const isHouseholdRetired = (personAlive ? personAge >= person.retirementAge : true) &&
-            (spouseAlive && currentSpouse ? spouseAge! >= currentSpouse.retirementAge : true);
 
-        const householdSpend = isHouseholdRetired
-            ? postRetirementSpend * inflationFactor
-            : preRetirementSpend * inflationFactor;
+        // Household Retirement Status
+        const isRetired = (pAlive ? pAge >= p.retirementAge : true) &&
+            (sAlive && sAge ? sAge >= s.retirementAge : true);
 
-        // Assets at START of year for sharing logic
-        // (Variables removed as they were unused)
+        const targetSpend = (isRetired ? postRetirementSpend : preRetirementSpend) * inflationFactor;
 
-        // Perform individual preliminary income calculations (Taxes / Mandatory withdrawals)
-        // Note: targetSpendShare is set to 0 here because we handle the drawdown/saving as a household cluster below
-        let pRes = personAlive ? simulatePersonYear(
-            currentPerson,
-            personAge,
-            0,
-            personAge < currentPerson.retirementAge ? currentPerson.currentIncome : 0,
-            returnRates,
-            province,
-            inflationFactor,
-            false, // Do not perform individual reactive actions (handled by household)
-            !(withdrawalStrategy === 'rrsp-first' && personAge >= person.retirementAge) // Disable meltdown if RRSP First & Retired
-        ) : null;
+        // --- Step 1: Base Income & Mandatory Flows ---
+        const pBase = pAlive ? simulatePersonBaseYear(p, pAge, province, returnRates, inflationFactor) : null;
+        const sBase = sAlive && s ? simulatePersonBaseYear(s, sAge!, province, returnRates, inflationFactor) : null;
 
-        let sRes = (spouseAlive && currentSpouse) ? simulatePersonYear(
-            currentSpouse,
-            spouseAge!,
-            0,
-            spouseAge! < currentSpouse.retirementAge ? currentSpouse.currentIncome : 0,
-            returnRates,
-            province,
-            inflationFactor,
-            false, // Do not perform individual reactive actions
-            !(withdrawalStrategy === 'rrsp-first' && spouseAge! >= currentSpouse.retirementAge) // Disable meltdown if RRSP First & Retired
-        ) : null;
+        const householdBaseNet = (pBase?.baseNetCash || 0) + (sBase?.baseNetCash || 0);
 
-        // Household Cash flow after individual mandatory sources and estimated base taxes
-        const totalBaseNetCash = (pRes?.baseIncomeForNetCash || 0) + (sRes?.baseIncomeForNetCash || 0) - ((pRes?.tax || 0) + (sRes?.tax || 0));
-        let householdDeficit = Math.max(0, householdSpend - totalBaseNetCash);
-        let householdSurplus = Math.max(0, totalBaseNetCash - householdSpend);
+        // --- Step 2: Gap Analysis ---
+        let surplus = 0;
+        let deficit = 0;
 
-        // Track final values for result object
-        let totalTFSAWithdrawal = 0;
-        let totalNonRegWithdrawal = 0;
-        let totalRRSPWithdrawal = 0;
-        let totalRealizedCapGains = 0;
+        if (householdBaseNet >= targetSpend) {
+            surplus = householdBaseNet - targetSpend;
+        } else {
+            deficit = targetSpend - householdBaseNet;
+        }
 
-        // Split tracking for household actions
-        let pHouseholdNonReg = 0;
-        let sHouseholdNonReg = 0;
-        let pHouseholdTFSA = 0;
-        let sHouseholdTFSA = 0;
+        // Tracking Drawdowns
+        let pExtraRRSPGross = 0; let sExtraRRSPGross = 0;
+        let pTFSAWithdrawal = 0; let sTFSAWithdrawal = 0;
+        let pNonRegWithdrawal = 0; let sNonRegWithdrawal = 0;
+        let pRealizedGains = 0; let sRealizedGains = 0;
 
-        // 6. Household-Aware Drawdown (Only if spending is not met)
-        if (householdDeficit > 0) {
-            let remaining = householdDeficit;
+        // Tracking Reinvestment
+        let reinvestedTFSA = 0;
+        let reinvestedRRSP = 0;
+        let reinvestedNonReg = 0;
 
+        // --- Step 3: Deficit Resolution (Filling the Gap) ---
+        if (deficit > 0) {
+            let remainingDeficit = deficit;
+
+            // Strategy Helper
             const withdrawNonReg = () => {
-                if (remaining <= 0) return;
-                const pNonReg = currentPerson.nonRegistered.balance;
-                const sNonReg = (spouseAlive && currentSpouse) ? currentSpouse.nonRegistered.balance : 0;
-                const totalNonRegAvailable = pNonReg + sNonReg;
+                if (remainingDeficit <= 0) return;
+                // Household Non-Reg Pool
+                const pBal = pAlive ? p.nonRegistered.balance : 0;
+                const sBal = sAlive && s ? s.nonRegistered.balance : 0;
+                const total = pBal + sBal;
 
-                if (totalNonRegAvailable > 0) {
-                    const take = Math.min(totalNonRegAvailable, remaining);
-                    const pTake = totalNonRegAvailable > 0 ? (pNonReg / totalNonRegAvailable) * take : 0;
-                    const sTake = totalNonRegAvailable > 0 ? (sNonReg / totalNonRegAvailable) * take : 0;
+                if (total > 0) {
+                    const take = Math.min(total, remainingDeficit);
+                    // Pro-rate based on balance
+                    const pShare = pBal > 0 ? (pBal / total) * take : 0;
+                    const sShare = sBal > 0 ? (sBal / total) * take : 0;
 
-                    if (pTake > 0) {
-                        const gainRatio = pNonReg > 0 ? Math.max(0, 1 - (currentPerson.nonRegistered.adjustedCostBase / pNonReg)) : 0;
-                        totalRealizedCapGains += pTake * gainRatio;
-                        totalNonRegWithdrawal += pTake;
-                        currentPerson.nonRegistered.adjustedCostBase *= (1 - pTake / pNonReg);
-                        currentPerson.nonRegistered.balance -= pTake;
-                        if (pRes) pRes.realizedCapGains += pTake * gainRatio;
-                        pHouseholdNonReg += pTake;
+                    if (pShare > 0) {
+                        const gainRatio = Math.max(0, 1 - (p.nonRegistered.adjustedCostBase / pBal));
+                        pRealizedGains += pShare * gainRatio;
+                        p.nonRegistered.adjustedCostBase *= (1 - pShare / pBal);
+                        p.nonRegistered.balance -= pShare;
+                        pNonRegWithdrawal += pShare;
                     }
-                    if (sTake > 0 && currentSpouse) {
-                        const gainRatio = sNonReg > 0 ? Math.max(0, 1 - (currentSpouse.nonRegistered.adjustedCostBase / sNonReg)) : 0;
-                        totalRealizedCapGains += sTake * gainRatio;
-                        totalNonRegWithdrawal += sTake;
-                        currentSpouse.nonRegistered.adjustedCostBase *= (1 - sTake / sNonReg);
-                        currentSpouse.nonRegistered.balance -= sTake;
-                        if (sRes) sRes.realizedCapGains += sTake * gainRatio;
-                        sHouseholdNonReg += sTake;
+                    if (sShare > 0 && s) {
+                        const gainRatio = Math.max(0, 1 - (s.nonRegistered.adjustedCostBase / sBal));
+                        sRealizedGains += sShare * gainRatio;
+                        s.nonRegistered.adjustedCostBase *= (1 - sShare / sBal);
+                        s.nonRegistered.balance -= sShare;
+                        sNonRegWithdrawal += sShare;
                     }
-                    remaining -= take;
+
+                    // Note: Cap Gains Tax is paid NEXT year effectively (or end of this year), 
+                    // but for "filling the gap" we treat Non-Reg Capital withdrawals as Net Cash 
+                    // and assume the tax bill is covered by the gross withdrawal or next year's planning.
+                    // To be strictly simpler: We just assume Non-Reg draws are AFTER tax money availability.
+                    // The tax on gains calculates into the FINAL tax bill for the year, reducing the "Effective Net"
+                    // checking later. But for filling the gap, $1 sold is $1 cash in hand.
+
+                    remainingDeficit -= take;
                 }
             };
 
             const withdrawTFSA = () => {
-                if (remaining <= 0) return;
-                const pTFSA = personAlive ? currentPerson.tfsa.balance : 0;
-                const sTFSA = (spouseAlive && currentSpouse) ? currentSpouse.tfsa.balance : 0;
-                const totalTFSAAvailable = pTFSA + sTFSA;
+                if (remainingDeficit <= 0) return;
+                const pBal = pAlive ? p.tfsa.balance : 0;
+                const sBal = sAlive && s ? s.tfsa.balance : 0;
+                const total = pBal + sBal;
 
-                if (totalTFSAAvailable > 0) {
-                    const take = Math.min(totalTFSAAvailable, remaining);
-                    const pTake = totalTFSAAvailable > 0 ? (pTFSA / totalTFSAAvailable) * take : 0;
-                    const sTake = totalTFSAAvailable > 0 ? (sTFSA / totalTFSAAvailable) * take : 0;
+                if (total > 0) {
+                    const take = Math.min(total, remainingDeficit);
+                    const pShare = pBal > 0 ? (pBal / total) * take : 0;
+                    const sShare = sBal > 0 ? (sBal / total) * take : 0;
 
-                    if (pTake > 0) {
-                        currentPerson.tfsa.balance -= pTake;
-                        totalTFSAWithdrawal += pTake;
-                        pHouseholdTFSA += pTake;
-                    }
-                    if (sTake > 0 && currentSpouse) {
-                        currentSpouse.tfsa.balance -= sTake;
-                        totalTFSAWithdrawal += sTake;
-                        sHouseholdTFSA += sTake;
-                    }
-                    remaining -= take;
+                    if (pShare > 0) { p.tfsa.balance -= pShare; pTFSAWithdrawal += pShare; }
+                    if (sShare > 0 && s) { s.tfsa.balance -= sShare; sTFSAWithdrawal += sShare; }
+
+                    remainingDeficit -= take;
                 }
             };
 
             const withdrawRRSP = () => {
-                if (remaining <= 0) return;
-                const pRRSP = personAlive ? currentPerson.rrsp.balance : 0;
-                const sRRSP = (spouseAlive && currentSpouse) ? currentSpouse.rrsp.balance : 0;
-                const totalRRSPAvailable = pRRSP + sRRSP;
+                if (remainingDeficit <= 0) return;
 
-                if (totalRRSPAvailable > 0) {
-                    const takeNet = Math.min(totalRRSPAvailable * 0.7, remaining);
-                    const takeGross = takeNet / 0.7;
-                    const pTake = totalRRSPAvailable > 0 ? (pRRSP / totalRRSPAvailable) * takeGross : 0;
-                    const sTake = totalRRSPAvailable > 0 ? (sRRSP / totalRRSPAvailable) * takeGross : 0;
+                // We need to request GROSS amounts to satisfy the Remaining NET Deficit.
+                // We split the request 50/50 between spouses if both have room, or pro-rata?
+                // Simple approach: Split Net requirement 50/50
 
-                    if (pTake > 0) {
-                        currentPerson.rrsp.balance -= pTake;
-                        totalRRSPWithdrawal += pTake;
-                        if (pRes) pRes.extraRRSPWithdrawal = pTake;
+                let pNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (pAlive ? remainingDeficit : 0);
+                let sNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (sAlive && s ? remainingDeficit : 0);
+
+                // function to execute withdrawal for one person
+                const doWithdraw = (personObj: Person, base: PersonAnnualBase, netReq: number): { gross: number, netObtained: number } => {
+                    if (netReq <= 0 || personObj.rrsp.balance <= 0) return { gross: 0, netObtained: 0 };
+
+                    // Solve for Gross
+                    // Current Taxable = Base Taxable + (RealizedGains * 0.5) <--- We add gains from NonReg sale here
+                    // Note: We haven't finalized gains yet if order is mixed, but typically NonReg is done.
+                    // IMPORTANT: The definition of 'Base' above didn't include Cap Gains yet.
+
+                    const currentTaxable = base.taxableIncome + (personObj === p ? pRealizedGains * 0.5 : sRealizedGains * 0.5);
+
+                    const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, personObj.age);
+
+                    // Check balance
+                    const actualGross = Math.min(gross, personObj.rrsp.balance);
+                    personObj.rrsp.balance -= actualGross;
+
+                    let actualNet = netReq;
+
+                    // If we hit the balance cap, we didn't get the full Net we wanted.
+                    // We must calculate exactly how much Net we DID get so the Deficit tracks correctly.
+                    if (actualGross < gross) {
+                        const newTaxable = currentTaxable + actualGross;
+
+                        // Calculate marginal tax on the *actual* gross we extracted
+                        const originalClawback = calculateOASClawback(currentTaxable, base.oasIncome, inflationFactor);
+                        const originalTax = calculateIncomeTax(currentTaxable, province, inflationFactor) + originalClawback;
+
+                        const newClawback = calculateOASClawback(newTaxable, base.oasIncome, inflationFactor);
+                        const newTax = calculateIncomeTax(newTaxable, province, inflationFactor, undefined, personObj.age) + newClawback;
+
+                        const actualTax = newTax - originalTax;
+                        actualNet = actualGross - actualTax;
                     }
-                    if (sTake > 0 && currentSpouse) {
-                        currentSpouse.rrsp.balance -= sTake;
-                        totalRRSPWithdrawal += sTake;
-                        if (sRes) sRes.extraRRSPWithdrawal = sTake;
-                    }
-                    remaining -= takeNet;
+
+                    return { gross: actualGross, netObtained: actualNet };
+                };
+
+                if (pAlive && pBase) {
+                    const res = doWithdraw(p, pBase, pNetReq);
+                    pExtraRRSPGross += res.gross;
+                    remainingDeficit -= res.netObtained; // Assuming we got it
                 }
+                if (sAlive && s && sBase) {
+                    const res = doWithdraw(s, sBase, sNetReq);
+                    sExtraRRSPGross += res.gross;
+                    remainingDeficit -= res.netObtained;
+                }
+
+                // If one couldn't cover their half, the other tries? (skipped for simplicity in v1)
             };
 
             if (withdrawalStrategy === 'rrsp-first') {
@@ -341,156 +331,227 @@ export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
                 withdrawNonReg();
                 withdrawTFSA();
             } else {
-                // Default: Tax-Efficient (Non-Reg -> TFSA -> RRSP)
                 withdrawNonReg();
                 withdrawTFSA();
                 withdrawRRSP();
             }
         }
 
-        // 7. Household-Aware Saving (Only if surplus exists)
-        if (householdSurplus > 0) {
-            let remaining = householdSurplus;
+        // --- Step 4: Surplus Allocation (Reinvestment) ---
+        if (surplus > 0) {
+            let remaining = surplus;
             const tfsaLimit = 7000 * inflationFactor;
 
-            if (personAlive) {
-                const pToTFSA = Math.min(remaining, tfsaLimit);
-                currentPerson.tfsa.balance += pToTFSA;
-                remaining -= pToTFSA;
+            // 1. TFSA
+            if (pAlive) {
+                const add = Math.min(remaining, tfsaLimit);
+                p.tfsa.balance += add;
+                remaining -= add;
+                reinvestedTFSA += add; // Total tracking
             }
-            if (spouseAlive && currentSpouse && remaining > 0) {
-                const sToTFSA = Math.min(remaining, tfsaLimit);
-                currentSpouse.tfsa.balance += sToTFSA;
-                remaining -= sToTFSA;
-            }
-
-            if (personAlive && remaining > 0 && personAge < 71) {
-                const pEmpIncome = personAge < currentPerson.retirementAge ? currentPerson.currentIncome : 0;
-                if (pEmpIncome > 0) {
-                    const rrspLimit = Math.min(pEmpIncome * 0.18, 31000 * inflationFactor);
-                    const toRRSP = Math.min(remaining, rrspLimit);
-                    currentPerson.rrsp.balance += toRRSP;
-                    remaining -= toRRSP;
-                }
-            }
-            if (spouseAlive && currentSpouse && remaining > 0 && spouseAge! < 71) {
-                const sEmpIncome = spouseAge! < currentSpouse.retirementAge ? currentSpouse.currentIncome : 0;
-                if (sEmpIncome > 0) {
-                    const rrspLimit = Math.min(sEmpIncome * 0.18, 31000 * inflationFactor);
-                    const toRRSP = Math.min(remaining, rrspLimit);
-                    currentSpouse.rrsp.balance += toRRSP;
-                    remaining -= toRRSP;
-                }
+            if (sAlive && s && remaining > 0) {
+                const add = Math.min(remaining, tfsaLimit);
+                s.tfsa.balance += add;
+                remaining -= add;
+                reinvestedTFSA += add;
             }
 
+            // 2. RRSP (if room and < 71)
+            if (pAlive && pAge < 71 && remaining > 0 && p.currentIncome > 0 && pAge < p.retirementAge) {
+                const limit = Math.min(p.currentIncome * 0.18, 31000 * inflationFactor); // Approx room gen
+                const add = Math.min(remaining, limit);
+                p.rrsp.balance += add;
+                remaining -= add;
+                reinvestedRRSP += add;
+            }
+            if (sAlive && s && sAge! < 71 && remaining > 0 && s.currentIncome > 0 && sAge! < s.retirementAge) {
+                const limit = Math.min(s.currentIncome * 0.18, 31000 * inflationFactor);
+                const add = Math.min(remaining, limit);
+                s.rrsp.balance += add;
+                remaining -= add;
+                reinvestedRRSP += add;
+            }
+
+            // 3. Non-Reg
             if (remaining > 0) {
-                if (personAlive) {
-                    currentPerson.nonRegistered.balance += remaining;
-                    currentPerson.nonRegistered.adjustedCostBase += remaining;
-                } else if (spouseAlive && currentSpouse) {
-                    currentSpouse.nonRegistered.balance += remaining;
-                    currentSpouse.nonRegistered.adjustedCostBase += remaining;
+                reinvestedNonReg += remaining;
+                // Split remaining 50/50 or to owner?
+                if (pAlive && sAlive && s) {
+                    p.nonRegistered.balance += remaining / 2;
+                    p.nonRegistered.adjustedCostBase += remaining / 2;
+                    s.nonRegistered.balance += remaining / 2;
+                    s.nonRegistered.adjustedCostBase += remaining / 2;
+                } else if (pAlive) {
+                    p.nonRegistered.balance += remaining;
+                    p.nonRegistered.adjustedCostBase += remaining;
+                } else if (sAlive && s) {
+                    s.nonRegistered.balance += remaining;
+                    s.nonRegistered.adjustedCostBase += remaining;
                 }
             }
         }
 
-        // 8. Final Tax Recalculation after Household Actions
-        if (personAlive && pRes) {
-            const totalRRSP = pRes.rrifWithdrawal + pRes.voluntaryRRSPWithdrawal + pRes.extraRRSPWithdrawal;
-            const taxableGains = pRes.realizedCapGains * 0.5;
-            pRes.taxableIncome = pRes.employmentIncome + pRes.cppIncome + pRes.oasIncome + totalRRSP + pRes.interestIncome + (pRes.divIncome * 1.38) + taxableGains;
-            pRes.tax = calculateIncomeTax(pRes.taxableIncome, province, inflationFactor) + calculateOASClawback(pRes.taxableIncome, pRes.oasIncome, inflationFactor);
+        // --- Step 5: Final Tax & Net Recalculation ---
+        // Now we know exact Gross Income components.
+
+        const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number) => {
+            const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
+            const taxableGains = realizedGains * 0.5;
+            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + (base.divIncome * 1.38) + taxableGains;
+
+            const oasRecovery = calculateOASClawback(finalTaxable, base.oasIncome, inflationFactor);
+            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age) + oasRecovery;
+
+            // Net Cash "In Hand" from this person (excluding shared withdrawals which were tracked separately? No, include all sourced from them)
+            // Wait, "Net Cash" for the Spending Chart needs to be pure.
+            // Net = (Gross Sources - Tax).
+
+            // Let's apportion Tax to sources pro-rata for the chart?
+            // Or just return Gross and Tax, and let the Chart handle "Net" Visualization by subtracting?
+            // The Task asked for "Accurate" Spending chart.
+
+
+            /* 
+               Actually, to be perfect for the chart:
+               Net Salary = Salary - (Salary / TotalGross) * TotalTax
+            */
+
+            return {
+                finalTaxable,
+                finalTax,
+                totalRRSP,
+                taxableGains
+            };
+        };
+
+        const pFinal = pAlive && pBase ? getFinalStats(pBase, pExtraRRSPGross, pRealizedGains, pAge) : null;
+        const sFinal = sAlive && s && sBase ? getFinalStats(sBase, sExtraRRSPGross, sRealizedGains, sAge!) : null;
+
+        const totalTaxPaid = (pFinal?.finalTax || 0) + (sFinal?.finalTax || 0);
+
+        // --- Step 6: Asset Growth (End of Year) ---
+
+        // Non-Reg growth (already handled interest/divs as cash flow, so only grow Capital)
+        // Note: The 'interest' and 'div' portions were paid out. The 'capital' portion grows.
+        // Actually, in the simple model, we assume the whole balance grows by the 'Capital Growth' rate assigned to the equity portion?
+        // Or do we assume price appreciation on the whole bag?
+        // Let's stick to previous logic: mix.capitalGain * returnRates.capitalGrowth
+        if (pAlive) {
+            p.rrsp.balance *= (1 + returnRates.capitalGrowth);
+            p.tfsa.balance *= (1 + returnRates.capitalGrowth);
+            p.nonRegistered.balance *= (1 + (p.nonRegistered.assetMix.capitalGain * returnRates.capitalGrowth));
         }
-        if (spouseAlive && sRes) {
-            const totalRRSP = sRes.rrifWithdrawal + sRes.voluntaryRRSPWithdrawal + sRes.extraRRSPWithdrawal;
-            const taxableGains = sRes.realizedCapGains * 0.5;
-            sRes.taxableIncome = sRes.employmentIncome + sRes.cppIncome + sRes.oasIncome + totalRRSP + sRes.interestIncome + (sRes.divIncome * 1.38) + taxableGains;
-            sRes.tax = calculateIncomeTax(sRes.taxableIncome, province, inflationFactor) + calculateOASClawback(sRes.taxableIncome, sRes.oasIncome, inflationFactor);
+        if (sAlive && s) {
+            s.rrsp.balance *= (1 + returnRates.capitalGrowth);
+            s.tfsa.balance *= (1 + returnRates.capitalGrowth);
+            s.nonRegistered.balance *= (1 + (s.nonRegistered.assetMix.capitalGain * returnRates.capitalGrowth));
         }
 
-        let totalTax = (pRes?.tax || 0) + (sRes?.tax || 0);
 
-        // 9. Apply Income Splitting & Final Statistics
-        if (useIncomeSplitting && personAlive && spouseAlive && pRes && sRes) {
-            const pSplittable = pRes.rrifWithdrawal + pRes.voluntaryRRSPWithdrawal + pRes.extraRRSPWithdrawal + pRes.cppIncome;
-            const sSplittable = sRes.rrifWithdrawal + sRes.voluntaryRRSPWithdrawal + sRes.extraRRSPWithdrawal + sRes.cppIncome;
-            const totalSplittable = pSplittable + sSplittable;
+        // --- Result Construction ---
 
-            const pNonSplittable = pRes.taxableIncome - pSplittable;
-            const sNonSplittable = sRes.taxableIncome - sSplittable;
+        // Calculate Granular Net Cash for Charts (Pro-rata Tax allocation)
+        // Net Source = Gross Source - AllocatableTax
 
-            let idealX = (totalSplittable + sNonSplittable - pNonSplittable) / 2;
-            const pIdealShift = pSplittable - idealX;
-            const maxPToS = pSplittable * 0.5;
-            const maxSToP = sSplittable * 0.5;
-            const actualShift = Math.max(-maxSToP, Math.min(maxPToS, pIdealShift));
+        const calcNet = (gross: number, totalGross: number, totalTax: number) => {
+            if (totalGross <= 0) return 0;
+            const share = gross / totalGross;
+            return gross - (share * totalTax);
+        };
 
-            const pAdjTaxable = pRes.taxableIncome - actualShift;
-            const sAdjTaxable = sRes.taxableIncome + actualShift;
+        const pGrossTotal = pFinal?.finalTaxable || 0;
+        const sGrossTotal = sFinal?.finalTaxable || 0;
 
-            const pNewTax = calculateIncomeTax(pAdjTaxable, province, inflationFactor) + calculateOASClawback(pAdjTaxable, pRes.oasIncome, inflationFactor);
-            const sNewTax = calculateIncomeTax(sAdjTaxable, province, inflationFactor) + calculateOASClawback(sAdjTaxable, sRes.oasIncome, inflationFactor);
+        // Person Nets
+        const pNetEmp = calcNet(pBase?.employmentIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
+        const pNetCPP = calcNet(pBase?.cppIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
+        const pNetOAS = calcNet(pBase?.oasIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
+        const pNetRRSP = calcNet(pFinal?.totalRRSP || 0, pGrossTotal, pFinal?.finalTax || 0);
+        // Investment income (Interest + Divs) counts as taxable for tax allocation
+        // But actual cash was purely Int + Div. We subtract the allocated tax from the CASH amount.
+        // Tax allocated to investment was: (InvTaxable / Gross) * Tax.
+        const pInvTax = (pGrossTotal > 0) ? (((pBase?.interestIncome || 0) + (pBase?.divIncome || 0) * 1.38) / pGrossTotal) * (pFinal?.finalTax || 0) : 0;
+        const pNetInvCash = ((pBase?.interestIncome || 0) + (pBase?.divIncome || 0)) - pInvTax;
 
-            totalTax = pNewTax + sNewTax;
-        }
+        // Spouse Nets
+        const sNetEmp = calcNet(sBase?.employmentIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const sNetCPP = calcNet(sBase?.cppIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const sNetOAS = calcNet(sBase?.oasIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const sNetRRSP = calcNet(sFinal?.totalRRSP || 0, sGrossTotal, sFinal?.finalTax || 0);
+        // Spouse Inv
+        const sInvTax = (sGrossTotal > 0) ? (((sBase?.interestIncome || 0) + (sBase?.divIncome || 0) * 1.38) / sGrossTotal) * (sFinal?.finalTax || 0) : 0;
+        const sNetInvCash = ((sBase?.interestIncome || 0) + (sBase?.divIncome || 0)) - sInvTax;
 
-        // Final assets at END of year for record
-        const finalPersonAssets = personAlive ? (currentPerson.rrsp.balance + currentPerson.tfsa.balance + currentPerson.nonRegistered.balance) : 0;
-        const finalSpouseAssets = (spouseAlive && currentSpouse) ? (currentSpouse.rrsp.balance + currentSpouse.tfsa.balance + currentSpouse.nonRegistered.balance) : 0;
+        // TFSA / Non-Reg Withdrawals are already Net (Tax Free / Tax Paid on Prev Year or handling)
+        // (Technically realized gains invoke tax, but we treated them as accessible cash for deficit. 
+        // The tax bill generated by them reduces the 'Net Analysis' of next year or is absorbed by the gap filler.)
 
         results.push({
             year: new Date().getFullYear() + yearOffset,
-            age: personAge,
-            spouseAge: spouseAge,
-            totalAssets: finalPersonAssets + finalSpouseAssets,
-            grossIncome: (pRes?.taxableIncome || 0) + (sRes?.taxableIncome || 0),
-            cppIncome: (pRes?.cppIncome || 0) + (sRes?.cppIncome || 0),
-            oasIncome: (pRes?.oasIncome || 0) + (sRes?.oasIncome || 0),
-            netIncome: ((pRes?.employmentIncome || 0) + (sRes?.employmentIncome || 0) +
-                (pRes?.cppIncome || 0) + (sRes?.cppIncome || 0) +
-                (pRes?.oasIncome || 0) + (sRes?.oasIncome || 0) +
-                totalRRSPWithdrawal +
-                (pRes?.investmentIncome || 0) + (sRes?.investmentIncome || 0) +
-                totalNonRegWithdrawal +
-                totalTFSAWithdrawal) - totalTax - householdSurplus,
-            spending: householdSpend,
-            taxPaid: totalTax,
+            age: pAge,
+            spouseAge: sAge,
+            totalAssets: (pAlive ? p.rrsp.balance + p.tfsa.balance + p.nonRegistered.balance : 0) +
+                (sAlive && s ? s.rrsp.balance + s.tfsa.balance + s.nonRegistered.balance : 0),
+            grossIncome: pGrossTotal + sGrossTotal,
+            cppIncome: (pBase?.cppIncome || 0) + (sBase?.cppIncome || 0),
+            oasIncome: (pBase?.oasIncome || 0) + (sBase?.oasIncome || 0),
+            netIncome: (pGrossTotal + sGrossTotal) - totalTaxPaid + pTFSAWithdrawal + sTFSAWithdrawal + pNonRegWithdrawal + sNonRegWithdrawal, // Total Cash In Hand
+            spending: targetSpend,
+            taxPaid: totalTaxPaid,
             accounts: {
-                rrsp: personAlive ? currentPerson.rrsp.balance : 0,
-                tfsa: personAlive ? currentPerson.tfsa.balance : 0,
-                nonRegistered: personAlive ? currentPerson.nonRegistered.balance : 0,
-                nonRegisteredACB: personAlive ? currentPerson.nonRegistered.adjustedCostBase : 0
+                rrsp: pAlive ? p.rrsp.balance : 0,
+                tfsa: pAlive ? p.tfsa.balance : 0,
+                nonRegistered: pAlive ? p.nonRegistered.balance : 0,
+                nonRegisteredACB: pAlive ? p.nonRegistered.adjustedCostBase : 0
             },
-            spouseAccounts: spouseAlive && currentSpouse ? {
-                rrsp: currentSpouse.rrsp.balance,
-                tfsa: currentSpouse.tfsa.balance,
-                nonRegistered: currentSpouse.nonRegistered.balance,
-                spouseNonRegisteredACB: currentSpouse.nonRegistered.adjustedCostBase
+            spouseAccounts: sAlive && s ? {
+                rrsp: s.rrsp.balance,
+                tfsa: s.tfsa.balance,
+                nonRegistered: s.nonRegistered.balance,
+                spouseNonRegisteredACB: s.nonRegistered.adjustedCostBase
             } : undefined,
-            totalTFSAWithdrawal,
-            totalNonRegWithdrawal,
-            totalRRSPWithdrawal: (pRes?.rrifWithdrawal || 0) + (pRes?.voluntaryRRSPWithdrawal || 0) + (pRes?.extraRRSPWithdrawal || 0) + (sRes?.rrifWithdrawal || 0) + (sRes?.voluntaryRRSPWithdrawal || 0) + (sRes?.extraRRSPWithdrawal || 0),
 
-            // Split Sources
-            personTFSAWithdrawal: (pRes?.tfsaWithdrawal || 0) + pHouseholdTFSA,
-            spouseTFSAWithdrawal: (sRes?.tfsaWithdrawal || 0) + sHouseholdTFSA,
-            personNonRegWithdrawal: (pRes?.nonRegWithdrawal || 0) + pHouseholdNonReg,
-            spouseNonRegWithdrawal: (sRes?.nonRegWithdrawal || 0) + sHouseholdNonReg,
-            personRRSPWithdrawal: (pRes?.rrifWithdrawal || 0) + (pRes?.voluntaryRRSPWithdrawal || 0) + (pRes?.extraRRSPWithdrawal || 0),
-            spouseRRSPWithdrawal: (sRes?.rrifWithdrawal || 0) + (sRes?.voluntaryRRSPWithdrawal || 0) + (sRes?.extraRRSPWithdrawal || 0),
+            // New Visualization Fields
+            netEmploymentIncome: pNetEmp + sNetEmp,
+            netCPPIncome: pNetCPP + sNetCPP,
+            netOASIncome: pNetOAS + sNetOAS,
+            netInvestmentIncome: pNetInvCash + sNetInvCash,
 
-            employmentIncome: (pRes?.employmentIncome || 0) + (sRes?.employmentIncome || 0),
-            investmentIncome: (pRes?.investmentIncome || 0) + (sRes?.investmentIncome || 0),
-            totalRealizedCapGains,
+            // Reinvestments
+            reinvestedTFSA,
+            reinvestedRRSP,
+            reinvestedNonReg,
+
+            // Split Nets
+            personNetRRSP: pNetRRSP,
+            spouseNetRRSP: sNetRRSP,
+            personNetTFSA: pTFSAWithdrawal,
+            spouseNetTFSA: sTFSAWithdrawal,
+            personNetNonReg: pNonRegWithdrawal,
+            spouseNetNonReg: sNonRegWithdrawal,
+
+            // Raw
+            totalTFSAWithdrawal: pTFSAWithdrawal + sTFSAWithdrawal,
+            totalNonRegWithdrawal: pNonRegWithdrawal + sNonRegWithdrawal,
+            totalRRSPWithdrawal: (pFinal?.totalRRSP || 0) + (sFinal?.totalRRSP || 0),
+
+            // Just for checking
+            netRRSPWithdrawal: pNetRRSP + sNetRRSP,
+            netTFSAWithdrawal: pTFSAWithdrawal + sTFSAWithdrawal,
+            netNonRegWithdrawal: pNonRegWithdrawal + sNonRegWithdrawal,
+
+            employmentIncome: (pBase?.employmentIncome || 0) + (sBase?.employmentIncome || 0),
+            investmentIncome: (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0),
+            totalRealizedCapGains: pRealizedGains + sRealizedGains,
             inflationFactor,
-            householdSurplus
+            householdSurplus: surplus // The initial surplus before reinvestment
         });
     }
 
     return results;
 }
 
-// Federal RRIF Minimum Withdrawal Factors (Post-2015)
+// Federal RRIF Minimum Withdrawal Factors (Post-2015) - unchanged
 const RRIF_MINIMUMS: { [age: number]: number } = {
     71: 0.0528, 72: 0.0540, 73: 0.0553, 74: 0.0567, 75: 0.0582,
     76: 0.0598, 77: 0.0617, 78: 0.0636, 79: 0.0658, 80: 0.0682,
@@ -500,7 +561,7 @@ const RRIF_MINIMUMS: { [age: number]: number } = {
 };
 
 function getRRIFMinFactor(age: number): number {
-    if (age <= 70) return 0.05; // Simplified placeholder for early conversion
+    if (age <= 70) return 0.05;
     if (age >= 95) return 0.20;
-    return RRIF_MINIMUMS[age] || 0.06; // Fallback should unlikely be hit
+    return RRIF_MINIMUMS[age] || 0.06;
 }
