@@ -1,4 +1,5 @@
 import type { SimulationResult } from '../../engine/types';
+import React from 'react';
 
 interface YearlyBreakdownTableProps {
     data: SimulationResult[];
@@ -55,7 +56,7 @@ function HeaderCell({ label, tooltip, align }: { label: string; tooltip: string;
     );
 }
 
-export function YearlyBreakdownTable({ data, hasSpouse = false }: YearlyBreakdownTableProps) {
+export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ data, hasSpouse = false }: YearlyBreakdownTableProps) {
     const columns = getColumns(hasSpouse);
 
     return (
@@ -103,4 +104,4 @@ export function YearlyBreakdownTable({ data, hasSpouse = false }: YearlyBreakdow
             </div>
         </div>
     );
-}
+});

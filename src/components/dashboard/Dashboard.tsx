@@ -14,6 +14,7 @@ import type { Person, SimulationInputs, NonRegisteredAccount } from '../../engin
 import { calculateIncomeTax } from '../../engine/tax';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
+import { ScenarioManager } from './ScenarioManager';
 
 const createDefaultPerson = (isSpouse = false): Person => ({
     age: isSpouse ? 45 : 48,
@@ -54,7 +55,6 @@ const INITIAL_INPUTS: SimulationInputs = {
 export function Dashboard() {
     const [inputs, setInputs] = usePersistentState<SimulationInputs>('retirement_sim_v2', INITIAL_INPUTS);
     const { scenarios, saveScenario, updateScenario, deleteScenario } = useScenarios();
-    const [newScenarioName, setNewScenarioName] = useState('');
     const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
     const [hasSpouse, setHasSpouse] = useState(!!inputs.spouse);
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
@@ -109,23 +109,21 @@ export function Dashboard() {
         }
     };
 
-    const handleSaveScenario = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newScenarioName.trim()) return;
-        saveScenario(newScenarioName, inputs);
-        setNewScenarioName('');
+    const handleSaveScenario = (name: string) => {
+        saveScenario(name, inputs);
+        alert("Scenario saved!");
     };
 
     const loadScenario = (savedScenario: SavedScenario) => {
         setInputs(savedScenario.inputs);
         setHasSpouse(!!savedScenario.inputs.spouse);
         setActiveScenarioId(savedScenario.id);
-        setNewScenarioName(savedScenario.name);
     };
 
     const handleUpdateScenario = () => {
         if (activeScenarioId) {
             updateScenario(activeScenarioId, inputs);
+            alert("Scenario updated!");
         }
     };
 
@@ -133,7 +131,13 @@ export function Dashboard() {
         setInputs(INITIAL_INPUTS);
         setHasSpouse(!!INITIAL_INPUTS.spouse);
         setActiveScenarioId(null);
-        setNewScenarioName('');
+    };
+
+    const handleImport = (newInputs: SimulationInputs) => {
+        setInputs(newInputs);
+        setHasSpouse(!!newInputs.spouse);
+        setActiveScenarioId(null);
+        alert("Scenario loaded successfully!");
     };
 
 
@@ -143,32 +147,40 @@ export function Dashboard() {
         const lastYear = simulationResults[simulationResults.length - 1];
         const retirementResults = simulationResults.filter(r => r.age >= inputs.person.retirementAge);
 
-        const annualTaxRetirement = retirementResults.reduce((acc, curr) => acc + curr.taxPaid, 0);
-        const totalSpend = simulationResults.reduce((acc, curr) => acc + curr.spending, 0);
-        const totalRetirementIncome = retirementResults.reduce((acc, curr) => acc + curr.grossIncome, 0);
+        // Inflation adjustment helper
+        const adj = (val: number, factor: number) => isInflationAdjusted ? val / factor : val;
 
-        const terminalIncome =
+        const annualTaxRetirement = retirementResults.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0);
+        const totalSpend = simulationResults.reduce((acc, curr) => acc + adj(curr.spending, curr.inflationFactor), 0);
+        const totalRetirementIncome = retirementResults.reduce((acc, curr) => acc + adj(curr.grossIncome, curr.inflationFactor), 0);
+
+        // Terminal income is calculated at the end (death), so use lastYear's factor
+        const rawTerminalIncome =
             lastYear.accounts.rrsp +
             (lastYear.spouseAccounts?.rrsp || 0) +
             (Math.max(0, lastYear.accounts.nonRegistered - lastYear.accounts.nonRegisteredACB) * 0.5) +
             (lastYear.spouseAccounts ? Math.max(0, lastYear.spouseAccounts.nonRegistered - lastYear.spouseAccounts.spouseNonRegisteredACB) * 0.5 : 0);
 
-        const estateTax = calculateIncomeTax(terminalIncome, inputs.province);
-        const totalTaxPlusEstate = annualTaxRetirement + estateTax;
+        const estateTax = calculateIncomeTax(rawTerminalIncome, inputs.province); // Tax is calculated on nominal amount
+
+        // Convert final estate values to real dollars if needed
+        const estateValue = adj(lastYear.totalAssets, lastYear.inflationFactor);
+        const adjustedEstateTax = adj(estateTax, lastYear.inflationFactor);
+
+        const totalTaxPlusEstate = annualTaxRetirement + adjustedEstateTax;
 
         const effectiveTaxRateRetirement = totalRetirementIncome > 0 ? (annualTaxRetirement / totalRetirementIncome) * 100 : 0;
         const outOfMoneyYear = simulationResults.find(r => r.totalAssets < 1000 && r.age >= inputs.person.retirementAge);
         const outOfMoneyAge = outOfMoneyYear ? outOfMoneyYear.age : null;
 
-        const estateValue = lastYear.totalAssets;
-        const effectiveTaxRateEstate = estateValue > 0 ? (estateTax / estateValue) * 100 : 0;
+        const effectiveTaxRateEstate = estateValue > 0 ? (adjustedEstateTax / estateValue) * 100 : 0;
         const totalEffectiveTaxRate = (totalRetirementIncome + estateValue) > 0 ? (totalTaxPlusEstate / (totalRetirementIncome + estateValue)) * 100 : 0;
 
         return {
-            nwRetirement: atRetirement ? atRetirement.totalAssets : 0,
+            nwRetirement: atRetirement ? adj(atRetirement.totalAssets, atRetirement.inflationFactor) : 0,
             estate: estateValue,
             annualTaxRetirement,
-            estateTax,
+            estateTax: adjustedEstateTax,
             totalTaxPlusEstate,
             totalSpend,
             totalRetirementIncome,
@@ -177,7 +189,7 @@ export function Dashboard() {
             totalEffectiveTaxRate,
             outOfMoneyAge
         };
-    }, [simulationResults, inputs.person.retirementAge, inputs.province]);
+    }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted]);
 
     return (
         <div className="flex flex-col gap-6">
@@ -188,98 +200,17 @@ export function Dashboard() {
                 <div className="lg:col-span-4 space-y-6">
                     {/* ... existing sidebar ... */}
                     {/* Saved Scenarios */}
-                    <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-4">
-                        <div className="flex items-center justify-between border-b pb-2">
-                            <div className="flex flex-col">
-                                <h2 className="text-xl font-bold text-slate-900 line-clamp-1">
-                                    {activeScenarioId
-                                        ? scenarios.find(s => s.id === activeScenarioId)?.name || 'Scenarios'
-                                        : 'Scenarios'}
-                                </h2>
-                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
-                                    {activeScenarioId ? 'Active Scenario' : ''}
-                                </p>
-                            </div>
-                            <button
-                                onClick={handleCreateNew}
-                                className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200 transition-colors"
-                            >
-                                Reset to Defaults
-                            </button>
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <div className="flex gap-2">
-                                <input
-                                    type="text"
-                                    placeholder="Scenario name..."
-                                    className="flex-1 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none"
-                                    value={newScenarioName}
-                                    onChange={(e) => setNewScenarioName(e.target.value)}
-                                />
-                                {activeScenarioId ? (
-                                    <button
-                                        onClick={handleUpdateScenario}
-                                        className="bg-brand-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors whitespace-nowrap"
-                                    >
-                                        Update
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={handleSaveScenario}
-                                        className="bg-brand-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-brand-700 transition-colors whitespace-nowrap"
-                                    >
-                                        Save
-                                    </button>
-                                )}
-                            </div>
-                            {activeScenarioId && (
-                                <button
-                                    onClick={handleSaveScenario}
-                                    className="text-xs text-slate-400 hover:text-brand-600 text-center transition-colors"
-                                >
-                                    Save as copy instead
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar pt-2 border-t">
-                            {scenarios.length === 0 ? (
-                                <p className="text-xs text-slate-400 italic text-center py-4">No saved scenarios yet.</p>
-                            ) : (
-                                scenarios.map(s => (
-                                    <div
-                                        key={s.id}
-                                        className={`flex items-center justify-between p-2 rounded-lg group transition-all cursor-pointer ${activeScenarioId === s.id
-                                            ? 'bg-brand-50 border border-brand-100'
-                                            : 'bg-slate-50 border border-transparent hover:bg-slate-100'
-                                            }`}
-                                        onClick={() => loadScenario(s)}
-                                    >
-                                        <div className="flex-1">
-                                            <p className={`text-sm font-medium truncate ${activeScenarioId === s.id ? 'text-brand-900' : 'text-slate-700'}`}>
-                                                {s.name}
-                                            </p>
-                                            <p className="text-[10px] text-slate-400">{new Date(s.lastSaved).toLocaleDateString()}</p>
-                                        </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteScenario(s.id);
-                                                if (activeScenarioId === s.id) setActiveScenarioId(null);
-                                            }}
-                                            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                    </section>
+                    <ScenarioManager
+                        scenarios={scenarios}
+                        activeScenarioId={activeScenarioId}
+                        currentInputs={inputs}
+                        onSave={handleSaveScenario}
+                        onUpdate={handleUpdateScenario}
+                        onLoad={loadScenario}
+                        onDelete={deleteScenario}
+                        onCreateNew={handleCreateNew}
+                        onImport={handleImport}
+                    />
 
                     {/* Person 1 Profile */}
                     <PersonSection
@@ -453,7 +384,7 @@ export function Dashboard() {
                         </div>
 
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                            <label className="text-sm font-medium text-slate-700">Real Dollars (Inflation Adjusted)</label>
+                            <label className="text-sm font-medium text-slate-700">Show Real Dollars (Inflation Adjusted)</label>
                             <input
                                 type="checkbox"
                                 checked={isInflationAdjusted}

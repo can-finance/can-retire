@@ -4,7 +4,7 @@ export function HowItWorks() {
         <div className="max-w-4xl mx-auto space-y-12 pb-20">
             {/* Header Section */}
             <section className="text-center space-y-4">
-                <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">How the C.R.A.P. tool works</h1>
+                <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">How the Canadian Retirement Asset Planning tool works</h1>
 
             </section>
 
@@ -96,6 +96,27 @@ export function HowItWorks() {
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>In RRSP/TFSA:</strong> All returns are automatically reinvested and grow tax-free within the account.</li>
                         <li><strong>In Non-Registered:</strong> Yield is paid out as cash (and taxed) each year. Only the "Capital Growth" portion increases the account balance and ACB.</li>
+                    </ul>
+                </div>
+            </section>
+
+            {/* Privacy Section */}
+            <section className="bg-emerald-50/50 rounded-3xl p-8 border border-emerald-100 space-y-4">
+                <h2 className="text-2xl font-bold text-emerald-900 flex items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 21a11.955 11.955 0 01-9.618-7.016m19.236 0a11.955 11.955 0 01-19.236 0" />
+                    </svg>
+                    Privacy & Data Security
+                </h2>
+                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                    <p>
+                        Your privacy is built into the architecture of this tool.
+                        <strong> All calculations are performed locally within your web browser.</strong>
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li><strong>No Data Transfer:</strong> None of your personal financial information is ever sent to a server.</li>
+                        <li><strong>Local Logic:</strong> The projection engine and tax models run entirely on your own device.</li>
+                        <li><strong>No Persistent Tracking:</strong> We do not use cookies or database systems to track your individual scenarios. Any "saved" scenarios are stored only in your browser's local storage.</li>
                     </ul>
                 </div>
             </section>

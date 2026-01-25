@@ -340,7 +340,9 @@ export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
         // --- Step 4: Surplus Allocation (Reinvestment) ---
         if (surplus > 0) {
             let remaining = surplus;
-            const tfsaLimit = 7000 * inflationFactor;
+            // TFSA Limit rounded to nearest $500
+            const tfsaLimitRaw = 7000 * inflationFactor;
+            const tfsaLimit = Math.round(tfsaLimitRaw / 500) * 500;
 
             // 1. TFSA
             if (pAlive) {
@@ -357,14 +359,20 @@ export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
             }
 
             // 2. RRSP (if room and < 71)
-            if (pAlive && pAge < 71 && remaining > 0 && p.currentIncome > 0 && pAge < p.retirementAge) {
+            // Modification: Skip if in Pre-Retirement Melt Period
+            const pIsMelting = p.rrspMeltAmount && p.rrspMeltAmount > 0 && pAge >= (p.rrspMeltStartAge || p.retirementAge);
+
+            if (pAlive && pAge < 71 && remaining > 0 && p.currentIncome > 0 && pAge < p.retirementAge && !pIsMelting) {
                 const limit = Math.min(p.currentIncome * 0.18, 31000 * inflationFactor); // Approx room gen
                 const add = Math.min(remaining, limit);
                 p.rrsp.balance += add;
                 remaining -= add;
                 reinvestedRRSP += add;
             }
-            if (sAlive && s && sAge! < 71 && remaining > 0 && s.currentIncome > 0 && sAge! < s.retirementAge) {
+
+            const sIsMelting = s && s.rrspMeltAmount && s.rrspMeltAmount > 0 && sAge! >= (s.rrspMeltStartAge || s.retirementAge);
+
+            if (sAlive && s && sAge! < 71 && remaining > 0 && s.currentIncome > 0 && sAge! < s.retirementAge && !sIsMelting) {
                 const limit = Math.min(s.currentIncome * 0.18, 31000 * inflationFactor);
                 const add = Math.min(remaining, limit);
                 s.rrsp.balance += add;

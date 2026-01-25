@@ -20,6 +20,11 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
                         </h1>
                     </div>
 
+                    <div className="hidden md:flex items-center gap-2 text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        Local Browser Execution Only • No Data Sent to Server
+                    </div>
+
                     <nav className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl">
                         <button
                             onClick={() => onNavigate('dashboard')}

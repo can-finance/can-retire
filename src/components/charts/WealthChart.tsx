@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { SimulationResult } from '../../engine/types';
 
@@ -8,7 +8,7 @@ interface WealthChartProps {
     inflationAdjusted: boolean;
 }
 
-export function WealthChart({ data, hasSpouse, inflationAdjusted }: WealthChartProps) {
+export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, inflationAdjusted }: WealthChartProps) {
     const formatCurrency = (val: number) => {
         if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
         if (val >= 1000) return `$${(val / 1000).toFixed(0)}k`;
@@ -213,4 +213,4 @@ export function WealthChart({ data, hasSpouse, inflationAdjusted }: WealthChartP
             </ResponsiveContainer>
         </div>
     );
-}
+});
