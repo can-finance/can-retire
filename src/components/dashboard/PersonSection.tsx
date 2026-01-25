@@ -8,13 +8,14 @@ interface PersonSectionProps {
     onAccountChange: (account: 'rrsp' | 'tfsa' | 'nonRegistered', field: 'balance' | 'adjustedCostBase', value: number) => void;
     showRemove?: boolean;
     onRemove?: () => void;
-    colorTheme?: 'blue' | 'indigo' | 'slate';
+    colorTheme?: 'blue' | 'indigo' | 'slate' | 'purple';
 }
 
 const THEME_CLASSES = {
     blue: 'bg-blue-50/60 border-blue-100',
     indigo: 'bg-indigo-50/60 border-indigo-100',
-    slate: 'bg-slate-50/60 border-slate-100'
+    slate: 'bg-slate-50/60 border-slate-100',
+    purple: 'bg-purple-50/60 border-purple-100'
 };
 
 export function PersonSection({
@@ -61,12 +62,18 @@ export function PersonSection({
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
                 <FinancialInput
                     label="CPP Start Age"
                     prefix=""
                     value={person.cppStartAge}
                     onChange={(e) => onChange('cppStartAge', Number(e.target.value))}
+                />
+                <FinancialInput
+                    label="Years Contributed"
+                    prefix=""
+                    value={person.cppContributedYears ?? 35}
+                    onChange={(e) => onChange('cppContributedYears', Number(e.target.value))}
                 />
                 <FinancialInput
                     label="OAS Start Age"
@@ -111,13 +118,13 @@ export function PersonSection({
 
             <div className="grid grid-cols-2 gap-4">
                 <FinancialInput
-                    label="Melt Start Age"
+                    label="RRSP Melt Start Age"
                     prefix=""
                     value={person.rrspMeltStartAge || person.retirementAge}
                     onChange={(e) => onChange('rrspMeltStartAge', Number(e.target.value))}
                 />
                 <FinancialInput
-                    label="Melt Annual Amount"
+                    label="RRSP Melt Annual Amount"
                     value={person.rrspMeltAmount || 0}
                     onChange={(e) => onChange('rrspMeltAmount', Number(e.target.value))}
                 />

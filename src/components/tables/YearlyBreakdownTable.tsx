@@ -64,7 +64,7 @@ export function YearlyBreakdownTable({ data, hasSpouse = false }: YearlyBreakdow
                 <h2 className="text-xl font-bold text-slate-900">Year-by-Year Breakdown</h2>
                 <p className="text-xs text-slate-500 mt-1">Hover over column headers for calculation details</p>
             </div>
-            <div className="overflow-x-auto max-h-[600px]">
+            <div className="overflow-x-auto max-h-[800px]">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 sticky top-0">
                         <tr>

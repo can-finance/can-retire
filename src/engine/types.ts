@@ -54,6 +54,7 @@ export interface Person {
     lifeExpectancy: number; // death age
     currentIncome: number;
     cppStartAge: number;
+    cppContributedYears: number; // Years contributed to CPP (Max 40)
     oasStartAge: number; // Usually 65
     rrspMeltStartAge?: number; // When to start voluntary RRSP meltdown (default: retirementAge)
     rrspMeltAmount?: number; // Annual voluntary withdrawal amount

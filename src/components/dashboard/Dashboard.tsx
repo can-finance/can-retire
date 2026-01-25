@@ -21,10 +21,11 @@ const createDefaultPerson = (isSpouse = false): Person => ({
     lifeExpectancy: 90,
     currentIncome: isSpouse ? 50000 : 85000,
     cppStartAge: 65,
+    cppContributedYears: 35,
     oasStartAge: 65,
-    rrspMeltStartAge: 60,
-    rrspMeltAmount: 20000,
-    rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 1000000 },
+    rrspMeltStartAge: 55,
+    rrspMeltAmount: isSpouse ? 10000 : 20000,
+    rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 500000 },
     tfsa: { type: AccountTypeVals.TFSA, balance: isSpouse ? 100000 : 150000 },
     nonRegistered: {
         type: 'NonRegistered',
@@ -36,6 +37,7 @@ const createDefaultPerson = (isSpouse = false): Person => ({
 
 const INITIAL_INPUTS: SimulationInputs = {
     person: createDefaultPerson(),
+    spouse: createDefaultPerson(true),
     province: 'ON',
     inflationRate: 0.025,
     preRetirementSpend: 70000,
@@ -129,7 +131,7 @@ export function Dashboard() {
 
     const handleCreateNew = () => {
         setInputs(INITIAL_INPUTS);
-        setHasSpouse(false);
+        setHasSpouse(!!INITIAL_INPUTS.spouse);
         setActiveScenarioId(null);
         setNewScenarioName('');
     };
@@ -297,7 +299,7 @@ export function Dashboard() {
                             onAccountChange={(acct, field, val) => updateNestedAccount('spouse', acct, field, val)}
                             showRemove
                             onRemove={toggleSpouse}
-                            colorTheme="indigo"
+                            colorTheme="purple"
                         />
                     ) : (
                         <section className="bg-slate-50/40 rounded-2xl p-6 shadow-sm border border-slate-100">
@@ -375,7 +377,7 @@ export function Dashboard() {
                     </section>
 
                     {/* Assumptions */}
-                    <section className="bg-slate-50/80 rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
+                    <section className="bg-rose-50/80 rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
                         <h2 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2">Assumptions</h2>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -449,23 +451,24 @@ export function Dashboard() {
                                 className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
                             />
                         </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <label className="text-sm font-medium text-slate-700">Real Dollars (Inflation Adjusted)</label>
+                            <input
+                                type="checkbox"
+                                checked={isInflationAdjusted}
+                                onChange={(e) => setIsInflationAdjusted(e.target.checked)}
+                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                            />
+                        </div>
+
                     </section>
                 </div>
 
                 {/* Main Content / Charts */}
                 <div className="lg:col-span-8 space-y-6">
                     {/* Out of Money Warning */}
-                    <div className="flex justify-end mb-2">
-                        <div className="flex items-center space-x-2 bg-white/80 backdrop-blur rounded-lg px-2 py-1 border border-slate-200 shadow-sm">
-                            <label className="text-xs font-medium text-slate-600">Real Dollars</label>
-                            <input
-                                type="checkbox"
-                                checked={isInflationAdjusted}
-                                onChange={(e) => setIsInflationAdjusted(e.target.checked)}
-                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4"
-                            />
-                        </div>
-                    </div>
+
                     {metrics.outOfMoneyAge && (
                         <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start gap-3">
                             <div className="text-red-500 mt-0.5">

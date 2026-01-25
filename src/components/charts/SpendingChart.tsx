@@ -110,10 +110,10 @@ export function SpendingChart({ data, hasSpouse, inflationAdjusted }: SpendingCh
                                 "TFSA",
                                 "Spouse RRSP",
                                 "RRSP",
-                                "Yield (Net)",
-                                "OAS (Net)",
-                                "CPP (Net)",
-                                "Net Salary",
+                                "Yield",
+                                "OAS",
+                                "CPP",
+                                "Salary",
                                 "Taxes Paid"
                             ];
 
@@ -159,10 +159,10 @@ export function SpendingChart({ data, hasSpouse, inflationAdjusted }: SpendingCh
                     <Line type="monotone" dataKey="TargetSpend" stroke="#0f172a" strokeWidth={2} dot={false} name="Target Spend" />
 
                     {/* Sources Stack (Bottom to Top) */}
-                    <Bar dataKey="NetEmployment" name="Net Salary" stackId="a" fill="#94a3b8" />
-                    <Bar dataKey="NetCPP" name="CPP (Net)" stackId="a" fill="#8b5cf6" />
-                    <Bar dataKey="NetOAS" name="OAS (Net)" stackId="a" fill="#c4b5fd" />
-                    <Bar dataKey="NetInvestment" name="Yield (Net)" stackId="a" fill="#a78bfa" />
+                    <Bar dataKey="NetEmployment" name="Salary" stackId="a" fill="#94a3b8" />
+                    <Bar dataKey="NetCPP" name="CPP" stackId="a" fill="#8b5cf6" />
+                    <Bar dataKey="NetOAS" name="OAS" stackId="a" fill="#c4b5fd" />
+                    <Bar dataKey="NetInvestment" name="Yield" stackId="a" fill="#d946ef" />
 
                     {/* RRSP Group: Primary (Bottom), Spouse (Top) */}
                     <Bar dataKey="PersonNetRRSP" name="RRSP" stackId="a" fill="#0ea5e9" />

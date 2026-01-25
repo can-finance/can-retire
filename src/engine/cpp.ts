@@ -1,13 +1,17 @@
 // import type { TaxRates } from './types'; // Unused
 
 export function calculateEstimatedCPP(
-    percentOfMax: number, // 0 to 1
+    yearsContributed: number, // Max 40
     startAge: number,
     _taxConstants: any, // TaxRates unused for now as we hardcoded max
     inflationFactor: number = 1.0
 ): number {
     // 2024 Max CPP at 65 is roughly $1364.60/month -> ~$16,375/year
     const maxAnnualCPP = 16375 * inflationFactor;
+
+    // Calculate Percent of Max based on contribution years (approximate drop-out provision logic is complex, simple linear here)
+    // Max roughly 40 years needed for full pension
+    const percentOfMax = Math.min(1.0, Math.max(0, yearsContributed / 40));
 
     // Adjust for age
     // 65 is standard
@@ -24,9 +28,6 @@ export function calculateEstimatedCPP(
         // Late
         adjustmentFactor = 1.0 + (monthsDiff * 0.007);
     }
-
-    // Cap adjustment? -36% (at 60) to +42% (at 70)
-    // Formula handles this naturally if ages constrained 60-70.
 
     return maxAnnualCPP * percentOfMax * adjustmentFactor;
 }

@@ -87,7 +87,7 @@ function simulatePersonBaseYear(
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
     const cppIncome = (age >= person.cppStartAge)
-        ? calculateEstimatedCPP(1.0, person.cppStartAge, TAX_CONSTANTS, inflationFactor)
+        ? calculateEstimatedCPP(person.cppContributedYears ?? 40, person.cppStartAge, TAX_CONSTANTS, inflationFactor)
         : 0;
 
     const oasIncome = calculateOAS(age, person.oasStartAge, inflationFactor);
