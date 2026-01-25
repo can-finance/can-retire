@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
 import { useScenarios } from '../../hooks/useScenarios';
 import type { SavedScenario } from '../../hooks/useScenarios';
@@ -38,7 +39,7 @@ const createDefaultPerson = (isSpouse = false): Person => ({
 
 const INITIAL_INPUTS: SimulationInputs = {
     person: createDefaultPerson(),
-    spouse: createDefaultPerson(true),
+    spouse: undefined,
     province: 'ON',
     inflationRate: 0.025,
     preRetirementSpend: 70000,
@@ -58,6 +59,28 @@ export function Dashboard() {
     const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
     const [hasSpouse, setHasSpouse] = useState(!!inputs.spouse);
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
+
+    // Hydrate from URL Hash on mount
+    useEffect(() => {
+        const hash = window.location.hash;
+        if (hash.startsWith('#start=')) {
+            try {
+                const compressed = hash.replace('#start=', '');
+                const json = LZString.decompressFromEncodedURIComponent(compressed);
+                if (json) {
+                    const parsed = JSON.parse(json);
+                    if (parsed && parsed.person) {
+                        setInputs(parsed);
+                        // Optional: Clear hash to clean URL? 
+                        // history.replaceState(null, '', ' '); 
+                        // Keeping it allows refreshing the page to stay on the scenario.
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to hydrate from URL", e);
+            }
+        }
+    }, []); // Run once on mount
 
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
@@ -111,7 +134,6 @@ export function Dashboard() {
 
     const handleSaveScenario = (name: string) => {
         saveScenario(name, inputs);
-        alert("Scenario saved!");
     };
 
     const loadScenario = (savedScenario: SavedScenario) => {
@@ -123,7 +145,6 @@ export function Dashboard() {
     const handleUpdateScenario = () => {
         if (activeScenarioId) {
             updateScenario(activeScenarioId, inputs);
-            alert("Scenario updated!");
         }
     };
 
@@ -133,12 +154,7 @@ export function Dashboard() {
         setActiveScenarioId(null);
     };
 
-    const handleImport = (newInputs: SimulationInputs) => {
-        setInputs(newInputs);
-        setHasSpouse(!!newInputs.spouse);
-        setActiveScenarioId(null);
-        alert("Scenario loaded successfully!");
-    };
+
 
 
 
@@ -209,7 +225,7 @@ export function Dashboard() {
                         onLoad={loadScenario}
                         onDelete={deleteScenario}
                         onCreateNew={handleCreateNew}
-                        onImport={handleImport}
+
                     />
 
                     {/* Person 1 Profile */}

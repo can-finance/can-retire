@@ -117,6 +117,7 @@ export function HowItWorks() {
                         <li><strong>No Data Transfer:</strong> None of your personal financial information is ever sent to a server.</li>
                         <li><strong>Local Logic:</strong> The projection engine and tax models run entirely on your own device.</li>
                         <li><strong>No Persistent Tracking:</strong> We do not use cookies or database systems to track your individual scenarios. Any "saved" scenarios are stored only in your browser's local storage.</li>
+                        <li><strong>Anonymous Analytics:</strong> We use Cloudflare Web Analytics to monitor aggregate traffic (total visits, page views) in a non-identifiable way. This helps us understand how the tool is used without collecting any personal data or using tracking cookies.</li>
                     </ul>
                 </div>
             </section>

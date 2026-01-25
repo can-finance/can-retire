@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import LZString from 'lz-string';
 import type { SavedScenario } from '../../hooks/useScenarios';
 import type { SimulationInputs } from '../../engine/types';
 
@@ -11,7 +12,7 @@ interface ScenarioManagerProps {
     onLoad: (scenario: SavedScenario) => void;
     onDelete: (id: string) => void;
     onCreateNew: () => void;
-    onImport: (inputs: SimulationInputs) => void;
+
 }
 
 export function ScenarioManager({
@@ -23,7 +24,7 @@ export function ScenarioManager({
     onLoad,
     onDelete,
     onCreateNew,
-    onImport
+
 }: ScenarioManagerProps) {
     const [name, setName] = useState('');
 
@@ -42,19 +43,22 @@ export function ScenarioManager({
     // --- Sharing Logic ---
     const handleShareScenario = () => {
         try {
-            const data = btoa(JSON.stringify(currentInputs));
+            // Compress the inputs
+            const json = JSON.stringify(currentInputs);
+            const compressed = LZString.compressToEncodedURIComponent(json);
+
+            // Construct full URL
+            const url = `${window.location.origin}${window.location.pathname}#start=${compressed}`;
 
             // Check if clipboard API is available (Secure context / localhost)
             if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(data)
-                    .then(() => alert("Scenario configuration copied to clipboard!"))
+                navigator.clipboard.writeText(url)
+                    .then(() => alert("Shareable URL copied to clipboard!"))
                     .catch(() => {
-                        // Fallback in case writeText fails unexpectedly
-                        prompt("Copy this scenario string:", data);
+                        prompt("Copy this URL:", url);
                     });
             } else {
-                // Fallback for non-secure contexts
-                prompt("Copy this scenario string (Your browser requires manual copy in this context):", data);
+                prompt("Copy this URL:", url);
             }
         } catch (e) {
             console.error("Failed to share", e);
@@ -62,23 +66,7 @@ export function ScenarioManager({
         }
     };
 
-    const handleImportScenario = () => {
-        const str = prompt("Paste the scenario string here:");
-        if (!str) return;
-        try {
-            const parsed = JSON.parse(atob(str));
-            // Basic validation check
-            if (parsed.person && parsed.returnRates) {
-                onImport(parsed);
-                // We don't reset name here, caller handles state
-            } else {
-                throw new Error("Invalid shape");
-            }
-        } catch (e) {
-            console.error("Failed to import", e);
-            alert("Invalid scenario string. Could not load.");
-        }
-    };
+
 
     return (
         <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-4">
@@ -93,34 +81,24 @@ export function ScenarioManager({
                         {activeScenarioId ? 'Active Scenario' : ''}
                     </p>
                 </div>
-                <button
-                    onClick={onCreateNew}
-                    className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200 transition-colors"
-                >
-                    Reset to Defaults
-                </button>
-            </div>
-
-            {/* Export / Import Controls */}
-            <div className="flex gap-2 text-xs">
-                <button
-                    onClick={handleShareScenario}
-                    className="flex-1 flex items-center justify-center gap-1 bg-indigo-50 text-indigo-700 py-2 rounded-lg hover:bg-indigo-100 transition-colors font-medium border border-indigo-100"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                    </svg>
-                    Share Scenario
-                </button>
-                <button
-                    onClick={handleImportScenario}
-                    className="flex-1 flex items-center justify-center gap-1 bg-slate-50 text-slate-700 py-2 rounded-lg hover:bg-slate-100 transition-colors font-medium border border-slate-200"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                    Import Scenario
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleShareScenario}
+                        className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors font-medium border border-indigo-100"
+                        title="Copy link to clipboard"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                        Share
+                    </button>
+                    <button
+                        onClick={onCreateNew}
+                        className="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                    >
+                        Reset to Default
+                    </button>
+                </div>
             </div>
 
             <form onSubmit={activeScenarioId ? handleUpdateSubmit : handleSaveSubmit} className="flex flex-col gap-2">
