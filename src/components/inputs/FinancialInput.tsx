@@ -9,7 +9,7 @@ interface FinancialInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEl
     onChange: (e: { target: { value: string } }) => void;
     prefix?: string;
     suffix?: string;
-    helperText?: string;
+    tooltip?: string;
     minFractionDigits?: number;
     maxFractionDigits?: number;
 }
@@ -27,7 +27,7 @@ export function FinancialInput({
     onChange,
     prefix = '$',
     suffix,
-    helperText,
+    tooltip,
     minFractionDigits = 0,
     maxFractionDigits = 2,
     className,
@@ -92,7 +92,13 @@ export function FinancialInput({
 
     return (
         <div className={clsx("flex flex-col gap-1.5", className)}>
-            <label className="text-sm font-medium text-slate-700">
+            <label
+                className={twMerge(
+                    "text-sm font-medium text-slate-700",
+                    tooltip && "cursor-help border-b border-dashed border-slate-300 w-fit"
+                )}
+                title={tooltip}
+            >
                 {label}
             </label>
             <div className="relative flex items-center">
@@ -122,9 +128,7 @@ export function FinancialInput({
                     </span>
                 )}
             </div>
-            {helperText && (
-                <p className="text-xs text-slate-500">{helperText}</p>
-            )}
+
         </div>
     );
 }

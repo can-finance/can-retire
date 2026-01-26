@@ -28,7 +28,7 @@ export const SurplusChart = React.memo(function SurplusChart({ data, inflationAd
     }, [data, inflationAdjusted]);
 
     return (
-        <div className="h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+        <div className="h-[350px] lg:h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="mb-6 text-lg font-bold text-slate-900">Surplus Reinvestment</h3>
             <ResponsiveContainer width="100%" height="90%">
                 <BarChart

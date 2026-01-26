@@ -8,6 +8,30 @@ export function HowItWorks() {
 
             </section>
 
+            {/* Strategy focus Section */}
+            <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-4">
+                <h2 className="text-2xl font-bold text-indigo-900 flex items-center gap-3">
+                    Exploring decumulation scenarios
+                </h2>
+                <div className="prose prose-indigo max-w-none text-indigo-900/80 leading-relaxed">
+                    <p>
+                        This tool is specifically designed to help you explore various <strong>decumulation scenarios</strong>—the phase of life where you begin spending down your hard-earned assets. By testing different assumptions, you can see how the timing of government benefits and the sequence of account withdrawals impact your lifelong tax burden.
+                    </p>
+                    <p>
+                        Use the simulation to compare:
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li><strong>Payment Timing:</strong> Model the impact of starting CPP or OAS at different ages (e.g., 60 vs 70).</li>
+                        <li><strong>Withdrawal Sequencing:</strong> Switch between "Tax-Efficient" and "RRSP First" strategies to see which yields a lower lifetime effective tax rate.</li>
+                        <li><strong>RRSP Melt:</strong> Test how early, deliberate withdrawals from your RRSP (the "melt" strategy) can help spread out your taxable income over more years, potentially avoiding higher tax brackets later in life or a large tax bill for your estate.</li>
+                        <li><strong>Account Optimization:</strong> Observe how drawing from Non-Registered, TFSA, or RRSP accounts in different orders can preserve your capital longer or increase your net estate.</li>
+                    </ul>
+                    <p>
+                        The goal is to help you visualize the long-term impact of these choices on your <strong>overall effective tax rate</strong> and your final net estate value.
+                    </p>
+                </div>
+            </section>
+
             {/* Core Methodology */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
                 <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">

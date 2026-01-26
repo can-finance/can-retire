@@ -488,7 +488,7 @@ export function Dashboard() {
                                                 ...inputs,
                                                 returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
                                             })}
-                                            helperText="Standard deviation of annual returns (e.g. 10% for equities)."
+                                            tooltip="Standard deviation of annual returns (e.g. 10% for equities)."
                                         />
                                     </div>
                                 )}

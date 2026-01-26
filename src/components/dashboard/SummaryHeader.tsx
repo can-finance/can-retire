@@ -30,11 +30,11 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                     {/* a) Estate Value */}
                     <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-100">
-                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Gross Estate</p>
-                        <p className="text-lg font-bold text-slate-900">
-                            {formatCurrency(metrics.estate)}
+                        <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Net Estate</p>
+                        <p className="text-lg font-bold text-green-600">
+                            {formatCurrency(metrics.netEstateValue)}
                         </p>
-                        <p className="text-[10px] text-slate-400">Total Assets at End</p>
+                        <p className="text-[10px] text-slate-400">Before Tax: {formatCurrency(metrics.estate)}</p>
                     </div>
 
                     {/* Withdrawal Rate */}
@@ -53,8 +53,8 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                             {metrics.effectiveTaxRateRetirement.toFixed(1)}%
                         </p>
                         <div className="flex flex-col gap-0.5">
+                            <p className="text-[11px] font-semibold text-green-600">Net: {formatCurrency(metrics.netRetirementIncome)}</p>
                             <p className="text-[10px] text-red-400">Tax: {formatCurrency(metrics.annualTaxRetirement)}</p>
-                            <p className="text-[10px] text-green-600 font-medium">Net: {formatCurrency(metrics.netRetirementIncome)}</p>
                         </div>
                     </div>
 
@@ -65,8 +65,8 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                             {metrics.effectiveTaxRateEstate.toFixed(1)}%
                         </p>
                         <div className="flex flex-col gap-0.5">
+                            <p className="text-[11px] font-semibold text-green-600">Net: {formatCurrency(metrics.netEstateValue)}</p>
                             <p className="text-[10px] text-red-400">Tax: {formatCurrency(metrics.estateTax)}</p>
-                            <p className="text-[10px] text-green-600 font-medium">Net: {formatCurrency(metrics.netEstateValue)}</p>
                         </div>
                     </div>
 
@@ -77,8 +77,8 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                             {metrics.totalEffectiveTaxRate.toFixed(1)}%
                         </p>
                         <div className="flex flex-col gap-0.5">
+                            <p className="text-[11px] font-semibold text-green-600">Net: {formatCurrency(metrics.totalNetValue)}</p>
                             <p className="text-[10px] text-red-400">Tax: {formatCurrency(metrics.totalTaxPlusEstate)}</p>
-                            <p className="text-[10px] text-green-600 font-medium">Net: {formatCurrency(metrics.totalNetValue)}</p>
                         </div>
                     </div>
 

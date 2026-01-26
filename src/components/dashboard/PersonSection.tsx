@@ -185,7 +185,7 @@ export function PersonSection({
                             label="Non-Reg ACB"
                             value={person.nonRegistered.adjustedCostBase}
                             onChange={(e) => onAccountChange('nonRegistered', 'adjustedCostBase', Number(e.target.value))}
-                            helperText={title === 'You' ? "Original investment cost" : "Original amount invested"}
+                            tooltip={title === 'You' ? "Original investment cost" : "Original amount invested"}
                         />
                     </div>
 
@@ -195,11 +195,13 @@ export function PersonSection({
                             prefix=""
                             value={person.rrspMeltStartAge || person.retirementAge}
                             onChange={(e) => onChange('rrspMeltStartAge', Number(e.target.value))}
+                            tooltip="Age to begin deliberate early RRSP withdrawals. Melt automatically stops at age 71 (before mandatory RRIF conversion at 72)."
                         />
                         <FinancialInput
                             label="RRSP Melt Annual Amount"
                             value={person.rrspMeltAmount || 0}
                             onChange={(e) => onChange('rrspMeltAmount', Number(e.target.value))}
+                            tooltip="Annual amount to withdraw from RRSP from start age until age 71."
                         />
                     </div>
                 </div>
