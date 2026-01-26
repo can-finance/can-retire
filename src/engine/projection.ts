@@ -1,9 +1,17 @@
 
-import type { Person, SimulationInputs, SimulationResult } from './types';
+import type { Person, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
 import { calculateIncomeTax, calculateOASClawback, TAX_CONSTANTS } from './tax';
 import { calculateEstimatedCPP, calculateOAS } from './cpp';
 
 // --- Helper Types for Internal engine calculation ---
+
+// Standard Normal Distribution Generator (Mean 0, StdDev 1)
+function boxMullerRandom(): number {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
 
 interface PersonAnnualBase {
     taxableIncome: number;
@@ -144,7 +152,7 @@ function simulatePersonBaseYear(
     };
 }
 
-export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
+export function runSimulation(inputs: SimulationInputs, stochastic: boolean = false): SimulationResult[] {
     const results: SimulationResult[] = [];
     const { person, spouse, province, inflationRate, returnRates, preRetirementSpend, postRetirementSpend, withdrawalStrategy } = inputs;
 
@@ -175,9 +183,21 @@ export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
 
         const targetSpend = (isRetired ? postRetirementSpend : preRetirementSpend) * inflationFactor;
 
+        // --- Determine Returns for this Year ---
+        let currentYearRates = returnRates;
+        if (stochastic && returnRates.volatility) {
+            // Apply volatility to Capital Growth
+            // Simple model: Return = Mean + (Vol * Z)
+            const z = boxMullerRandom();
+            currentYearRates = {
+                ...returnRates,
+                capitalGrowth: returnRates.capitalGrowth + (returnRates.volatility * z)
+            };
+        }
+
         // --- Step 1: Base Income & Mandatory Flows ---
-        const pBase = pAlive ? simulatePersonBaseYear(p, pAge, province, returnRates, inflationFactor) : null;
-        const sBase = sAlive && s ? simulatePersonBaseYear(s, sAge!, province, returnRates, inflationFactor) : null;
+        const pBase = pAlive ? simulatePersonBaseYear(p, pAge, province, currentYearRates, inflationFactor) : null;
+        const sBase = sAlive && s ? simulatePersonBaseYear(s, sAge!, province, currentYearRates, inflationFactor) : null;
 
         const householdBaseNet = (pBase?.baseNetCash || 0) + (sBase?.baseNetCash || 0);
 
@@ -444,15 +464,16 @@ export function runSimulation(inputs: SimulationInputs): SimulationResult[] {
         // Actually, in the simple model, we assume the whole balance grows by the 'Capital Growth' rate assigned to the equity portion?
         // Or do we assume price appreciation on the whole bag?
         // Let's stick to previous logic: mix.capitalGain * returnRates.capitalGrowth
+        // Let's stick to previous logic: mix.capitalGain * returnRates.capitalGrowth
         if (pAlive) {
-            p.rrsp.balance *= (1 + returnRates.capitalGrowth);
-            p.tfsa.balance *= (1 + returnRates.capitalGrowth);
-            p.nonRegistered.balance *= (1 + (p.nonRegistered.assetMix.capitalGain * returnRates.capitalGrowth));
+            p.rrsp.balance *= (1 + currentYearRates.capitalGrowth);
+            p.tfsa.balance *= (1 + currentYearRates.capitalGrowth);
+            p.nonRegistered.balance *= (1 + (p.nonRegistered.assetMix.capitalGain * currentYearRates.capitalGrowth));
         }
         if (sAlive && s) {
-            s.rrsp.balance *= (1 + returnRates.capitalGrowth);
-            s.tfsa.balance *= (1 + returnRates.capitalGrowth);
-            s.nonRegistered.balance *= (1 + (s.nonRegistered.assetMix.capitalGain * returnRates.capitalGrowth));
+            s.rrsp.balance *= (1 + currentYearRates.capitalGrowth);
+            s.tfsa.balance *= (1 + currentYearRates.capitalGrowth);
+            s.nonRegistered.balance *= (1 + (s.nonRegistered.assetMix.capitalGain * currentYearRates.capitalGrowth));
         }
 
 
@@ -572,4 +593,63 @@ function getRRIFMinFactor(age: number): number {
     if (age <= 70) return 0.05;
     if (age >= 95) return 0.20;
     return RRIF_MINIMUMS[age] || 0.06;
+}
+
+export function runMonteCarlo(inputs: SimulationInputs, iterations: number = 200): MonteCarloResult {
+    const rawRuns: SimulationResult[][] = [];
+
+    // Run N simulations
+    for (let i = 0; i < iterations; i++) {
+        rawRuns.push(runSimulation(inputs, true));
+    }
+
+    // Process Results
+    // We assume all runs have same length (same life expectancy inputs)
+    const years = rawRuns[0].length;
+    const percentiles: MonteCarloPercentile[] = [];
+
+
+    for (let i = 0; i < years; i++) {
+        // Extract total assets for this specific year across all runs
+        const assetsAtYear = rawRuns.map(run => run[i].totalAssets);
+        const refRun = rawRuns[0][i];
+
+        // Sort to find percentiles
+        assetsAtYear.sort((a, b) => a - b);
+
+        const getP = (p: number) => assetsAtYear[Math.floor(p * iterations)];
+
+        // At end of plan (last year), count runs where assets < 0 (or close to 0)
+        // Actually, our engine might not allow negative assets (it stops at 0?), 
+        // let's check. Engine allows balance -= withdrawal. If balance < 0, it stays negative?
+        // Let's check: "person.rrsp.balance -= rrifWithdrawal".
+        // If balance is 0, withdrawal is 0?
+        // Ah, in "Step 3" withdraw function checks: "Math.min(total, remainingDeficit)". 
+        // So balance shouldn't go negative, it just hits 0.
+        // But for success rate, we check if they ran out of money BEFORE life expectancy.
+        // Or simply: check if assets at end are > 0.
+
+        percentiles.push({
+            year: refRun.year,
+            age: refRun.age,
+            p5: getP(0.05),
+            p25: getP(0.25),
+            p50: getP(0.50),
+            p75: getP(0.75),
+            p95: getP(0.95)
+        });
+    }
+
+    // Success Rate Calculation
+    // A run is a "failure" if at any point in the retired phase assets hit 0 while deficit exists?
+    // Or simpler: Is the Final Asset Value > 0?
+    // Using final value is easiest Proxy.
+    const lastYearAssets = rawRuns.map(run => run[run.length - 1].totalAssets);
+    const successes = lastYearAssets.filter(val => val > 1000).length; // Tolerance $1000
+
+    return {
+        percentiles,
+        successRate: (successes / iterations) * 100,
+        medianEndOfPlanAssets: percentiles[percentiles.length - 1].p50
+    };
 }

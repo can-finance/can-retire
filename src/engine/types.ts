@@ -134,5 +134,22 @@ export interface SimulationInputs {
         interest: number;
         dividend: number;
         capitalGrowth: number;
+        volatility?: number; // Standard Deviation (e.g., 0.1 for 10% std dev)
     };
+}
+
+export interface MonteCarloPercentile {
+    year: number;
+    age: number;
+    p5: number;   // 5th percentile (Worst case)
+    p25: number;
+    p50: number;  // Median
+    p75: number;
+    p95: number;  // 95th percentile (Best case)
+}
+
+export interface MonteCarloResult {
+    percentiles: MonteCarloPercentile[];
+    successRate: number; // 0-100% of runs that didn't run out of money
+    medianEndOfPlanAssets: number;
 }

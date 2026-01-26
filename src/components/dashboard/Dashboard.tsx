@@ -7,9 +7,10 @@ import { FinancialInput } from '../inputs/FinancialInput';
 import { AssetMixInput } from '../inputs/AssetMixInput';
 import { WealthChart } from '../charts/WealthChart';
 import { SpendingChart } from '../charts/SpendingChart';
+import { MonteCarloChart } from '../charts/MonteCarloChart';
 import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
-import { runSimulation } from '../../engine/projection';
+import { runSimulation, runMonteCarlo } from '../../engine/projection';
 import { AccountTypeVals } from '../../engine/types';
 import type { Person, SimulationInputs, NonRegisteredAccount } from '../../engine/types';
 import { calculateIncomeTax } from '../../engine/tax';
@@ -49,7 +50,8 @@ const INITIAL_INPUTS: SimulationInputs = {
     returnRates: {
         interest: 0.02,
         dividend: 0.03,
-        capitalGrowth: 0.05
+        capitalGrowth: 0.05,
+        volatility: 0.10
     }
 };
 
@@ -59,6 +61,7 @@ export function Dashboard() {
     const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
     const [hasSpouse, setHasSpouse] = useState(!!inputs.spouse);
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
+    const [isMonteCarlo, setIsMonteCarlo] = useState(false);
 
     // Hydrate from URL Hash on mount
     useEffect(() => {
@@ -71,9 +74,6 @@ export function Dashboard() {
                     const parsed = JSON.parse(json);
                     if (parsed && parsed.person) {
                         setInputs(parsed);
-                        // Optional: Clear hash to clean URL? 
-                        // history.replaceState(null, '', ' '); 
-                        // Keeping it allows refreshing the page to stay on the scenario.
                     }
                 }
             } catch (e) {
@@ -85,6 +85,11 @@ export function Dashboard() {
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
     }, [inputs]);
+
+    const monteCarloResults = useMemo(() => {
+        if (!isMonteCarlo) return null;
+        return runMonteCarlo(inputs, 250); // 250 iterations for responsiveness
+    }, [inputs, isMonteCarlo]);
 
     const updatePerson = (field: string, value: number | object) => {
         setInputs({
@@ -159,7 +164,6 @@ export function Dashboard() {
 
 
     const metrics = useMemo(() => {
-        const atRetirement = simulationResults.find(r => r.age === inputs.person.retirementAge);
         const lastYear = simulationResults[simulationResults.length - 1];
         const retirementResults = simulationResults.filter(r => r.age >= inputs.person.retirementAge);
 
@@ -167,7 +171,6 @@ export function Dashboard() {
         const adj = (val: number, factor: number) => isInflationAdjusted ? val / factor : val;
 
         const annualTaxRetirement = retirementResults.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0);
-        const totalSpend = simulationResults.reduce((acc, curr) => acc + adj(curr.spending, curr.inflationFactor), 0);
         const totalRetirementIncome = retirementResults.reduce((acc, curr) => acc + adj(curr.grossIncome, curr.inflationFactor), 0);
 
         // Terminal income is calculated at the end (death), so use lastYear's factor
@@ -192,24 +195,75 @@ export function Dashboard() {
         const effectiveTaxRateEstate = estateValue > 0 ? (adjustedEstateTax / estateValue) * 100 : 0;
         const totalEffectiveTaxRate = (totalRetirementIncome + estateValue) > 0 ? (totalTaxPlusEstate / (totalRetirementIncome + estateValue)) * 100 : 0;
 
+        // Withdrawal Rate Calculation
+        let initialWithdrawalRate = 0;
+        const retirementIndex = simulationResults.findIndex(r => r.age === inputs.person.retirementAge);
+
+        // Determine the "First Year of Retirement" logic
+        // If retirementIndex is -1 (started after retirement) or 0 (starting now), we use index 0 and Initial Inputs for assets
+        // If retirementIndex > 0, we use that year for withdrawals, and the previous year's End Assets as the base
+
+        if (retirementIndex > 0) {
+            const firstRetYear = simulationResults[retirementIndex];
+            const prevYear = simulationResults[retirementIndex - 1];
+            const totalWithdrawal = firstRetYear.totalRRSPWithdrawal + firstRetYear.totalTFSAWithdrawal + firstRetYear.totalNonRegWithdrawal;
+            // Use previous year's ending assets as the 'start of year' assets for the calculation
+            // Adjust for inflation if needed? The rate is ratio, so if both nominal ok.
+            // If inflation adjusted, both typically adjusted.
+            // Let's use raw nominal for ratio to be safe, or both real. 
+            // SimulationResults are nominal.
+            if (prevYear.totalAssets > 0) {
+                initialWithdrawalRate = (totalWithdrawal / prevYear.totalAssets) * 100;
+            }
+        } else {
+            // Already retired or retiring immediately. Use inputs for initial assets.
+            const firstRetYear = simulationResults[0];
+            const startAssets =
+                inputs.person.rrsp.balance +
+                inputs.person.tfsa.balance +
+                (inputs.person.nonRegistered.balance) +
+                (inputs.spouse ? (inputs.spouse.rrsp.balance + inputs.spouse.tfsa.balance + inputs.spouse.nonRegistered.balance) : 0);
+
+            if (firstRetYear && startAssets > 0) {
+                const totalWithdrawal = firstRetYear.totalRRSPWithdrawal + firstRetYear.totalTFSAWithdrawal + firstRetYear.totalNonRegWithdrawal;
+                initialWithdrawalRate = (totalWithdrawal / startAssets) * 100;
+            }
+        }
+
+        const netRetirementIncome = totalRetirementIncome - annualTaxRetirement;
+        const netEstateValue = estateValue - adjustedEstateTax;
+        const totalNetValue = netRetirementIncome + netEstateValue;
+
         return {
-            nwRetirement: atRetirement ? adj(atRetirement.totalAssets, atRetirement.inflationFactor) : 0,
             estate: estateValue,
             annualTaxRetirement,
             estateTax: adjustedEstateTax,
             totalTaxPlusEstate,
-            totalSpend,
-            totalRetirementIncome,
             effectiveTaxRateRetirement,
             effectiveTaxRateEstate,
             totalEffectiveTaxRate,
-            outOfMoneyAge
+            totalRetirementIncome,
+            netRetirementIncome,
+            netEstateValue,
+            totalNetValue,
+            outOfMoneyAge,
+            initialWithdrawalRate
         };
-    }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted]);
+    }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegistered.balance, inputs.spouse]);
+
+    const globalMaxY = useMemo(() => {
+        if (simulationResults.length === 0) return 0;
+        return Math.max(...simulationResults.map(r => {
+            const factor = isInflationAdjusted ? r.inflationFactor : 1.0;
+            const inflow = r.netEmploymentIncome + r.netCPPIncome + r.netOASIncome + r.netInvestmentIncome +
+                r.netRRSPWithdrawal + r.netTFSAWithdrawal + r.netNonRegWithdrawal;
+            return inflow / factor;
+        }));
+    }, [simulationResults, isInflationAdjusted]);
 
     return (
         <div className="flex flex-col gap-6">
-            <SummaryHeader metrics={metrics} />
+            <SummaryHeader metrics={metrics} monteCarlo={monteCarloResults} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Sidebar / Inputs */}
@@ -371,6 +425,39 @@ export function Dashboard() {
                             />
                         </div>
 
+                        {/* Monte Carlo Toggle & Volatility */}
+                        <div className="pt-2 border-t border-slate-100 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                                    Monte Carlo Simulation
+                                    <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
+                                </label>
+                                <div
+                                    className={`w-11 h-6 flex items-center bg-slate-200 rounded-full p-1 cursor-pointer transition-colors ${isMonteCarlo ? 'bg-emerald-600' : ''}`}
+                                    onClick={() => setIsMonteCarlo(!isMonteCarlo)}
+                                >
+                                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isMonteCarlo ? 'translate-x-5' : ''}`}></div>
+                                </div>
+                            </div>
+
+                            {isMonteCarlo && (
+                                <div className="bg-indigo-50/50 p-3 rounded-lg space-y-2 border border-indigo-100">
+                                    <FinancialInput
+                                        label="Volatility (Risk)"
+                                        prefix="%"
+                                        minFractionDigits={1}
+                                        maxFractionDigits={1}
+                                        value={Number(((inputs.returnRates.volatility || 0.10) * 100).toFixed(1))}
+                                        onChange={(e) => setInputs({
+                                            ...inputs,
+                                            returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
+                                        })}
+                                        helperText="Standard deviation of annual returns (e.g. 10% for equities)."
+                                    />
+                                </div>
+                            )}
+                        </div>
+
                         <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                             <label className="text-sm font-medium text-slate-700">Use Pension Income Splitting</label>
                             <input
@@ -432,9 +519,31 @@ export function Dashboard() {
                             </div>
                         </div>
                     )}
-                    <WealthChart data={simulationResults} hasSpouse={hasSpouse} inflationAdjusted={isInflationAdjusted} />
-                    <SpendingChart data={simulationResults} hasSpouse={hasSpouse} inflationAdjusted={isInflationAdjusted} />
-                    <SurplusChart data={simulationResults} inflationAdjusted={isInflationAdjusted} />
+                    <WealthChart
+                        data={simulationResults}
+                        hasSpouse={hasSpouse}
+                        inflationAdjusted={isInflationAdjusted}
+                    />
+                    <SpendingChart
+                        data={simulationResults}
+                        hasSpouse={hasSpouse}
+                        inflationAdjusted={isInflationAdjusted}
+                        domainMax={globalMaxY}
+                    />
+                    <SurplusChart
+                        data={simulationResults}
+                        inflationAdjusted={isInflationAdjusted}
+                        domainMax={globalMaxY}
+                    />
+
+                    {isMonteCarlo && monteCarloResults && (
+                        <MonteCarloChart
+                            data={simulationResults}
+                            monteCarlo={monteCarloResults}
+                            inflationAdjusted={isInflationAdjusted}
+                        />
+                    )}
+
                     <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} />
                 </div>
             </div>

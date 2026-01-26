@@ -30,6 +30,7 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
         });
     }, [data, hasSpouse, inflationAdjusted]);
 
+    // Deterministic View
     return (
         <div className="h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="mb-6 text-lg font-bold text-slate-900">Projected Net Worth</h3>
@@ -128,87 +129,15 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
                         }}
                     />
 
-                    {/* 
-                        Stack Order (Bottom to Top):
-                        1. RRSP Group
-                           - Primary RRSP
-                           - Spouse RRSP
-                        2. TFSA Group
-                           - Primary TFSA
-                           - Spouse TFSA
-                        3. Non-Reg Group
-                           - Primary Non-Reg
-                           - Spouse Non-Reg
-                    */}
-
                     {/* RRSP Group */}
-                    <Area
-                        type="monotone"
-                        dataKey="pRRSP"
-                        name="RRSP/RRIF"
-                        stackId="1"
-                        stroke="#0ea5e9"
-                        fill="url(#colorRrsp)"
-                        strokeWidth={2}
-                        hide={false}
-                    />
-                    {hasSpouse && (
-                        <Area
-                            type="monotone"
-                            dataKey="sRRSP"
-                            name="Spouse RRSP/RRIF"
-                            stackId="1"
-                            stroke="#7dd3fc"
-                            fill="url(#colorSpRrsp)"
-                            strokeWidth={2}
-                        />
-                    )}
-
+                    <Area type="monotone" dataKey="pRRSP" name="RRSP/RRIF" stackId="1" stroke="#0ea5e9" fill="url(#colorRrsp)" strokeWidth={2} />
+                    {hasSpouse && <Area type="monotone" dataKey="sRRSP" name="Spouse RRSP/RRIF" stackId="1" stroke="#7dd3fc" fill="url(#colorSpRrsp)" strokeWidth={2} />}
                     {/* TFSA Group */}
-                    <Area
-                        type="monotone"
-                        dataKey="pTFSA"
-                        name="TFSA"
-                        stackId="1"
-                        stroke="#10b981"
-                        fill="url(#colorTfsa)"
-                        strokeWidth={2}
-                        hide={false}
-                    />
-                    {hasSpouse && (
-                        <Area
-                            type="monotone"
-                            dataKey="sTFSA"
-                            name="Spouse TFSA"
-                            stackId="1"
-                            stroke="#6ee7b7"
-                            fill="url(#colorSpTfsa)"
-                            strokeWidth={2}
-                        />
-                    )}
-
+                    <Area type="monotone" dataKey="pTFSA" name="TFSA" stackId="1" stroke="#10b981" fill="url(#colorTfsa)" strokeWidth={2} />
+                    {hasSpouse && <Area type="monotone" dataKey="sTFSA" name="Spouse TFSA" stackId="1" stroke="#6ee7b7" fill="url(#colorSpTfsa)" strokeWidth={2} />}
                     {/* Non-Reg Group */}
-                    <Area
-                        type="monotone"
-                        dataKey="pNonReg"
-                        name="Non-Reg"
-                        stackId="1"
-                        stroke="#f59e0b"
-                        fill="url(#colorNonReg)"
-                        strokeWidth={2}
-                        hide={false}
-                    />
-                    {hasSpouse && (
-                        <Area
-                            type="monotone"
-                            dataKey="sNonReg"
-                            name="Spouse Non-Reg"
-                            stackId="1"
-                            stroke="#fbbf24"
-                            fill="url(#colorSpNonReg)"
-                            strokeWidth={2}
-                        />
-                    )}
+                    <Area type="monotone" dataKey="pNonReg" name="Non-Reg" stackId="1" stroke="#f59e0b" fill="url(#colorNonReg)" strokeWidth={2} />
+                    {hasSpouse && <Area type="monotone" dataKey="sNonReg" name="Spouse Non-Reg" stackId="1" stroke="#fbbf24" fill="url(#colorSpNonReg)" strokeWidth={2} />}
                 </AreaChart>
             </ResponsiveContainer>
         </div>

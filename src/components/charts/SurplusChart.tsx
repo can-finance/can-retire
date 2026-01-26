@@ -5,9 +5,10 @@ import type { SimulationResult } from '../../engine/types';
 interface SurplusChartProps {
     data: SimulationResult[];
     inflationAdjusted: boolean;
+    domainMax?: number;
 }
 
-export const SurplusChart = React.memo(function SurplusChart({ data, inflationAdjusted }: SurplusChartProps) {
+export const SurplusChart = React.memo(function SurplusChart({ data, inflationAdjusted, domainMax }: SurplusChartProps) {
     const formatCurrency = (val: number) => {
         if (Math.abs(val) >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
         if (Math.abs(val) >= 1000) return `$${(val / 1000).toFixed(0)}k`;
@@ -48,6 +49,7 @@ export const SurplusChart = React.memo(function SurplusChart({ data, inflationAd
                         tick={{ fontSize: 12 }}
                         tickLine={false}
                         axisLine={false}
+                        domain={domainMax ? [0, domainMax] : ['auto', 'auto']}
                     />
                     <Tooltip
                         formatter={((val: number) => {
