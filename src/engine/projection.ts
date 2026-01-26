@@ -156,6 +156,20 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
     const results: SimulationResult[] = [];
     const { person, spouse, province, inflationRate, returnRates, preRetirementSpend, postRetirementSpend, withdrawalStrategy } = inputs;
 
+    // Guard: Return empty if invalid age configuration
+    if (person.age >= person.lifeExpectancy) return results;
+    if (person.age < 0 || person.lifeExpectancy < 0) return results;
+    if (person.retirementAge > person.lifeExpectancy) return results;
+    if (isNaN(person.age) || isNaN(person.lifeExpectancy)) return results;
+
+    // Spouse guards
+    if (spouse) {
+        if (spouse.age >= spouse.lifeExpectancy) return results;
+        if (spouse.age < 0 || spouse.lifeExpectancy < 0) return results;
+        if (spouse.retirementAge > spouse.lifeExpectancy) return results;
+        if (isNaN(spouse.age) || isNaN(spouse.lifeExpectancy)) return results;
+    }
+
     // Deep copy to avoid mutating inputs
     const p = JSON.parse(JSON.stringify(person)) as Person;
     const s = spouse ? JSON.parse(JSON.stringify(spouse)) as Person : undefined;
@@ -165,6 +179,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         p.lifeExpectancy,
         s ? s.lifeExpectancy + (s.age - p.age) : 0
     );
+
+    // Guard: Prevent infinite loops
+    if (endAge - startAge > 120) return results;
 
     for (let yearOffset = 0; yearOffset <= (endAge - startAge); yearOffset++) {
         const pAge = startAge + yearOffset;
@@ -177,11 +194,16 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         const inflationFactor = Math.pow(1 + inflationRate, yearOffset);
 
-        // Household Retirement Status
+
         const isRetired = (pAlive ? pAge >= p.retirementAge : true) &&
             (sAlive && sAge ? sAge >= s.retirementAge : true);
 
-        const targetSpend = (isRetired ? postRetirementSpend : preRetirementSpend) * inflationFactor;
+        // One-time expenses for this year
+        const annualOneTimeExpenses = (inputs.oneTimeExpenses || [])
+            .filter(e => e.age === pAge)
+            .reduce((sum, e) => sum + e.amount, 0);
+
+        const targetSpend = ((isRetired ? postRetirementSpend : preRetirementSpend) * inflationFactor) + annualOneTimeExpenses;
 
         // --- Determine Returns for this Year ---
         let currentYearRates = returnRates;

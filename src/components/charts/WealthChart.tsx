@@ -34,8 +34,9 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
     return (
         <div className="h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="mb-6 text-lg font-bold text-slate-900">Projected Net Worth</h3>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="90%">
                 <AreaChart
+                    key={hasSpouse ? 'spouse' : 'single'}
                     data={chartData}
                     margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                 >
@@ -81,14 +82,46 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
                         axisLine={false}
                     />
                     <Tooltip
-                        formatter={((val: number) => {
-                            if (val === undefined || val === null || Math.abs(val) < 1) return [undefined, undefined]; // Hide 0 values
-                            return [
-                                new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(val),
-                                undefined
-                            ];
-                        }) as any}
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        content={({ active, payload }) => {
+                            if (!active || !payload || !payload.length) return null;
+
+                            const labelMap: Record<string, string> = {
+                                'pRRSP': 'RRSP/RRIF',
+                                'sRRSP': 'Spouse RRSP/RRIF',
+                                'pTFSA': 'TFSA',
+                                'sTFSA': 'Spouse TFSA',
+                                'pNonReg': 'Non-Reg',
+                                'sNonReg': 'Spouse Non-Reg'
+                            };
+
+                            const data = payload[0]?.payload;
+                            let total = 0;
+
+                            return (
+                                <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-200">
+                                    <p className="font-semibold text-slate-900 mb-2">Age {data?.age}</p>
+                                    {payload.filter((entry: any) => Math.abs(entry.value) >= 1).map((entry: any, index: number) => {
+                                        total += entry.value;
+                                        return (
+                                            <div key={index} className="flex justify-between gap-4 text-sm">
+                                                <span className="text-slate-600" style={{ color: entry.color }}>
+                                                    {labelMap[entry.dataKey] || entry.name}
+                                                </span>
+                                                <span className="font-semibold text-slate-900">
+                                                    {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(entry.value)}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between gap-4 text-sm font-semibold">
+                                        <span className="text-slate-900">Total Net Worth</span>
+                                        <span className="text-slate-900">
+                                            {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(total)}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        }}
                     />
                     <Legend
                         iconType="circle"

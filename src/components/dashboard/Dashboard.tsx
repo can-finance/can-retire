@@ -5,6 +5,8 @@ import { useScenarios } from '../../hooks/useScenarios';
 import type { SavedScenario } from '../../hooks/useScenarios';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { AssetMixInput } from '../inputs/AssetMixInput';
+import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
+import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { WealthChart } from '../charts/WealthChart';
 import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
@@ -43,8 +45,9 @@ const INITIAL_INPUTS: SimulationInputs = {
     spouse: undefined,
     province: 'ON',
     inflationRate: 0.025,
-    preRetirementSpend: 70000,
-    postRetirementSpend: 80000,
+    preRetirementSpend: 60000,
+    postRetirementSpend: 55000,
+    oneTimeExpenses: [],
     withdrawalStrategy: 'rrsp-first',
     useIncomeSplitting: true,
     returnRates: {
@@ -164,6 +167,25 @@ export function Dashboard() {
 
 
     const metrics = useMemo(() => {
+        // Guard: Return default metrics if no simulation results
+        if (simulationResults.length === 0) {
+            return {
+                estate: 0,
+                estateTax: 0,
+                annualTaxRetirement: 0,
+                effectiveTaxRateRetirement: 0,
+                effectiveTaxRateEstate: 0,
+                totalEffectiveTaxRate: 0,
+                totalTaxPlusEstate: 0,
+                totalRetirementIncome: 0,
+                netRetirementIncome: 0,
+                netEstateValue: 0,
+                totalNetValue: 0,
+                initialWithdrawalRate: 0,
+                outOfMoneyAge: null
+            };
+        }
+
         const lastYear = simulationResults[simulationResults.length - 1];
         const retirementResults = simulationResults.filter(r => r.age >= inputs.person.retirementAge);
 
@@ -269,18 +291,6 @@ export function Dashboard() {
                 {/* Sidebar / Inputs */}
                 <div className="lg:col-span-4 space-y-6">
                     {/* ... existing sidebar ... */}
-                    {/* Saved Scenarios */}
-                    <ScenarioManager
-                        scenarios={scenarios}
-                        activeScenarioId={activeScenarioId}
-                        currentInputs={inputs}
-                        onSave={handleSaveScenario}
-                        onUpdate={handleUpdateScenario}
-                        onLoad={loadScenario}
-                        onDelete={deleteScenario}
-                        onCreateNew={handleCreateNew}
-
-                    />
 
                     {/* Person 1 Profile */}
                     <PersonSection
@@ -320,8 +330,11 @@ export function Dashboard() {
                     )}
 
                     {/* Household Spending */}
-                    <section className="bg-emerald-50/60 rounded-2xl p-6 shadow-sm border border-emerald-100 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900 border-b border-emerald-200/50 pb-2">Household Spending</h2>
+                    <CollapsibleSection
+                        title="Household Spending"
+                        className="bg-emerald-50/60 border-emerald-100"
+                        headerClassName="bg-emerald-50/60"
+                    >
                         <div className="grid grid-cols-2 gap-4">
                             <FinancialInput
                                 label="Pre-Retirement"
@@ -334,34 +347,25 @@ export function Dashboard() {
                                 onChange={(e) => setInputs({ ...inputs, postRetirementSpend: Number(e.target.value) })}
                             />
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-sm font-medium text-slate-700">Province</label>
-                            <select
-                                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-                                value={inputs.province}
-                                onChange={(e) => setInputs({ ...inputs, province: e.target.value })}
-                            >
-                                <option value="AB">Alberta</option>
-                                <option value="BC">British Columbia</option>
-                                <option value="MB">Manitoba</option>
-                                <option value="NB">New Brunswick</option>
-                                <option value="NL">Newfoundland and Labrador</option>
-                                <option value="NS">Nova Scotia</option>
-                                <option value="NT">Northwest Territories</option>
-                                <option value="NU">Nunavut</option>
-                                <option value="ON">Ontario</option>
-                                <option value="PE">Prince Edward Island</option>
-                                <option value="QC">Quebec</option>
-                                <option value="SK">Saskatchewan</option>
-                                <option value="YT">Yukon</option>
-                            </select>
-                        </div>
 
-                    </section>
+                        <div className="pt-2 border-t border-emerald-200/50 mt-4">
+                            <OneTimeSpendingInput
+                                expenses={inputs.oneTimeExpenses || []}
+                                onChange={(expenses) => setInputs({ ...inputs, oneTimeExpenses: expenses })}
+                            />
+                        </div>
+                    </CollapsibleSection>
+
+
+
 
                     {/* Asset Mix */}
-                    <section className="bg-amber-50/60 rounded-2xl p-6 shadow-sm border border-amber-100 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900 border-b border-amber-200/50 pb-2">Non-Reg Asset Mix</h2>
+                    <CollapsibleSection
+                        title="Non-Reg Asset Mix"
+                        className="bg-amber-50/60 border-amber-100"
+                        headerClassName="bg-amber-50/60"
+                        defaultOpen={false}
+                    >
                         <AssetMixInput
                             mix={inputs.person.nonRegistered.assetMix}
                             onChange={(newMix) => setInputs({
@@ -375,128 +379,172 @@ export function Dashboard() {
                                 }
                             })}
                         />
-                    </section>
+                    </CollapsibleSection>
 
                     {/* Assumptions */}
-                    <section className="bg-rose-50/80 rounded-2xl p-6 shadow-sm border border-slate-200 space-y-4">
-                        <h2 className="text-xl font-bold text-slate-900 border-b border-slate-200 pb-2">Assumptions</h2>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <FinancialInput
-                                label="Inflation Rate"
-                                prefix="%"
-                                minFractionDigits={1}
-                                maxFractionDigits={1}
-                                value={Number((inputs.inflationRate * 100).toFixed(1))}
-                                onChange={(e) => setInputs({ ...inputs, inflationRate: Number(e.target.value) / 100 })}
-                            />
-                            <FinancialInput
-                                label="Equity Returns"
-                                prefix="%"
-                                minFractionDigits={1}
-                                maxFractionDigits={1}
-                                value={Number((inputs.returnRates.capitalGrowth * 100).toFixed(1))}
-                                onChange={(e) => setInputs({
-                                    ...inputs,
-                                    returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
-                                })}
-                            />
-                            <FinancialInput
-                                label="Dividend Yield"
-                                prefix="%"
-                                minFractionDigits={1}
-                                maxFractionDigits={1}
-                                value={Number((inputs.returnRates.dividend * 100).toFixed(1))}
-                                onChange={(e) => setInputs({
-                                    ...inputs,
-                                    returnRates: { ...inputs.returnRates, dividend: Number(e.target.value) / 100 }
-                                })}
-                            />
-                            <FinancialInput
-                                label="Interest Rate"
-                                prefix="%"
-                                minFractionDigits={1}
-                                maxFractionDigits={1}
-                                value={Number((inputs.returnRates.interest * 100).toFixed(1))}
-                                onChange={(e) => setInputs({
-                                    ...inputs,
-                                    returnRates: { ...inputs.returnRates, interest: Number(e.target.value) / 100 }
-                                })}
-                            />
-                        </div>
-
-                        {/* Monte Carlo Toggle & Volatility */}
-                        <div className="pt-2 border-t border-slate-100 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                                    Monte Carlo Simulation
-                                    <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
-                                </label>
-                                <div
-                                    className={`w-11 h-6 flex items-center bg-slate-200 rounded-full p-1 cursor-pointer transition-colors ${isMonteCarlo ? 'bg-emerald-600' : ''}`}
-                                    onClick={() => setIsMonteCarlo(!isMonteCarlo)}
+                    <CollapsibleSection
+                        title="Assumptions"
+                        className="bg-rose-50/80 border-slate-200"
+                        headerClassName="bg-rose-50/80"
+                        defaultOpen={false}
+                    >
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-1.5">
+                                <label
+                                    className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300 w-fit"
+                                    title="Determines provincial income tax rates, brackets, surtaxes (e.g. Ontario Health Premium), and tax credits used in the simulation."
                                 >
-                                    <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isMonteCarlo ? 'translate-x-5' : ''}`}></div>
-                                </div>
+                                    Province
+                                </label>
+                                <select
+                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
+                                    value={inputs.province}
+                                    onChange={(e) => setInputs({ ...inputs, province: e.target.value })}
+                                >
+                                    <option value="AB">Alberta</option>
+                                    <option value="BC">British Columbia</option>
+                                    <option value="MB">Manitoba</option>
+                                    <option value="NB">New Brunswick</option>
+                                    <option value="NL">Newfoundland and Labrador</option>
+                                    <option value="NS">Nova Scotia</option>
+                                    <option value="NT">Northwest Territories</option>
+                                    <option value="NU">Nunavut</option>
+                                    <option value="ON">Ontario</option>
+                                    <option value="PE">Prince Edward Island</option>
+                                    <option value="QC">Quebec</option>
+                                    <option value="SK">Saskatchewan</option>
+                                    <option value="YT">Yukon</option>
+                                </select>
                             </div>
 
-                            {isMonteCarlo && (
-                                <div className="bg-indigo-50/50 p-3 rounded-lg space-y-2 border border-indigo-100">
-                                    <FinancialInput
-                                        label="Volatility (Risk)"
-                                        prefix="%"
-                                        minFractionDigits={1}
-                                        maxFractionDigits={1}
-                                        value={Number(((inputs.returnRates.volatility || 0.10) * 100).toFixed(1))}
-                                        onChange={(e) => setInputs({
-                                            ...inputs,
-                                            returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
-                                        })}
-                                        helperText="Standard deviation of annual returns (e.g. 10% for equities)."
-                                    />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FinancialInput
+                                    label="Inflation Rate"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number((inputs.inflationRate * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({ ...inputs, inflationRate: Number(e.target.value) / 100 })}
+                                />
+                                <FinancialInput
+                                    label="Equity Returns"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number((inputs.returnRates.capitalGrowth * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
+                                    })}
+                                />
+                                <FinancialInput
+                                    label="Dividend Yield"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number((inputs.returnRates.dividend * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        returnRates: { ...inputs.returnRates, dividend: Number(e.target.value) / 100 }
+                                    })}
+                                />
+                                <FinancialInput
+                                    label="Interest Rate"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number((inputs.returnRates.interest * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        returnRates: { ...inputs.returnRates, interest: Number(e.target.value) / 100 }
+                                    })}
+                                />
+                            </div>
+
+                            {/* Monte Carlo Toggle & Volatility */}
+                            <div className="pt-2 border-t border-slate-100 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                                        Monte Carlo Simulation
+                                        <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
+                                    </label>
+                                    <div
+                                        className={`w-11 h-6 flex items-center bg-slate-200 rounded-full p-1 cursor-pointer transition-colors ${isMonteCarlo ? 'bg-emerald-600' : ''}`}
+                                        onClick={() => setIsMonteCarlo(!isMonteCarlo)}
+                                    >
+                                        <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isMonteCarlo ? 'translate-x-5' : ''}`}></div>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
 
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                            <label className="text-sm font-medium text-slate-700">Use Pension Income Splitting</label>
-                            <input
-                                type="checkbox"
-                                checked={inputs.useIncomeSplitting ?? true}
-                                onChange={(e) => setInputs({ ...inputs, useIncomeSplitting: e.target.checked })}
-                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            />
-                        </div>
+                                {isMonteCarlo && (
+                                    <div className="bg-indigo-50/50 p-3 rounded-lg space-y-2 border border-indigo-100">
+                                        <FinancialInput
+                                            label="Volatility (Risk)"
+                                            prefix="%"
+                                            minFractionDigits={1}
+                                            maxFractionDigits={1}
+                                            value={Number(((inputs.returnRates.volatility || 0.10) * 100).toFixed(1))}
+                                            onChange={(e) => setInputs({
+                                                ...inputs,
+                                                returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
+                                            })}
+                                            helperText="Standard deviation of annual returns (e.g. 10% for equities)."
+                                        />
+                                    </div>
+                                )}
+                            </div>
 
-                        <div
-                            className="flex items-center justify-between pt-2 border-t border-slate-100"
-                            title="If unchecked, withdrawals will come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
-                        >
-                            <label className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300">
-                                Withdraw from RRSP First
-                            </label>
-                            <input
-                                type="checkbox"
-                                checked={inputs.withdrawalStrategy === 'rrsp-first'}
-                                onChange={(e) => setInputs({
-                                    ...inputs,
-                                    withdrawalStrategy: e.target.checked ? 'rrsp-first' : 'tax-efficient'
-                                })}
-                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            />
-                        </div>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                                <label className="text-sm font-medium text-slate-700">Use Pension Income Splitting</label>
+                                <input
+                                    type="checkbox"
+                                    checked={inputs.useIncomeSplitting ?? true}
+                                    onChange={(e) => setInputs({ ...inputs, useIncomeSplitting: e.target.checked })}
+                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                />
+                            </div>
 
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                            <label className="text-sm font-medium text-slate-700">Show Real Dollars (Inflation Adjusted)</label>
-                            <input
-                                type="checkbox"
-                                checked={isInflationAdjusted}
-                                onChange={(e) => setIsInflationAdjusted(e.target.checked)}
-                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            />
-                        </div>
+                            <div
+                                className="flex items-center justify-between pt-2 border-t border-slate-100"
+                                title="If unchecked, withdrawals will come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
+                            >
+                                <label className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300">
+                                    Withdraw from RRSP First
+                                </label>
+                                <input
+                                    type="checkbox"
+                                    checked={inputs.withdrawalStrategy === 'rrsp-first'}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        withdrawalStrategy: e.target.checked ? 'rrsp-first' : 'tax-efficient'
+                                    })}
+                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                />
+                            </div>
 
-                    </section>
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                                <label className="text-sm font-medium text-slate-700">Show Real Dollars (Inflation Adjusted)</label>
+                                <input
+                                    type="checkbox"
+                                    checked={isInflationAdjusted}
+                                    onChange={(e) => setIsInflationAdjusted(e.target.checked)}
+                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                                />
+                            </div>
+                        </div>
+                    </CollapsibleSection>
+
+                    {/* Saved Scenarios */}
+                    <ScenarioManager
+                        scenarios={scenarios}
+                        activeScenarioId={activeScenarioId}
+                        currentInputs={inputs}
+                        onSave={handleSaveScenario}
+                        onUpdate={handleUpdateScenario}
+                        onLoad={loadScenario}
+                        onDelete={deleteScenario}
+                        onCreateNew={handleCreateNew}
+                    />
                 </div>
 
                 {/* Main Content / Charts */}
@@ -547,6 +595,6 @@ export function Dashboard() {
                     <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} />
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

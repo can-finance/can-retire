@@ -9,7 +9,7 @@ interface AppLayoutProps {
 export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900">
-            <header className="sticky top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
+            <header className="lg:sticky lg:top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
                     <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">

@@ -121,6 +121,13 @@ export interface SimulationResult {
     householdSurplus: number;
 }
 
+export interface OneTimeExpense {
+    id: string;
+    name: string;
+    amount: number;
+    age: number; // Age of primary person when expense occurs
+}
+
 export interface SimulationInputs {
     person: Person;
     spouse?: Person;
@@ -128,6 +135,7 @@ export interface SimulationInputs {
     inflationRate: number;
     preRetirementSpend: number; // Household spending pre-retirement
     postRetirementSpend: number; // Household spending post-retirement
+    oneTimeExpenses?: OneTimeExpense[];
     useIncomeSplitting?: boolean;
     withdrawalStrategy?: 'tax-efficient' | 'rrsp-first';
     returnRates: {
