@@ -76,11 +76,11 @@ export function HowItWorks() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="space-y-2">
                         <h4 className="font-bold text-slate-900">Income Tax</h4>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                            Applies federal and provincial brackets, including the Basic Personal Amount, Age Amount (65+), and Pension Income Credit.
+                            Applies federal and provincial brackets, including the Basic Personal Amount, Age Amount (65+), and Pension Income Credit. <strong>All tax brackets and credit thresholds are indexed to your projected inflation rate</strong> to maintain consistent purchasing power values throughout the simulation.
                         </p>
                     </div>
                     <div className="space-y-2">
@@ -95,6 +95,12 @@ export function HowItWorks() {
                             Non-Registered withdrawals use your <strong>Adjusted Cost Base (ACB)</strong>. Only 50% of the gain portion is included in taxable income.
                         </p>
                     </div>
+                    <div className="space-y-2">
+                        <h4 className="font-bold text-slate-900">Dividend Tax Credit</h4>
+                        <p className="text-xs text-slate-600 leading-relaxed">
+                            Eligible Canadian dividends are grossed up (38%) and receive both federal and provincial non-refundable tax credits to reflect taxes already paid by corporations.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="pt-6 border-t border-slate-100 flex items-center gap-4">
@@ -106,6 +112,21 @@ export function HowItWorks() {
                     <p className="text-sm text-slate-500 italic">
                         Note: This is a planning tool, not a tax return. Calculations are approximations based on current tax law and do not account for all possible deductions or credits.
                     </p>
+                </div>
+            </section>
+
+            {/* Income Splitting Section */}
+            <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
+                <h2 className="text-2xl font-bold text-slate-900">Pension Income Splitting</h2>
+                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                    <p>
+                        For couples, the engine automatically calculates the optimal amount of eligible pension income (like RRIF withdrawals) to "split" with a lower-earning spouse.
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li><strong>Optimization:</strong> Each year, the simulation tests different splitting percentages (up to 50%) to find the point that minimizes the household's combined tax bill.</li>
+                        <li><strong>OAS Impact:</strong> It also considers how splitting income might help one spouse avoid or reduce an OAS clawback.</li>
+                        <li><strong>Credits:</strong> The engine ensures that splitting income also preserves various tax credits (like the Age Amount) where beneficial.</li>
+                    </ul>
                 </div>
             </section>
 

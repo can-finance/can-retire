@@ -131,7 +131,9 @@ export function calculateIncomeTax(
     province: string,
     inflationFactor: number = 1.0,
     taxRates: TaxRates = TAX_CONSTANTS,
-    age: number = 0
+    age: number = 0,
+    eligiblePensionIncome: number = 0, // RRIF, company pension, annuity income
+    grossedUpDividends: number = 0 // Dividend income after 38% gross-up
 ): number {
     const fedTax = calculateTieredTax(taxableIncome, taxRates.federalBrackets, inflationFactor);
     const provTax = calculateTieredTax(taxableIncome, taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'], inflationFactor);
@@ -143,13 +145,31 @@ export function calculateIncomeTax(
 
     let totalTax = (fedTax - fedCredits) + (provTax - provCredits);
 
-    // Age and Pension Credits (Approximation)
+    // --- Pension Income Credit (Federal non-refundable) ---
+    // Only applies to eligible pension income: RRIF, company pension, annuity
+    // NOT employment income, CPP, OAS, or investment income
+    if (eligiblePensionIncome > 0) {
+        const maxPensionCredit = 2000 * inflationFactor;
+        const eligibleAmount = Math.min(eligiblePensionIncome, maxPensionCredit);
+        // Federal: 15% of eligible amount
+        totalTax -= eligibleAmount * 0.15;
+        // Provincial: ~5% approximation (varies by province)
+        totalTax -= eligibleAmount * 0.05;
+    }
 
-    // 1. Pension Income Credit (Federal non-refundable)
-    if (taxableIncome > 2000 * inflationFactor) {
-        // Assume eligibility if high enough income in retirement phase
-        // Technically requires pension income source, but RRIF qualifies.
-        totalTax -= 2000 * inflationFactor * 0.20;
+    // --- Dividend Tax Credit ---
+    // For eligible Canadian dividends grossed up by 38%
+    // Federal DTC: ~15.02% of grossed-up amount
+    // Provincial DTC: varies by province (using simplified rates)
+    if (grossedUpDividends > 0) {
+        const federalDTC = grossedUpDividends * 0.1502;
+        const provincialDTCRates: Record<string, number> = {
+            'AB': 0.0812, 'BC': 0.12, 'MB': 0.08, 'NB': 0.14,
+            'NL': 0.0635, 'NS': 0.0885, 'NT': 0.1155, 'NU': 0.0551,
+            'ON': 0.10, 'PE': 0.1063, 'QC': 0.117, 'SK': 0.11, 'YT': 0.1502
+        };
+        const provincialDTC = grossedUpDividends * (provincialDTCRates[province] || 0.10);
+        totalTax -= (federalDTC + provincialDTC);
     }
 
     // 2. Age Amount (Federal)
@@ -252,4 +272,163 @@ export function calculateOASClawback(
 
     const repayment = (netIncome - indexedThreshold) * 0.15;
     return Math.min(repayment, maxClawback);
+}
+
+/**
+ * Calculate optimal pension income split between two spouses.
+ * Under Canadian tax law, up to 50% of eligible pension income can be split to a spouse.
+ * Eligible income: RRIF withdrawals, company pension, annuities (NOT CPP/OAS/employment)
+ * Requirement: Transferor must be 65+ years old.
+ */
+export interface SplitPerson {
+    taxableIncome: number;
+    eligiblePensionIncome: number;
+    oasIncome: number;
+    grossedUpDividends: number;
+    age: number;
+}
+
+export interface SplitResult {
+    splitAmount: number;         // Amount of pension income transferred
+    fromPerson: 1 | 2;           // Who is transferring (1 or 2)
+    taxSavings: number;          // Reduction in combined tax
+    person1NewTax: number;
+    person2NewTax: number;
+}
+
+export function calculateOptimalSplit(
+    person1: SplitPerson,
+    person2: SplitPerson,
+    province: string,
+    inflationFactor: number
+): SplitResult {
+    // Calculate baseline taxes (no splitting)
+    const p1BaseTax = calculateIncomeTax(
+        person1.taxableIncome, province, inflationFactor, undefined,
+        person1.age, person1.eligiblePensionIncome, person1.grossedUpDividends
+    ) + calculateOASClawback(person1.taxableIncome, person1.oasIncome, inflationFactor);
+
+    const p2BaseTax = calculateIncomeTax(
+        person2.taxableIncome, province, inflationFactor, undefined,
+        person2.age, person2.eligiblePensionIncome, person2.grossedUpDividends
+    ) + calculateOASClawback(person2.taxableIncome, person2.oasIncome, inflationFactor);
+
+    const baselineCombinedTax = p1BaseTax + p2BaseTax;
+
+    // Helper to calculate combined tax after splitting 'amount' from person A to person B
+    const calcTaxWithSplit = (fromPerson: SplitPerson, toPerson: SplitPerson, amount: number): number => {
+        // Transferor: reduces taxable income and eligible pension income by amount
+        const fromNewTaxable = fromPerson.taxableIncome - amount;
+        const fromNewPension = fromPerson.eligiblePensionIncome - amount;
+
+        // Recipient: increases taxable income (and gains pension credit eligibility)
+        const toNewTaxable = toPerson.taxableIncome + amount;
+        const toNewPension = toPerson.eligiblePensionIncome + amount;
+
+        const fromTax = calculateIncomeTax(
+            fromNewTaxable, province, inflationFactor, undefined,
+            fromPerson.age, fromNewPension, fromPerson.grossedUpDividends
+        ) + calculateOASClawback(fromNewTaxable, fromPerson.oasIncome, inflationFactor);
+
+        const toTax = calculateIncomeTax(
+            toNewTaxable, province, inflationFactor, undefined,
+            toPerson.age, toNewPension, toPerson.grossedUpDividends
+        ) + calculateOASClawback(toNewTaxable, toPerson.oasIncome, inflationFactor);
+
+        return fromTax + toTax;
+    };
+
+    // Determine who can split (must be 65+ and have eligible pension income)
+    const p1CanSplit = person1.age >= 65 && person1.eligiblePensionIncome > 0;
+    const p2CanSplit = person2.age >= 65 && person2.eligiblePensionIncome > 0;
+
+    let bestResult: SplitResult = {
+        splitAmount: 0,
+        fromPerson: 1,
+        taxSavings: 0,
+        person1NewTax: p1BaseTax,
+        person2NewTax: p2BaseTax
+    };
+
+    // Try splitting from Person 1 to Person 2
+    if (p1CanSplit) {
+        const maxSplit = person1.eligiblePensionIncome * 0.5;
+
+        // Binary search for optimal split amount
+        let low = 0, high = maxSplit;
+        for (let i = 0; i < 15; i++) {
+            const mid1 = low + (high - low) / 3;
+            const mid2 = high - (high - low) / 3;
+
+            const tax1 = calcTaxWithSplit(person1, person2, mid1);
+            const tax2 = calcTaxWithSplit(person1, person2, mid2);
+
+            if (tax1 < tax2) {
+                high = mid2;
+            } else {
+                low = mid1;
+            }
+        }
+
+        const optimalAmount = (low + high) / 2;
+        const combinedTax = calcTaxWithSplit(person1, person2, optimalAmount);
+        const savings = baselineCombinedTax - combinedTax;
+
+        if (savings > bestResult.taxSavings) {
+            // Calculate individual new taxes
+            const fromNewTaxable = person1.taxableIncome - optimalAmount;
+            const fromNewPension = person1.eligiblePensionIncome - optimalAmount;
+            const toNewTaxable = person2.taxableIncome + optimalAmount;
+            const toNewPension = person2.eligiblePensionIncome + optimalAmount;
+
+            bestResult = {
+                splitAmount: optimalAmount,
+                fromPerson: 1,
+                taxSavings: savings,
+                person1NewTax: calculateIncomeTax(fromNewTaxable, province, inflationFactor, undefined, person1.age, fromNewPension, person1.grossedUpDividends) + calculateOASClawback(fromNewTaxable, person1.oasIncome, inflationFactor),
+                person2NewTax: calculateIncomeTax(toNewTaxable, province, inflationFactor, undefined, person2.age, toNewPension, person2.grossedUpDividends) + calculateOASClawback(toNewTaxable, person2.oasIncome, inflationFactor)
+            };
+        }
+    }
+
+    // Try splitting from Person 2 to Person 1
+    if (p2CanSplit) {
+        const maxSplit = person2.eligiblePensionIncome * 0.5;
+
+        let low = 0, high = maxSplit;
+        for (let i = 0; i < 15; i++) {
+            const mid1 = low + (high - low) / 3;
+            const mid2 = high - (high - low) / 3;
+
+            const tax1 = calcTaxWithSplit(person2, person1, mid1);
+            const tax2 = calcTaxWithSplit(person2, person1, mid2);
+
+            if (tax1 < tax2) {
+                high = mid2;
+            } else {
+                low = mid1;
+            }
+        }
+
+        const optimalAmount = (low + high) / 2;
+        const combinedTax = calcTaxWithSplit(person2, person1, optimalAmount);
+        const savings = baselineCombinedTax - combinedTax;
+
+        if (savings > bestResult.taxSavings) {
+            const fromNewTaxable = person2.taxableIncome - optimalAmount;
+            const fromNewPension = person2.eligiblePensionIncome - optimalAmount;
+            const toNewTaxable = person1.taxableIncome + optimalAmount;
+            const toNewPension = person1.eligiblePensionIncome + optimalAmount;
+
+            bestResult = {
+                splitAmount: optimalAmount,
+                fromPerson: 2,
+                taxSavings: savings,
+                person1NewTax: calculateIncomeTax(toNewTaxable, province, inflationFactor, undefined, person1.age, toNewPension, person1.grossedUpDividends) + calculateOASClawback(toNewTaxable, person1.oasIncome, inflationFactor),
+                person2NewTax: calculateIncomeTax(fromNewTaxable, province, inflationFactor, undefined, person2.age, fromNewPension, person2.grossedUpDividends) + calculateOASClawback(fromNewTaxable, person2.oasIncome, inflationFactor)
+            };
+        }
+    }
+
+    return bestResult;
 }

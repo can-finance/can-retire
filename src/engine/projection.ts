@@ -1,6 +1,7 @@
 
 import type { Person, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
-import { calculateIncomeTax, calculateOASClawback, TAX_CONSTANTS } from './tax';
+import { calculateIncomeTax, calculateOASClawback, TAX_CONSTANTS, calculateOptimalSplit } from './tax';
+import type { SplitPerson } from './tax';
 import { calculateEstimatedCPP, calculateOAS } from './cpp';
 
 // --- Helper Types for Internal engine calculation ---
@@ -127,9 +128,11 @@ function simulatePersonBaseYear(
     const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
 
     // Calculate Base Tax
+    // Eligible pension income for pension credit: RRIF + voluntary RRSP melt
+    const eligiblePensionIncome = rrifWithdrawal + voluntaryRRSPWithdrawal;
     const baseTaxable = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp;
     const oasRecovery = calculateOASClawback(baseTaxable, oasIncome, inflationFactor);
-    const totalTax = calculateIncomeTax(baseTaxable, province, inflationFactor, undefined, age) + oasRecovery;
+    const totalTax = calculateIncomeTax(baseTaxable, province, inflationFactor, undefined, age, eligiblePensionIncome, divGrossUp) + oasRecovery;
 
     // Net Cash Calculation
     // Total Cash In = Emp + CPP + OAS + RRIF + Melt + Int + Div
@@ -342,7 +345,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
                         // Calculate marginal tax on the *actual* gross we extracted
                         const originalClawback = calculateOASClawback(currentTaxable, base.oasIncome, inflationFactor);
-                        const originalTax = calculateIncomeTax(currentTaxable, province, inflationFactor) + originalClawback;
+                        const originalTax = calculateIncomeTax(currentTaxable, province, inflationFactor, undefined, personObj.age) + originalClawback;
 
                         const newClawback = calculateOASClawback(newTaxable, base.oasIncome, inflationFactor);
                         const newTax = calculateIncomeTax(newTaxable, province, inflationFactor, undefined, personObj.age) + newClawback;
@@ -447,10 +450,12 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number) => {
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
             const taxableGains = realizedGains * 0.5;
-            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + (base.divIncome * 1.38) + taxableGains;
+            const grossedUpDivs = base.divIncome * 1.38;
+            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + grossedUpDivs + taxableGains;
 
             const oasRecovery = calculateOASClawback(finalTaxable, base.oasIncome, inflationFactor);
-            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age) + oasRecovery;
+            // Pass totalRRSP as eligible pension income, grossedUpDivs for dividend tax credit
+            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, totalRRSP, grossedUpDivs) + oasRecovery;
 
             // Net Cash "In Hand" from this person (excluding shared withdrawals which were tracked separately? No, include all sourced from them)
             // Wait, "Net Cash" for the Spending Chart needs to be pure.
@@ -477,7 +482,37 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const pFinal = pAlive && pBase ? getFinalStats(pBase, pExtraRRSPGross, pRealizedGains, pAge) : null;
         const sFinal = sAlive && s && sBase ? getFinalStats(sBase, sExtraRRSPGross, sRealizedGains, sAge!) : null;
 
-        const totalTaxPaid = (pFinal?.finalTax || 0) + (sFinal?.finalTax || 0);
+        let totalTaxPaid = (pFinal?.finalTax || 0) + (sFinal?.finalTax || 0);
+        let pensionSplitAmount = 0;
+        let taxSavingsFromSplit = 0;
+
+        // --- Step 5.5: Income Splitting Optimization ---
+        // Apply pension income splitting if enabled and both spouses are alive
+        if (inputs.useIncomeSplitting && pAlive && sAlive && pFinal && sFinal && pBase && sBase) {
+            const pSplitInfo: SplitPerson = {
+                taxableIncome: pFinal.finalTaxable,
+                eligiblePensionIncome: pFinal.totalRRSP,
+                oasIncome: pBase.oasIncome,
+                grossedUpDividends: pBase.divIncome * 1.38,
+                age: pAge
+            };
+            const sSplitInfo: SplitPerson = {
+                taxableIncome: sFinal.finalTaxable,
+                eligiblePensionIncome: sFinal.totalRRSP,
+                oasIncome: sBase.oasIncome,
+                grossedUpDividends: sBase.divIncome * 1.38,
+                age: sAge!
+            };
+
+            const splitResult = calculateOptimalSplit(pSplitInfo, sSplitInfo, province, inflationFactor);
+
+            if (splitResult.taxSavings > 0) {
+                pensionSplitAmount = splitResult.splitAmount;
+                taxSavingsFromSplit = splitResult.taxSavings;
+                // Apply the new optimized tax amounts
+                totalTaxPaid = splitResult.person1NewTax + splitResult.person2NewTax;
+            }
+        }
 
         // --- Step 6: Asset Growth (End of Year) ---
 
@@ -537,6 +572,86 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // (Technically realized gains invoke tax, but we treated them as accessible cash for deficit. 
         // The tax bill generated by them reduces the 'Net Analysis' of next year or is absorbed by the gap filler.)
 
+        // --- Step 7: Terminal Tax (Death Year Calculations) ---
+        // Detect if this is the death year for either person
+        const pDiedThisYear = pAge === p.lifeExpectancy;
+        const sDiedThisYear = s && sAge === s.lifeExpectancy;
+        const bothDiedThisYear = pDiedThisYear && sDiedThisYear;
+        const isDeathYear = pDiedThisYear || sDiedThisYear;
+
+        let terminalTaxOnRRSP = 0;
+        let terminalTaxOnCapGains = 0;
+        let rrspRolledToSpouse = 0;
+
+        // Calculate terminal taxes when someone dies
+        if (pDiedThisYear) {
+            const pRRSPBalance = p.rrsp.balance;
+            const pNonRegBalance = p.nonRegistered.balance;
+            const pACB = p.nonRegistered.adjustedCostBase;
+            const pUnrealizedGains = Math.max(0, pNonRegBalance - pACB);
+
+            // Only rollover if spouse survives (not dying this year too)
+            if (sAlive && s && !bothDiedThisYear) {
+                // Rollover: Transfer RRSP to spouse's RRSP
+                s.rrsp.balance += pRRSPBalance;
+                rrspRolledToSpouse += pRRSPBalance;
+                // Non-Reg also rolls over at ACB (no tax triggered)
+                s.nonRegistered.balance += pNonRegBalance;
+                s.nonRegistered.adjustedCostBase += pACB;
+            } else {
+                // No surviving spouse: Full deemed disposition
+                // Combine RRSP + capital gains for single tax calculation (proper marginal rates)
+                const taxableGains = pUnrealizedGains * 0.5;
+                const totalDeemedIncome = pRRSPBalance + taxableGains;
+
+                if (totalDeemedIncome > 0) {
+                    const combinedTerminalTax = calculateIncomeTax(totalDeemedIncome, province, inflationFactor, undefined, pAge);
+                    // Pro-rate for reporting breakdown
+                    terminalTaxOnRRSP += combinedTerminalTax * (pRRSPBalance / totalDeemedIncome);
+                    terminalTaxOnCapGains += combinedTerminalTax * (taxableGains / totalDeemedIncome);
+                }
+            }
+        }
+
+        if (sDiedThisYear && s) {
+            const sRRSPBalance = s.rrsp.balance;
+            const sNonRegBalance = s.nonRegistered.balance;
+            const sACB = s.nonRegistered.adjustedCostBase;
+            const sUnrealizedGains = Math.max(0, sNonRegBalance - sACB);
+
+            // Only rollover if person survives (not dying this year too)
+            if (pAlive && !bothDiedThisYear) {
+                // Rollover: Transfer RRSP to person's RRSP
+                p.rrsp.balance += sRRSPBalance;
+                rrspRolledToSpouse += sRRSPBalance;
+                // Non-Reg also rolls over at ACB
+                p.nonRegistered.balance += sNonRegBalance;
+                p.nonRegistered.adjustedCostBase += sACB;
+            } else {
+                // No surviving spouse: Full deemed disposition
+                // Combine RRSP + capital gains for single tax calculation (proper marginal rates)
+                const taxableGains = sUnrealizedGains * 0.5;
+                const totalDeemedIncome = sRRSPBalance + taxableGains;
+
+                if (totalDeemedIncome > 0) {
+                    const combinedTerminalTax = calculateIncomeTax(totalDeemedIncome, province, inflationFactor, undefined, sAge!);
+                    // Pro-rate for reporting breakdown
+                    terminalTaxOnRRSP += combinedTerminalTax * (sRRSPBalance / totalDeemedIncome);
+                    terminalTaxOnCapGains += combinedTerminalTax * (taxableGains / totalDeemedIncome);
+                }
+            }
+        }
+
+        const totalTerminalTax = terminalTaxOnRRSP + terminalTaxOnCapGains;
+
+        // Calculate estate values (only meaningful in death year or final year)
+        const grossEstateValue = (pAlive ? p.rrsp.balance + p.tfsa.balance + p.nonRegistered.balance : 0) +
+            (sAlive && s ? s.rrsp.balance + s.tfsa.balance + s.nonRegistered.balance : 0);
+
+        // Net estate = gross - terminal tax (what heirs actually receive)
+        const netEstateValue = grossEstateValue - totalTerminalTax;
+
+
         results.push({
             year: new Date().getFullYear() + yearOffset,
             age: pAge,
@@ -595,7 +710,22 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             investmentIncome: (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0),
             totalRealizedCapGains: pRealizedGains + sRealizedGains,
             inflationFactor,
-            householdSurplus: surplus // The initial surplus before reinvestment
+            householdSurplus: surplus, // The initial surplus before reinvestment
+
+            // Income Splitting
+            pensionSplitAmount,
+            taxSavingsFromSplit,
+
+            // Estate / Death Year
+            isDeathYear,
+            personDeathThisYear: pDiedThisYear,
+            spouseDeathThisYear: sDiedThisYear,
+            terminalTaxOnRRSP,
+            terminalTaxOnCapGains,
+            totalTerminalTax,
+            grossEstateValue,
+            netEstateValue,
+            rrspRolledToSpouse
         });
     }
 

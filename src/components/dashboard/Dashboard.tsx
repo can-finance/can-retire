@@ -15,7 +15,6 @@ import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { runSimulation, runMonteCarlo } from '../../engine/projection';
 import { AccountTypeVals } from '../../engine/types';
 import type { Person, SimulationInputs, NonRegisteredAccount } from '../../engine/types';
-import { calculateIncomeTax } from '../../engine/tax';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
 import { ScenarioManager } from './ScenarioManager';
@@ -195,17 +194,14 @@ export function Dashboard() {
         const annualTaxRetirement = retirementResults.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0);
         const totalRetirementIncome = retirementResults.reduce((acc, curr) => acc + adj(curr.grossIncome, curr.inflationFactor), 0);
 
-        // Terminal income is calculated at the end (death), so use lastYear's factor
-        const rawTerminalIncome =
-            lastYear.accounts.rrsp +
-            (lastYear.spouseAccounts?.rrsp || 0) +
-            (Math.max(0, lastYear.accounts.nonRegistered - lastYear.accounts.nonRegisteredACB) * 0.5) +
-            (lastYear.spouseAccounts ? Math.max(0, lastYear.spouseAccounts.nonRegistered - lastYear.spouseAccounts.spouseNonRegisteredACB) * 0.5 : 0);
-
-        const estateTax = calculateIncomeTax(rawTerminalIncome, inputs.province); // Tax is calculated on nominal amount
+        // Terminal tax is now calculated by the engine and includes:
+        // - Deemed disposition of RRSP/RRIF at death (if no surviving spouse)
+        // - Capital gains on unrealized Non-Reg gains at death
+        // - Proper spouse rollover logic (tax-free transfer if spouse survives)
+        const estateTax = lastYear.totalTerminalTax || 0;
 
         // Convert final estate values to real dollars if needed
-        const estateValue = adj(lastYear.totalAssets, lastYear.inflationFactor);
+        const estateValue = adj(lastYear.grossEstateValue || lastYear.totalAssets, lastYear.inflationFactor);
         const adjustedEstateTax = adj(estateTax, lastYear.inflationFactor);
 
         const totalTaxPlusEstate = annualTaxRetirement + adjustedEstateTax;

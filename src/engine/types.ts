@@ -119,6 +119,21 @@ export interface SimulationResult {
     totalRealizedCapGains: number;
     inflationFactor: number;
     householdSurplus: number;
+
+    // Income Splitting
+    pensionSplitAmount?: number;     // Amount of pension income split to spouse
+    taxSavingsFromSplit?: number;    // Tax savings achieved from income splitting
+
+    // Estate / Death Year Calculations
+    isDeathYear?: boolean;                    // True if this is the final year for person or spouse
+    personDeathThisYear?: boolean;            // Primary person died this year
+    spouseDeathThisYear?: boolean;            // Spouse died this year
+    terminalTaxOnRRSP?: number;               // Tax on deemed disposition of RRSP/RRIF at death
+    terminalTaxOnCapGains?: number;           // Tax on unrealized Non-Reg gains at death
+    totalTerminalTax?: number;                // Combined terminal tax bill
+    grossEstateValue?: number;                // Total assets before terminal tax
+    netEstateValue?: number;                  // Assets minus terminal tax (what heirs receive)
+    rrspRolledToSpouse?: number;              // RRSP amount rolled over tax-free to surviving spouse
 }
 
 export interface OneTimeExpense {
