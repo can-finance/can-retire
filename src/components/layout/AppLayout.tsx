@@ -12,9 +12,7 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
             <header className="lg:sticky lg:top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
                     <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-500 to-indigo-600 flex items-center justify-center text-white font-bold text-lg">
-                            C
-                        </div>
+
                         <h1 className="text-lg font-bold tracking-tight text-slate-900">
                             Canadian Retirement Asset Planning <span className="text-brand-500">tool</span>
                         </h1>

@@ -1,30 +1,31 @@
 import { useState } from 'react';
-import type { OneTimeExpense } from '../../engine/types';
+import type { OneTimeEvent } from '../../engine/types';
 
 interface Props {
-    expenses: OneTimeExpense[];
-    onChange: (expenses: OneTimeExpense[]) => void;
+    expenses: OneTimeEvent[];
+    onChange: (expenses: OneTimeEvent[]) => void;
 }
 
 export function OneTimeSpendingInput({ expenses, onChange }: Props) {
     const [newName, setNewName] = useState('');
     const [newAmount, setNewAmount] = useState<number>(0);
     const [newAge, setNewAge] = useState<number>(65);
+    const [newType, setNewType] = useState<'expense' | 'inflow'>('expense');
 
     const handleAdd = () => {
         if (!newName || newAmount <= 0) return;
 
-        const newExpense: OneTimeExpense = {
+        const newEvent: OneTimeEvent = {
             id: Math.random().toString(36).substr(2, 9),
             name: newName,
             amount: newAmount,
-            age: newAge
+            age: newAge,
+            type: newType
         };
 
-        onChange([...expenses, newExpense]);
+        onChange([...expenses, newEvent]);
         setNewName('');
         setNewAmount(0);
-        // keep age as is for convenience
     };
 
     const handleRemove = (id: string) => {
@@ -33,21 +34,27 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
 
     return (
         <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-slate-700">One-Time Expenses</h3>
+            <h3 className="text-sm font-semibold text-slate-700">One-Time Events</h3>
 
-            {/* List of existing expenses */}
+            {/* List of existing events */}
             {expenses.length > 0 && (
                 <div className="space-y-2 mb-4">
-                    {expenses.map(expense => (
-                        <div key={expense.id} className="flex items-center justify-between bg-white p-2 rounded border border-slate-200 text-sm">
-                            <div className="flex gap-3">
-                                <span className="font-medium text-slate-700 w-32 truncate" title={expense.name}>{expense.name}</span>
-                                <span className="text-slate-500">Age {expense.age}</span>
-                                <span className="text-slate-900 font-semibold">${expense.amount.toLocaleString()}</span>
+                    {expenses.map(event => (
+                        <div key={event.id} className="flex items-center justify-between bg-white p-2 rounded border border-slate-200 text-sm">
+                            <div className="flex gap-3 items-center">
+                                <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${event.type === 'inflow' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                                    }`}>
+                                    {event.type || 'expense'}
+                                </span>
+                                <span className="font-medium text-slate-700 w-24 truncate" title={event.name}>{event.name}</span>
+                                <span className="text-slate-500">Age {event.age}</span>
+                                <span className={`font-semibold ${event.type === 'inflow' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                                    {event.type === 'inflow' ? '+' : ''}${event.amount.toLocaleString()}
+                                </span>
                             </div>
                             <button
-                                onClick={() => handleRemove(expense.id)}
-                                className="text-red-400 hover:text-red-600 p-1"
+                                onClick={() => handleRemove(event.id)}
+                                className="text-red-400 hover:text-red-600 p-1 transition-colors"
                                 title="Remove"
                             >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
@@ -61,7 +68,18 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
 
             {/* Add New Form */}
             <div className="grid grid-cols-12 gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <div className="col-span-5">
+                <div className="col-span-3">
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
+                    <select
+                        className="w-full rounded border-slate-300 text-sm px-1 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
+                        value={newType}
+                        onChange={(e) => setNewType(e.target.value as 'expense' | 'inflow')}
+                    >
+                        <option value="expense">Expense</option>
+                        <option value="inflow">Inflow</option>
+                    </select>
+                </div>
+                <div className="col-span-3">
                     <label className="block text-xs font-medium text-slate-500 mb-1">Description</label>
                     <input
                         type="text"
@@ -80,7 +98,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         onChange={(e) => setNewAge(Number(e.target.value))}
                     />
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-2">
                     <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
                     <input
                         type="number"
@@ -94,7 +112,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                     <button
                         onClick={handleAdd}
                         disabled={!newName || newAmount <= 0}
-                        className="w-full bg-emerald-600 text-white rounded py-1.5 text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="w-full bg-emerald-600 text-white rounded py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                         Add
                     </button>

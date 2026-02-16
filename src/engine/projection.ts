@@ -14,6 +14,18 @@ function boxMullerRandom(): number {
     return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
+function calculateTaxableCapitalGains(totalGains: number): number {
+    // Current Canadian Tax Law (Post-June 25, 2024):
+    // 50% inclusion rate for first $250,000 of realized gains per year (for individuals).
+    // 2/3 (66.67%) inclusion rate for any gains above $250,000.
+    const threshold = 250000;
+    if (totalGains <= threshold) {
+        return totalGains * 0.5;
+    } else {
+        return (threshold * 0.5) + ((totalGains - threshold) * (2 / 3));
+    }
+}
+
 interface PersonAnnualBase {
     taxableIncome: number;
     tax: number;
@@ -102,14 +114,20 @@ function simulatePersonBaseYear(
     const oasIncome = calculateOAS(age, person.oasStartAge, inflationFactor);
 
     // RRIF Minimums
+    // RRSP must convert to RRIF by Dec 31 of the year you turn 71.
+    // First mandatory minimum withdrawal is in the calendar year you turn 72,
+    // but the RRIF factor is based on your age on Jan 1 of that year (i.e., 71).
+    // So: age >= 72 means "year you turn 72" → factor uses (age - 1) = 71.
     let rrifWithdrawal = 0;
     if (age >= 72) {
-        const minFactor = getRRIFMinFactor(age);
+        const factorAge = age - 1; // Age on Jan 1 of this calendar year
+        const minFactor = getRRIFMinFactor(factorAge);
         rrifWithdrawal = person.rrsp.balance * minFactor;
         person.rrsp.balance -= rrifWithdrawal; // Deduct immediately
     }
 
     // Voluntary Meltdown (Pre-calculated fixed gross)
+    // Stops at age 71 (last year before mandatory RRIF conversion)
     let voluntaryRRSPWithdrawal = 0;
     const meltStart = person.rrspMeltStartAge || person.retirementAge;
     if (person.rrspMeltAmount && person.rrspMeltAmount > 0 && age >= meltStart && age < 72) {
@@ -202,8 +220,15 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             (sAlive && sAge ? sAge >= s.retirementAge : true);
 
         // One-time expenses for this year
-        const annualOneTimeExpenses = (inputs.oneTimeExpenses || [])
-            .filter(e => e.age === pAge)
+        const annualOneTimeEvents = (inputs.oneTimeExpenses || [])
+            .filter(e => e.age === pAge);
+
+        const annualOneTimeExpenses = annualOneTimeEvents
+            .filter(e => e.type !== 'inflow')
+            .reduce((sum, e) => sum + e.amount, 0);
+
+        const annualOneTimeInflows = annualOneTimeEvents
+            .filter(e => e.type === 'inflow')
             .reduce((sum, e) => sum + e.amount, 0);
 
         const targetSpend = ((isRetired ? postRetirementSpend : preRetirementSpend) * inflationFactor) + annualOneTimeExpenses;
@@ -224,7 +249,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const pBase = pAlive ? simulatePersonBaseYear(p, pAge, province, currentYearRates, inflationFactor) : null;
         const sBase = sAlive && s ? simulatePersonBaseYear(s, sAge!, province, currentYearRates, inflationFactor) : null;
 
-        const householdBaseNet = (pBase?.baseNetCash || 0) + (sBase?.baseNetCash || 0);
+        const householdBaseNet = (pBase?.baseNetCash || 0) + (sBase?.baseNetCash || 0) + annualOneTimeInflows;
 
         // --- Step 2: Gap Analysis ---
         let surplus = 0;
@@ -328,7 +353,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                     // Note: We haven't finalized gains yet if order is mixed, but typically NonReg is done.
                     // IMPORTANT: The definition of 'Base' above didn't include Cap Gains yet.
 
-                    const currentTaxable = base.taxableIncome + (personObj === p ? pRealizedGains * 0.5 : sRealizedGains * 0.5);
+                    const currentTaxable = base.taxableIncome + (personObj === p ? calculateTaxableCapitalGains(pRealizedGains) : calculateTaxableCapitalGains(sRealizedGains));
 
                     const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, personObj.age);
 
@@ -449,7 +474,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number) => {
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
-            const taxableGains = realizedGains * 0.5;
+            const taxableGains = calculateTaxableCapitalGains(realizedGains);
             const grossedUpDivs = base.divIncome * 1.38;
             const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + grossedUpDivs + taxableGains;
 
@@ -587,6 +612,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         if (pDiedThisYear) {
             const pRRSPBalance = p.rrsp.balance;
             const pNonRegBalance = p.nonRegistered.balance;
+            const pTFSABalance = p.tfsa.balance;
             const pACB = p.nonRegistered.adjustedCostBase;
             const pUnrealizedGains = Math.max(0, pNonRegBalance - pACB);
 
@@ -598,17 +624,38 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 // Non-Reg also rolls over at ACB (no tax triggered)
                 s.nonRegistered.balance += pNonRegBalance;
                 s.nonRegistered.adjustedCostBase += pACB;
+                // TFSA rolls over to spouse tax-free
+                s.tfsa.balance += pTFSABalance;
+
+                // CRITICAL: Zero out deceased balances to avoid double counting and accurately reflect estate
+                p.rrsp.balance = 0;
+                p.nonRegistered.balance = 0;
+                p.nonRegistered.adjustedCostBase = 0;
+                p.tfsa.balance = 0;
             } else {
                 // No surviving spouse: Full deemed disposition
                 // Combine RRSP + capital gains for single tax calculation (proper marginal rates)
-                const taxableGains = pUnrealizedGains * 0.5;
+                const taxableGains = calculateTaxableCapitalGains(pUnrealizedGains);
                 const totalDeemedIncome = pRRSPBalance + taxableGains;
 
                 if (totalDeemedIncome > 0) {
-                    const combinedTerminalTax = calculateIncomeTax(totalDeemedIncome, province, inflationFactor, undefined, pAge);
-                    // Pro-rate for reporting breakdown
-                    terminalTaxOnRRSP += combinedTerminalTax * (pRRSPBalance / totalDeemedIncome);
-                    terminalTaxOnCapGains += combinedTerminalTax * (taxableGains / totalDeemedIncome);
+                    // Fix: Terminal tax must be calculated INCREMENTALLY on top of regular income this year
+                    // to ensure it hits the correct marginal tax brackets.
+                    const pRegularTaxable = pFinal?.finalTaxable || 0;
+                    const pRegularTax = pFinal?.finalTax || 0;
+
+                    const totalTaxWithDeemed = calculateIncomeTax(pRegularTaxable + totalDeemedIncome, province, inflationFactor, undefined, pAge);
+                    const incrementalTerminalTax = Math.max(0, totalTaxWithDeemed - pRegularTax);
+
+                    terminalTaxOnRRSP += incrementalTerminalTax * (pRRSPBalance / totalDeemedIncome);
+                    terminalTaxOnCapGains += incrementalTerminalTax * (taxableGains / totalDeemedIncome);
+
+                    // Deduct tax from balances for net estate accurate reporting
+                    const afterTaxRRSP = pRRSPBalance - (incrementalTerminalTax * (pRRSPBalance / totalDeemedIncome));
+                    const afterTaxNonReg = pNonRegBalance - (incrementalTerminalTax * (taxableGains / totalDeemedIncome));
+
+                    p.rrsp.balance = afterTaxRRSP;
+                    p.nonRegistered.balance = afterTaxNonReg;
                 }
             }
         }
@@ -616,6 +663,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         if (sDiedThisYear && s) {
             const sRRSPBalance = s.rrsp.balance;
             const sNonRegBalance = s.nonRegistered.balance;
+            const sTFSABalance = s.tfsa.balance;
             const sACB = s.nonRegistered.adjustedCostBase;
             const sUnrealizedGains = Math.max(0, sNonRegBalance - sACB);
 
@@ -627,17 +675,36 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 // Non-Reg also rolls over at ACB
                 p.nonRegistered.balance += sNonRegBalance;
                 p.nonRegistered.adjustedCostBase += sACB;
+                // TFSA rolls over to person
+                p.tfsa.balance += sTFSABalance;
+
+                // CRITICAL: Zero out deceased balances
+                s.rrsp.balance = 0;
+                s.nonRegistered.balance = 0;
+                s.nonRegistered.adjustedCostBase = 0;
+                s.tfsa.balance = 0;
             } else {
                 // No surviving spouse: Full deemed disposition
-                // Combine RRSP + capital gains for single tax calculation (proper marginal rates)
-                const taxableGains = sUnrealizedGains * 0.5;
+                const taxableGains = calculateTaxableCapitalGains(sUnrealizedGains);
                 const totalDeemedIncome = sRRSPBalance + taxableGains;
 
                 if (totalDeemedIncome > 0) {
-                    const combinedTerminalTax = calculateIncomeTax(totalDeemedIncome, province, inflationFactor, undefined, sAge!);
-                    // Pro-rate for reporting breakdown
-                    terminalTaxOnRRSP += combinedTerminalTax * (sRRSPBalance / totalDeemedIncome);
-                    terminalTaxOnCapGains += combinedTerminalTax * (taxableGains / totalDeemedIncome);
+                    // Fix: Incremental terminal tax
+                    const sRegularTaxable = sFinal?.finalTaxable || 0;
+                    const sRegularTax = sFinal?.finalTax || 0;
+
+                    const totalTaxWithDeemed = calculateIncomeTax(sRegularTaxable + totalDeemedIncome, province, inflationFactor, undefined, sAge!);
+                    const incrementalTerminalTax = Math.max(0, totalTaxWithDeemed - sRegularTax);
+
+                    terminalTaxOnRRSP += incrementalTerminalTax * (sRRSPBalance / totalDeemedIncome);
+                    terminalTaxOnCapGains += incrementalTerminalTax * (taxableGains / totalDeemedIncome);
+
+                    // Deduct tax from balances
+                    const afterTaxRRSP = sRRSPBalance - (incrementalTerminalTax * (sRRSPBalance / totalDeemedIncome));
+                    const afterTaxNonReg = sNonRegBalance - (incrementalTerminalTax * (taxableGains / totalDeemedIncome));
+
+                    s.rrsp.balance = afterTaxRRSP;
+                    s.nonRegistered.balance = afterTaxNonReg;
                 }
             }
         }
@@ -732,7 +799,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
     return results;
 }
 
-// Federal RRIF Minimum Withdrawal Factors (Post-2015) - unchanged
+// Federal RRIF Minimum Withdrawal Factors (Post-2015)
+// The factor age is the annuitant's age on Jan 1 of the withdrawal year.
+// When called from the engine: factorAge = calendarAge - 1.
 const RRIF_MINIMUMS: { [age: number]: number } = {
     71: 0.0528, 72: 0.0540, 73: 0.0553, 74: 0.0567, 75: 0.0582,
     76: 0.0598, 77: 0.0617, 78: 0.0636, 79: 0.0658, 80: 0.0682,
@@ -741,8 +810,9 @@ const RRIF_MINIMUMS: { [age: number]: number } = {
     91: 0.1306, 92: 0.1449, 93: 0.1634, 94: 0.1879
 };
 
+// Returns the RRIF minimum factor for a given age (age on Jan 1)
 function getRRIFMinFactor(age: number): number {
-    if (age <= 70) return 0.05;
+    if (age <= 70) return 1 / (90 - age); // CRA formula for under-71
     if (age >= 95) return 0.20;
     return RRIF_MINIMUMS[age] || 0.06;
 }

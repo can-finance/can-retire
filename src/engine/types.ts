@@ -136,11 +136,12 @@ export interface SimulationResult {
     rrspRolledToSpouse?: number;              // RRSP amount rolled over tax-free to surviving spouse
 }
 
-export interface OneTimeExpense {
+export interface OneTimeEvent {
     id: string;
     name: string;
     amount: number;
     age: number; // Age of primary person when expense occurs
+    type?: 'expense' | 'inflow';
 }
 
 export interface SimulationInputs {
@@ -150,7 +151,7 @@ export interface SimulationInputs {
     inflationRate: number;
     preRetirementSpend: number; // Household spending pre-retirement
     postRetirementSpend: number; // Household spending post-retirement
-    oneTimeExpenses?: OneTimeExpense[];
+    oneTimeExpenses?: OneTimeEvent[];
     useIncomeSplitting?: boolean;
     withdrawalStrategy?: 'tax-efficient' | 'rrsp-first';
     returnRates: {

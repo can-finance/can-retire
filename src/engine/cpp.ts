@@ -6,8 +6,8 @@ export function calculateEstimatedCPP(
     _taxConstants: any, // TaxRates unused for now as we hardcoded max
     inflationFactor: number = 1.0
 ): number {
-    // 2024 Max CPP at 65 is roughly $1364.60/month -> ~$16,375/year
-    const maxAnnualCPP = 16375 * inflationFactor;
+    // 2025 Max CPP at 65 is $1,433/month -> $17,196/year
+    const maxAnnualCPP = 17196 * inflationFactor;
 
     // Calculate Percent of Max based on contribution years (approximate drop-out provision logic is complex, simple linear here)
     // Max roughly 40 years needed for full pension
@@ -35,9 +35,8 @@ export function calculateEstimatedCPP(
 export function calculateOAS(age: number, startAge: number, inflationFactor: number = 1.0): number {
     if (age < startAge) return 0;
 
-    // 2024 Base OAS at 65: ~$713.34/month -> $8560/yr
-    // Plus 10% boost at 75
-    let baseOAS = 8560 * inflationFactor; // Index the base benefit
+    // 2025 Base OAS at 65: ~$735/month -> $8,820/yr
+    let baseOAS = 8820 * inflationFactor; // Index the base benefit
 
     // Deferral bonus: 0.6% per month after 65, up to 70.
     // (startAge - 65) * 12 * 0.006

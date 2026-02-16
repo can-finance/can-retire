@@ -1,21 +1,22 @@
 import type { TaxRates, TaxBracket } from './types';
 
-// Approximate 2025 constants (using 2024 for baseline stability where 25 not fully confirmed)
+// 2025 Tax Constants — Updated to confirmed 2025 CRA / provincial values
 export const TAX_CONSTANTS: TaxRates = {
     federalBrackets: [
-        { threshold: 0, rate: 0.15 },
-        { threshold: 55867, rate: 0.205 },
-        { threshold: 111733, rate: 0.26 },
-        { threshold: 173205, rate: 0.29 },
-        { threshold: 246752, rate: 0.33 },
+        { threshold: 0, rate: 0.145 },      // Effective 14.5% for 2025 (mid-year cut from 15% to 14%)
+        { threshold: 57375, rate: 0.205 },
+        { threshold: 114750, rate: 0.26 },
+        { threshold: 177882, rate: 0.29 },
+        { threshold: 253414, rate: 0.33 },
     ],
     provincialBrackets: {
         'AB': [
-            { threshold: 0, rate: 0.10 },
-            { threshold: 157978, rate: 0.12 },
-            { threshold: 189574, rate: 0.13 },
-            { threshold: 252765, rate: 0.14 },
-            { threshold: 379148, rate: 0.15 },
+            { threshold: 0, rate: 0.08 },       // New 8% bracket effective Jan 1 2025
+            { threshold: 60000, rate: 0.10 },
+            { threshold: 151234, rate: 0.12 },
+            { threshold: 181481, rate: 0.13 },
+            { threshold: 241974, rate: 0.14 },
+            { threshold: 362961, rate: 0.15 },
         ],
         'BC': [
             { threshold: 0, rate: 0.0506 },
@@ -28,14 +29,15 @@ export const TAX_CONSTANTS: TaxRates = {
         ],
         'MB': [
             { threshold: 0, rate: 0.108 },
-            { threshold: 47000, rate: 0.1275 }, // Approx 2024/25
+            { threshold: 47000, rate: 0.1275 },
             { threshold: 100000, rate: 0.174 },
         ],
         'NB': [
             { threshold: 0, rate: 0.094 },
-            { threshold: 51306, rate: 0.14 },
-            { threshold: 102614, rate: 0.16 },
-            { threshold: 190060, rate: 0.195 },
+            { threshold: 52333, rate: 0.14 },
+            { threshold: 104666, rate: 0.16 },
+            { threshold: 170000, rate: 0.175 },
+            { threshold: 200000, rate: 0.195 },
         ],
         'NL': [
             { threshold: 0, rate: 0.087 },
@@ -43,9 +45,9 @@ export const TAX_CONSTANTS: TaxRates = {
             { threshold: 88382, rate: 0.158 },
             { threshold: 157792, rate: 0.178 },
             { threshold: 220910, rate: 0.198 },
-            { threshold: 282214, rate: 0.208 },
-            { threshold: 564429, rate: 0.213 },
-            { threshold: 1128858, rate: 0.218 },
+            { threshold: 281160, rate: 0.208 },
+            { threshold: 557250, rate: 0.213 },
+            { threshold: 1109430, rate: 0.218 },
         ],
         'NS': [
             { threshold: 0, rate: 0.0879 },
@@ -100,29 +102,29 @@ export const TAX_CONSTANTS: TaxRates = {
         ]
     },
     basicPersonalAmount: {
-        federal: 15705, // 2024
-        'AB': 21885,
-        'BC': 12588,
-        'MB': 15780,
-        'NB': 13044,
-        'NL': 10818,
-        'NS': 11481, // Simplified (varies by income)
-        'NT': 17373,
-        'NU': 18767,
-        'ON': 12399,
-        'PE': 13500,
-        'QC': 18056,
-        'SK': 18491,
-        'YT': 15705,
+        federal: 16129, // 2025
+        'AB': 22323,
+        'BC': 12932,
+        'MB': 15780, // Frozen (not indexed), phases out above $200k income
+        'NB': 13396,
+        'NL': 11067,
+        'NS': 11744,
+        'NT': 17842,
+        'NU': 19274,
+        'ON': 12747,
+        'PE': 14650,
+        'QC': 18571,
+        'SK': 19491,
+        'YT': 16129,
     },
     cpp: {
-        maxPensionableEarnings: 68500, // 2024
+        maxPensionableEarnings: 71300, // 2025 YMPE
         basicExemption: 3500,
-        maxContribution: 3867
+        maxContribution: 4034  // 2025 employee max
     },
     oas: {
-        maxAnnualBenefit: 8560, // Approx 2024 annualized
-        clawbackThreshold: 90997 // 2024
+        maxAnnualBenefit: 8820, // ~$735/mo × 12 (2025 annualized)
+        clawbackThreshold: 93454 // 2025
     }
 };
 
@@ -172,11 +174,10 @@ export function calculateIncomeTax(
         totalTax -= (federalDTC + provincialDTC);
     }
 
-    // 2. Age Amount (Federal)
-    // For 2024: Max claim ~$8,790. Reduced by 15% of income > ~$44,325.
+    // Age Amount (Federal) — 2025: Max $9,028, reduced by 15% of income > $45,522
     if (age >= 65) {
-        const maxClaim = 8790 * inflationFactor;
-        const threshold = 44325 * inflationFactor;
+        const maxClaim = 9028 * inflationFactor;
+        const threshold = 45522 * inflationFactor;
 
         // Reduction is 15% of net income exceeding threshold
         const reduction = Math.max(0, (taxableIncome - threshold) * 0.15);
@@ -189,19 +190,6 @@ export function calculateIncomeTax(
         // Adding ~5% impact for province
         totalTax -= claimable * 0.05;
     }
-
-    // 2. Age Amount (Federal)
-    // For 2024: Max claim $8,790. Reduced by 15% of income > $44,325.
-    // Value: Claim * 0.15.
-    // Applies if Age >= 65.
-    // Note: We need 'age' passed in, or we estimate based on income type? 
-    // The current signature doesn't support 'age'. 
-    // We will assume "Senior" status if Pension Credit was applied? No, 55+ can get pension credit.
-    // For now, we omit Age Amount or require signature update. 
-    // * DECISION *: I will update signature in next step. For now just cleaning up the comment block.
-    // Actually, I'll return the simplified credit block for now to ensure invalid lines are removed/cleaned.
-
-    // TODO: Update signature to support Age Amount properly.
 
     // Ontario Health Premium (Simplified table approximation, indexed)
     if (province === 'ON') {
@@ -242,9 +230,9 @@ function calculateOHP(income: number, inflationFactor: number = 1.0): number {
 function calculateOntarioSurtax(basicProvTax: number, inflationFactor: number = 1.0): number {
     if (basicProvTax <= 0) return 0;
 
-    // 2024 Thresholds
-    const tier1Threshold = 5315 * inflationFactor;
-    const tier2Threshold = 6802 * inflationFactor;
+    // 2025 Thresholds
+    const tier1Threshold = 5710 * inflationFactor;
+    const tier2Threshold = 7307 * inflationFactor;
 
     let surtax = 0;
 
