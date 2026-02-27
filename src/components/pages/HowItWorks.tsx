@@ -32,6 +32,34 @@ export function HowItWorks() {
                 </div>
             </section>
 
+            {/* Important Disclaimer */}
+            <section className="bg-amber-50 rounded-3xl p-8 border border-amber-200 space-y-4">
+                <h2 className="text-xl font-bold text-amber-900 flex items-center gap-3">
+                    <svg className="w-6 h-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    These are rough estimates — don't over-optimize
+                </h2>
+                <div className="prose prose-amber max-w-none text-amber-900/80 leading-relaxed space-y-3">
+                    <p>
+                        This tool projects decades into the future using fixed return assumptions. In reality, <strong>a difference of even 1–2% in your actual annual returns versus your estimate</strong>, compounded over a 20–30 year retirement, can easily dwarf any tax optimization you might achieve by tweaking withdrawal strategies or CPP timing.
+                    </p>
+                    <p>
+                        Think of the numbers here — especially the final estate value and lifetime tax rates — as <strong>relative comparisons between scenarios</strong>, not precise forecasts. The tool is most useful for answering questions like "does RRSP melting reduce my tax burden?" or "does delaying CPP improve my outcome?" rather than predicting an exact dollar figure decades from now.
+                    </p>
+                    <p>
+                        <strong>Don't get too hung up on the precise numbers.</strong> The difference between a $1.2M and $1.4M projected estate is likely to be overwhelmed by the gap between your assumed and actual investment returns over the forecast period. Use this tool to understand the <em>direction</em> and <em>magnitude</em> of your choices, then revisit your assumptions regularly as your situation evolves.
+                    </p>
+                </div>
+            </section>
+
+            {/* Section divider */}
+            <div className="flex items-center gap-4">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-sm font-semibold text-slate-400 uppercase tracking-widest whitespace-nowrap">Further details on how this works</span>
+                <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
             {/* Core Methodology */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
                 <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-3">

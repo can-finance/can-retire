@@ -7,3 +7,15 @@
     @apply bg-slate-50 text-slate-900 antialiased;
   }
 }
+
+@layer components {
+  /* Summary card: Option C — strong slate border all sides + coloured top accent */
+  .summary-card {
+    @apply bg-white rounded-xl px-4 py-3 shadow-sm border-2 border-slate-200 border-t-4;
+  }
+  .summary-card--emerald { @apply border-t-emerald-400; }
+  .summary-card--cyan    { @apply border-t-cyan-400; }
+  .summary-card--red-300 { @apply border-t-red-300; }
+  .summary-card--red-400 { @apply border-t-red-400; }
+  .summary-card--indigo  { @apply border-t-indigo-400; }
+}

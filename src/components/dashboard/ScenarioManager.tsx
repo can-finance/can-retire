@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import LZString from 'lz-string';
 import type { SavedScenario } from '../../hooks/useScenarios';
 import type { SimulationInputs } from '../../engine/types';
+import { SectionCard } from '../ui/SectionCard';
 
 interface ScenarioManagerProps {
     scenarios: SavedScenario[];
@@ -69,7 +70,7 @@ export function ScenarioManager({
 
 
     return (
-        <section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 space-y-4">
+        <SectionCard accent="indigo" className="space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
                 <div className="flex flex-col">
                     <h2 className="text-xl font-bold text-slate-900 line-clamp-1">
@@ -172,6 +173,6 @@ export function ScenarioManager({
                 )}
             </div>
 
-        </section>
+        </SectionCard>
     );
 }

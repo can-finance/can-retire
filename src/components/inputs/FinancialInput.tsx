@@ -12,6 +12,8 @@ interface FinancialInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEl
     tooltip?: string;
     minFractionDigits?: number;
     maxFractionDigits?: number;
+    /** Hex color string — tints the label and left border of the input to match chart colors */
+    accentColor?: string;
 }
 
 const formatNumber = (num: number, min = 0, max = 2) => {
@@ -30,6 +32,7 @@ export function FinancialInput({
     tooltip,
     minFractionDigits = 0,
     maxFractionDigits = 2,
+    accentColor,
     className,
     ...props
 }: FinancialInputProps) {
@@ -94,9 +97,12 @@ export function FinancialInput({
         <div className={clsx("flex flex-col gap-1.5", className)}>
             <label
                 className={twMerge(
-                    "text-sm font-medium text-slate-700",
-                    tooltip && "cursor-help border-b border-dashed border-slate-300 w-fit"
+                    "text-sm font-semibold",
+                    tooltip && "cursor-help border-b border-dashed w-fit",
+                    accentColor ? "" : "text-slate-700",
+                    tooltip && !accentColor && "border-slate-300"
                 )}
+                style={accentColor ? { color: accentColor, borderColor: accentColor + '80' } : undefined}
                 title={tooltip}
             >
                 {label}
@@ -116,10 +122,22 @@ export function FinancialInput({
                     onBlur={handleBlur}
                     onKeyDown={handleKeyDown}
                     className={twMerge(
-                        "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 sm:text-sm",
+                        "w-full rounded-lg border bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 sm:text-sm",
+                        accentColor ? "border-slate-200" : "border-slate-300 focus:border-brand-500 focus:ring-brand-500",
                         prefix && "pl-7",
                         suffix && "pr-8"
                     )}
+                    style={accentColor ? {
+                        borderLeftColor: accentColor,
+                        borderLeftWidth: '3px',
+                        // focus ring color via box-shadow can't easily be dynamic in Tailwind, handled by focus class below
+                    } : undefined}
+                    onFocusCapture={(e) => {
+                        if (accentColor) e.currentTarget.style.boxShadow = `0 0 0 1px ${accentColor}40`;
+                    }}
+                    onBlurCapture={(e) => {
+                        if (accentColor) e.currentTarget.style.boxShadow = '';
+                    }}
                     {...props}
                 />
                 {suffix && (

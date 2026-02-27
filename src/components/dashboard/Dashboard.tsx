@@ -7,6 +7,7 @@ import { FinancialInput } from '../inputs/FinancialInput';
 import { AssetMixInput } from '../inputs/AssetMixInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
+import { Toggle } from '../ui/Toggle';
 import { WealthChart } from '../charts/WealthChart';
 import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
@@ -93,25 +94,10 @@ export function Dashboard() {
         return runMonteCarlo(inputs, 250); // 250 iterations for responsiveness
     }, [inputs, isMonteCarlo]);
 
-    const updatePerson = (field: string, value: number | object) => {
-        setInputs({
-            ...inputs,
-            person: {
-                ...inputs.person,
-                [field]: value
-            }
-        });
-    };
-
-    const updateSpouse = (field: string, value: number | object) => {
-        if (!inputs.spouse) return;
-        setInputs({
-            ...inputs,
-            spouse: {
-                ...inputs.spouse,
-                [field]: value
-            }
-        });
+    const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object) => {
+        const target = who === 'person' ? inputs.person : inputs.spouse;
+        if (!target) return;
+        setInputs({ ...inputs, [who]: { ...target, [field]: value } });
     };
 
     const updateNestedAccount = (who: 'person' | 'spouse', account: 'rrsp' | 'tfsa' | 'nonRegistered', field: string, value: number) => {
@@ -160,10 +146,6 @@ export function Dashboard() {
         setHasSpouse(!!INITIAL_INPUTS.spouse);
         setActiveScenarioId(null);
     };
-
-
-
-
 
     const metrics = useMemo(() => {
         // Guard: Return default metrics if no simulation results
@@ -217,29 +199,21 @@ export function Dashboard() {
         let initialWithdrawalRate = 0;
         const retirementIndex = simulationResults.findIndex(r => r.age === inputs.person.retirementAge);
 
-        // Determine the "First Year of Retirement" logic
-        // If retirementIndex is -1 (started after retirement) or 0 (starting now), we use index 0 and Initial Inputs for assets
-        // If retirementIndex > 0, we use that year for withdrawals, and the previous year's End Assets as the base
-
+        // If retirementIndex > 0, use that year for withdrawals with previous year's assets as base.
+        // Otherwise (already retired), use input balances as starting assets.
         if (retirementIndex > 0) {
             const firstRetYear = simulationResults[retirementIndex];
             const prevYear = simulationResults[retirementIndex - 1];
             const totalWithdrawal = firstRetYear.totalRRSPWithdrawal + firstRetYear.totalTFSAWithdrawal + firstRetYear.totalNonRegWithdrawal;
-            // Use previous year's ending assets as the 'start of year' assets for the calculation
-            // Adjust for inflation if needed? The rate is ratio, so if both nominal ok.
-            // If inflation adjusted, both typically adjusted.
-            // Let's use raw nominal for ratio to be safe, or both real. 
-            // SimulationResults are nominal.
             if (prevYear.totalAssets > 0) {
                 initialWithdrawalRate = (totalWithdrawal / prevYear.totalAssets) * 100;
             }
         } else {
-            // Already retired or retiring immediately. Use inputs for initial assets.
             const firstRetYear = simulationResults[0];
             const startAssets =
                 inputs.person.rrsp.balance +
                 inputs.person.tfsa.balance +
-                (inputs.person.nonRegistered.balance) +
+                inputs.person.nonRegistered.balance +
                 (inputs.spouse ? (inputs.spouse.rrsp.balance + inputs.spouse.tfsa.balance + inputs.spouse.nonRegistered.balance) : 0);
 
             if (firstRetYear && startAssets > 0) {
@@ -286,13 +260,12 @@ export function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Sidebar / Inputs */}
                 <div className="lg:col-span-4 space-y-6">
-                    {/* ... existing sidebar ... */}
 
                     {/* Person 1 Profile */}
                     <PersonSection
                         title="You"
                         person={inputs.person}
-                        onChange={updatePerson}
+                        onChange={(field, val) => updatePersonField('person', field, val)}
                         onAccountChange={(acct, field, val) => updateNestedAccount('person', acct, field, val)}
                         colorTheme="blue"
                     />
@@ -302,35 +275,29 @@ export function Dashboard() {
                         <PersonSection
                             title="Spouse"
                             person={inputs.spouse}
-                            onChange={updateSpouse}
+                            onChange={(field, val) => updatePersonField('spouse', field, val)}
                             onAccountChange={(acct, field, val) => updateNestedAccount('spouse', acct, field, val)}
                             showRemove
                             onRemove={toggleSpouse}
                             colorTheme="purple"
                         />
                     ) : (
-                        <section className="bg-slate-50/40 rounded-2xl p-6 shadow-sm border border-slate-100">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-xl font-bold text-slate-900">Spouse</h2>
-                                <button
-                                    onClick={toggleSpouse}
-                                    className="px-3 py-1 text-sm rounded-full bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
-                                >
-                                    Add Spouse
-                                </button>
+                        <button
+                            onClick={toggleSpouse}
+                            className="w-full rounded-2xl p-6 border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-brand-50/30 transition-all group flex flex-col items-center gap-2 text-slate-400 hover:text-brand-500"
+                        >
+                            <div className="w-10 h-10 rounded-full border-2 border-dashed border-current flex items-center justify-center group-hover:scale-110 transition-transform">
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
                             </div>
-                            <p className="text-sm text-slate-500 italic mt-2">
-                                No spouse configured. Click "Add Spouse" to include a partner in the simulation.
-                            </p>
-                        </section>
+                            <span className="text-sm font-medium">Add Spouse</span>
+                            <span className="text-xs opacity-70">Include a spouse's accounts and CPP/OAS in the simulation</span>
+                        </button>
                     )}
 
                     {/* Household Spending */}
-                    <CollapsibleSection
-                        title="Household Spending"
-                        className="bg-emerald-50/60 border-emerald-100"
-                        headerClassName="bg-emerald-50/60"
-                    >
+                    <CollapsibleSection title="Household Spending" accent="teal">
                         <div className="grid grid-cols-2 gap-4">
                             <FinancialInput
                                 label="Pre-Retirement"
@@ -352,16 +319,8 @@ export function Dashboard() {
                         </div>
                     </CollapsibleSection>
 
-
-
-
                     {/* Asset Mix */}
-                    <CollapsibleSection
-                        title="Non-Reg Asset Mix"
-                        className="bg-amber-50/60 border-amber-100"
-                        headerClassName="bg-amber-50/60"
-                        defaultOpen={false}
-                    >
+                    <CollapsibleSection title="Non-Reg Asset Mix" accent="orange" defaultOpen={false}>
                         <AssetMixInput
                             mix={inputs.person.nonRegistered.assetMix}
                             onChange={(newMix) => setInputs({
@@ -378,12 +337,7 @@ export function Dashboard() {
                     </CollapsibleSection>
 
                     {/* Assumptions */}
-                    <CollapsibleSection
-                        title="Assumptions"
-                        className="bg-rose-50/80 border-slate-200"
-                        headerClassName="bg-rose-50/80"
-                        defaultOpen={false}
-                    >
+                    <CollapsibleSection title="Assumptions" accent="slate" defaultOpen={false}>
                         <div className="space-y-4">
                             <div className="flex flex-col gap-1.5">
                                 <label
@@ -458,19 +412,13 @@ export function Dashboard() {
                             </div>
 
                             {/* Monte Carlo Toggle & Volatility */}
-                            <div className="pt-2 border-t border-slate-100 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                                        Monte Carlo Simulation
-                                        <span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
-                                    </label>
-                                    <div
-                                        className={`w-11 h-6 flex items-center bg-slate-200 rounded-full p-1 cursor-pointer transition-colors ${isMonteCarlo ? 'bg-emerald-600' : ''}`}
-                                        onClick={() => setIsMonteCarlo(!isMonteCarlo)}
-                                    >
-                                        <div className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${isMonteCarlo ? 'translate-x-5' : ''}`}></div>
-                                    </div>
-                                </div>
+                            <div className="space-y-3">
+                                <Toggle
+                                    checked={isMonteCarlo}
+                                    onChange={setIsMonteCarlo}
+                                    label="Monte Carlo Simulation"
+                                    badge={<span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>}
+                                />
 
                                 {isMonteCarlo && (
                                     <div className="bg-indigo-50/50 p-3 rounded-lg space-y-2 border border-indigo-100">
@@ -490,43 +438,24 @@ export function Dashboard() {
                                 )}
                             </div>
 
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                                <label className="text-sm font-medium text-slate-700">Use Pension Income Splitting</label>
-                                <input
-                                    type="checkbox"
-                                    checked={inputs.useIncomeSplitting ?? true}
-                                    onChange={(e) => setInputs({ ...inputs, useIncomeSplitting: e.target.checked })}
-                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                />
-                            </div>
+                            <Toggle
+                                checked={inputs.useIncomeSplitting ?? true}
+                                onChange={(val) => setInputs({ ...inputs, useIncomeSplitting: val })}
+                                label="Pension Income Splitting"
+                            />
 
-                            <div
-                                className="flex items-center justify-between pt-2 border-t border-slate-100"
-                                title="If unchecked, withdrawals will come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
-                            >
-                                <label className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300">
-                                    Withdraw from RRSP First
-                                </label>
-                                <input
-                                    type="checkbox"
-                                    checked={inputs.withdrawalStrategy === 'rrsp-first'}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        withdrawalStrategy: e.target.checked ? 'rrsp-first' : 'tax-efficient'
-                                    })}
-                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                />
-                            </div>
+                            <Toggle
+                                checked={inputs.withdrawalStrategy === 'rrsp-first'}
+                                onChange={(val) => setInputs({ ...inputs, withdrawalStrategy: val ? 'rrsp-first' : 'tax-efficient' })}
+                                label="Withdraw from RRSP First"
+                                tooltip="If off, withdrawals come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
+                            />
 
-                            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                                <label className="text-sm font-medium text-slate-700">Show Real Dollars (Inflation Adjusted)</label>
-                                <input
-                                    type="checkbox"
-                                    checked={isInflationAdjusted}
-                                    onChange={(e) => setIsInflationAdjusted(e.target.checked)}
-                                    className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                                />
-                            </div>
+                            <Toggle
+                                checked={isInflationAdjusted}
+                                onChange={setIsInflationAdjusted}
+                                label="Show Real Dollars (Inflation Adjusted)"
+                            />
                         </div>
                     </CollapsibleSection>
 
@@ -545,20 +474,17 @@ export function Dashboard() {
 
                 {/* Main Content / Charts */}
                 <div className="lg:col-span-8 space-y-6">
-                    {/* Out of Money Warning */}
-
                     {metrics.outOfMoneyAge && (
-                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg flex items-start gap-3">
-                            <div className="text-red-500 mt-0.5">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 p-4 flex items-start gap-4">
+                            <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
+                                <svg className="w-5 h-5 text-red-600" viewBox="0 0 20 20" fill="currentColor">
                                     <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                 </svg>
                             </div>
-                            <div>
-                                <h3 className="text-red-800 font-bold">Projected Shortfall Detected</h3>
-                                <p className="text-red-700 text-sm mt-1">
-                                    Based on your current spending plan, liquid assets are projected to run out at age <strong>{metrics.outOfMoneyAge}</strong>.
-                                    Consider reducing post-retirement spending or increasing savings.
+                            <div className="min-w-0">
+                                <p className="text-sm font-bold text-red-900">Projected Shortfall at Age {metrics.outOfMoneyAge}</p>
+                                <p className="text-sm text-red-700 mt-0.5">
+                                    Liquid assets run out based on current spending. Consider reducing post-retirement spending or increasing savings.
                                 </p>
                             </div>
                         </div>
@@ -570,7 +496,6 @@ export function Dashboard() {
                     />
                     <SpendingChart
                         data={simulationResults}
-                        hasSpouse={hasSpouse}
                         inflationAdjusted={isInflationAdjusted}
                         domainMax={globalMaxY}
                     />
@@ -591,6 +516,6 @@ export function Dashboard() {
                     <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} />
                 </div>
             </div>
-        </div >
+        </div>
     );
 }
