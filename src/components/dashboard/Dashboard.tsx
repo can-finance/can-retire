@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
 import { useScenarios } from '../../hooks/useScenarios';
@@ -15,7 +15,7 @@ import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { runSimulation, runMonteCarlo } from '../../engine/projection';
 import { AccountTypeVals } from '../../engine/types';
-import type { Person, SimulationInputs, NonRegisteredAccount } from '../../engine/types';
+import type { Person, SimulationInputs, NonRegisteredAccount, MonteCarloResult } from '../../engine/types';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
 import { ScenarioManager } from './ScenarioManager';
@@ -89,9 +89,26 @@ export function Dashboard() {
         return runSimulation(inputs);
     }, [inputs]);
 
-    const monteCarloResults = useMemo(() => {
-        if (!isMonteCarlo) return null;
-        return runMonteCarlo(inputs, 250); // 250 iterations for responsiveness
+    // Debounced Monte Carlo — waits 500ms after last input change before running
+    const [monteCarloResults, setMonteCarloResults] = useState<MonteCarloResult | null>(null);
+    const mcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        if (!isMonteCarlo) {
+            setMonteCarloResults(null);
+            return;
+        }
+
+        // Clear any pending timer
+        if (mcTimerRef.current) clearTimeout(mcTimerRef.current);
+
+        mcTimerRef.current = setTimeout(() => {
+            setMonteCarloResults(runMonteCarlo(inputs, 200));
+        }, 500);
+
+        return () => {
+            if (mcTimerRef.current) clearTimeout(mcTimerRef.current);
+        };
     }, [inputs, isMonteCarlo]);
 
     const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object) => {

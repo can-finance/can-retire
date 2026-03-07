@@ -1,6 +1,6 @@
 
 import type { Person, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
-import { calculateIncomeTax, calculateOASClawback, TAX_CONSTANTS, calculateOptimalSplit } from './tax';
+import { calculateIncomeTax, calculateOASClawback, calculateOptimalSplit } from './tax';
 import type { SplitPerson } from './tax';
 import { calculateEstimatedCPP, calculateOAS } from './cpp';
 
@@ -99,6 +99,14 @@ function solveGrossWithdrawal(
 
 // --- Simulation Logic ---
 
+/**
+ * Calculate base-year income, mandatory withdrawals, and tax for a single person.
+ *
+ * ⚠️  SIDE EFFECT: This function MUTATES `person.rrsp.balance` in place to deduct
+ * RRIF minimums and voluntary meltdown withdrawals. Callers MUST pass a deep copy
+ * of the Person object (see `runSimulation` which does `JSON.parse(JSON.stringify(...))`)
+ * to avoid corrupting the original input data.
+ */
 function simulatePersonBaseYear(
     person: Person,
     age: number,
@@ -108,7 +116,7 @@ function simulatePersonBaseYear(
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
     const cppIncome = (age >= person.cppStartAge)
-        ? calculateEstimatedCPP(person.cppContributedYears ?? 40, person.cppStartAge, TAX_CONSTANTS, inflationFactor)
+        ? calculateEstimatedCPP(person.cppContributedYears ?? 40, person.cppStartAge, inflationFactor)
         : 0;
 
     const oasIncome = calculateOAS(age, person.oasStartAge, inflationFactor);

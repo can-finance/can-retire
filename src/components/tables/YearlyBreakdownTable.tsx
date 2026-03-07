@@ -1,13 +1,11 @@
 import type { SimulationResult } from '../../engine/types';
 import React from 'react';
+import { formatCurrencyCAD } from '../../utils/formatters';
 
 interface YearlyBreakdownTableProps {
     data: SimulationResult[];
     hasSpouse?: boolean;
 }
-
-const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(value);
 
 // Column definitions with tooltips
 const getColumns = (hasSpouse: boolean) => {
@@ -82,21 +80,21 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                 {hasSpouse && (
                                     <td className="px-3 py-2 text-slate-700">{row.spouseAge ?? '-'}</td>
                                 )}
-                                <td className="px-3 py-2 text-right text-sky-600">{formatCurrency(row.accounts.rrsp)}</td>
-                                <td className="px-3 py-2 text-right text-emerald-600">{formatCurrency(row.accounts.tfsa)}</td>
-                                <td className="px-3 py-2 text-right text-amber-600">{formatCurrency(row.accounts.nonRegistered)}</td>
+                                <td className="px-3 py-2 text-right text-sky-600">{formatCurrencyCAD(row.accounts.rrsp)}</td>
+                                <td className="px-3 py-2 text-right text-emerald-600">{formatCurrencyCAD(row.accounts.tfsa)}</td>
+                                <td className="px-3 py-2 text-right text-amber-600">{formatCurrencyCAD(row.accounts.nonRegistered)}</td>
                                 {hasSpouse && (
                                     <>
-                                        <td className="px-3 py-2 text-right text-sky-400">{row.spouseAccounts ? formatCurrency(row.spouseAccounts.rrsp) : '-'}</td>
-                                        <td className="px-3 py-2 text-right text-emerald-400">{row.spouseAccounts ? formatCurrency(row.spouseAccounts.tfsa) : '-'}</td>
-                                        <td className="px-3 py-2 text-right text-amber-400">{row.spouseAccounts ? formatCurrency(row.spouseAccounts.nonRegistered) : '-'}</td>
+                                        <td className="px-3 py-2 text-right text-sky-400">{row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.rrsp) : '-'}</td>
+                                        <td className="px-3 py-2 text-right text-emerald-400">{row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.tfsa) : '-'}</td>
+                                        <td className="px-3 py-2 text-right text-amber-400">{row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.nonRegistered) : '-'}</td>
                                     </>
                                 )}
-                                <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrency(row.totalAssets)}</td>
-                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(row.netCPPIncome)}</td>
-                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrency(row.netOASIncome)}</td>
-                                <td className="px-3 py-2 text-right text-green-600">{formatCurrency(row.netIncome)}</td>
-                                <td className="px-3 py-2 text-right text-red-500">{formatCurrency(row.taxPaid)}</td>
+                                <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrencyCAD(row.totalAssets)}</td>
+                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netCPPIncome)}</td>
+                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netOASIncome)}</td>
+                                <td className="px-3 py-2 text-right text-green-600">{formatCurrencyCAD(row.netIncome)}</td>
+                                <td className="px-3 py-2 text-right text-red-500">{formatCurrencyCAD(row.taxPaid)}</td>
                             </tr>
                         ))}
                     </tbody>

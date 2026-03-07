@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Line } from 'recharts';
+import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { SimulationResult } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
 import { formatCurrencyShort, formatCurrencyCAD } from '../../utils/formatters';
@@ -12,14 +12,14 @@ interface SpendingChartProps {
 }
 
 const LABEL_MAP: Record<string, string> = {
-    Salary:      'Employment Income',
-    CPP:         'CPP',
-    OAS:         'OAS',
-    Yield:       'Investment Income',
-    RRSP:        'RRSP/RRIF',
-    TFSA:        'TFSA',
-    NonReg:      'Non-Reg',
-    Taxes:       'Income Tax',
+    Salary: 'Employment Income',
+    CPP: 'CPP',
+    OAS: 'OAS',
+    Yield: 'Investment Income',
+    RRSP: 'RRSP/RRIF',
+    TFSA: 'TFSA',
+    NonReg: 'Non-Reg',
+    Taxes: 'Income Tax',
     TargetSpend: 'Target Spending',
 };
 
@@ -41,14 +41,14 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
             const factor = inflationAdjusted ? d.inflationFactor : 1.0;
             return {
                 ...d,
-                Salary:      d.netEmploymentIncome / factor,
-                CPP:         d.netCPPIncome / factor,
-                OAS:         d.netOASIncome / factor,
-                Yield:       d.netInvestmentIncome / factor,
-                RRSP:        d.netRRSPWithdrawal / factor,
-                TFSA:        d.netTFSAWithdrawal / factor,
-                NonReg:      d.netNonRegWithdrawal / factor,
-                Taxes:       -d.taxPaid / factor,
+                Salary: d.netEmploymentIncome / factor,
+                CPP: d.netCPPIncome / factor,
+                OAS: d.netOASIncome / factor,
+                Yield: d.netInvestmentIncome / factor,
+                RRSP: d.netRRSPWithdrawal / factor,
+                TFSA: d.netTFSAWithdrawal / factor,
+                NonReg: d.netNonRegWithdrawal / factor,
+                Taxes: -d.taxPaid / factor,
                 TargetSpend: d.spending / factor,
             };
         });
@@ -58,7 +58,7 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
         <div className="h-[350px] lg:h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="mb-6 text-xl font-bold text-slate-900">Annual Cash Flow (Net)</h3>
             <ResponsiveContainer width="100%" height="90%">
-                <BarChart
+                <ComposedChart
                     data={chartData}
                     margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                     stackOffset="sign"
@@ -108,15 +108,15 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
 
                     <Line type="monotone" dataKey="TargetSpend" stroke="#0f172a" strokeWidth={2} dot={false} name="Target Spend" />
 
-                    <Bar dataKey="Salary" name="Salary"     stackId="a" fill="#94a3b8" />
-                    <Bar dataKey="CPP"    name="CPP"        stackId="a" fill="#8b5cf6" />
-                    <Bar dataKey="OAS"    name="OAS"        stackId="a" fill="#c4b5fd" />
-                    <Bar dataKey="Yield"  name="Yield"      stackId="a" fill="#a78bfa" />
-                    <Bar dataKey="RRSP"   name="RRSP"       stackId="a" fill={CHART_COLORS.rrsp} />
-                    <Bar dataKey="TFSA"   name="TFSA"       stackId="a" fill={CHART_COLORS.tfsa} />
-                    <Bar dataKey="NonReg" name="Non-Reg"    stackId="a" fill={CHART_COLORS.nonReg} />
-                    <Bar dataKey="Taxes"  name="Taxes Paid" stackId="a" fill="#ef4444" />
-                </BarChart>
+                    <Bar dataKey="Salary" name="Salary" stackId="a" fill="#94a3b8" />
+                    <Bar dataKey="CPP" name="CPP" stackId="a" fill="#8b5cf6" />
+                    <Bar dataKey="OAS" name="OAS" stackId="a" fill="#c4b5fd" />
+                    <Bar dataKey="Yield" name="Yield" stackId="a" fill="#a78bfa" />
+                    <Bar dataKey="RRSP" name="RRSP" stackId="a" fill={CHART_COLORS.rrsp} />
+                    <Bar dataKey="TFSA" name="TFSA" stackId="a" fill={CHART_COLORS.tfsa} />
+                    <Bar dataKey="NonReg" name="Non-Reg" stackId="a" fill={CHART_COLORS.nonReg} />
+                    <Bar dataKey="Taxes" name="Taxes Paid" stackId="a" fill="#ef4444" />
+                </ComposedChart>
             </ResponsiveContainer>
         </div>
     );

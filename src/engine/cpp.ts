@@ -1,9 +1,6 @@
-// import type { TaxRates } from './types'; // Unused
-
 export function calculateEstimatedCPP(
     yearsContributed: number, // Max 40
     startAge: number,
-    _taxConstants: any, // TaxRates unused for now as we hardcoded max
     inflationFactor: number = 1.0
 ): number {
     // 2025 Max CPP at 65 is $1,433/month -> $17,196/year

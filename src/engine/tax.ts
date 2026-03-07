@@ -191,9 +191,9 @@ export function calculateIncomeTax(
         totalTax -= claimable * 0.05;
     }
 
-    // Ontario Health Premium (Simplified table approximation, indexed)
+    // Ontario Health Premium + Surtax (neither is indexed)
     if (province === 'ON') {
-        totalTax += calculateOHP(taxableIncome, inflationFactor);
+        totalTax += calculateOHP(taxableIncome);
         totalTax += calculateOntarioSurtax(provTax - provCredits, inflationFactor);
     }
 
@@ -217,31 +217,32 @@ function calculateTieredTax(income: number, brackets: TaxBracket[], inflationFac
     return accumulatedTax;
 }
 
-function calculateOHP(income: number, inflationFactor: number = 1.0): number {
-    // Indexing the bands for OHP
-    if (income <= 20000 * inflationFactor) return 0;
-    if (income <= 36000 * inflationFactor) return 300;
-    if (income <= 48000 * inflationFactor) return 450;
-    if (income <= 72000 * inflationFactor) return 600;
-    if (income <= 200000 * inflationFactor) return 750;
+// Ontario Health Premium — thresholds and amounts are NOT indexed.
+// These bands have been frozen since 2004 and are applied to nominal income.
+function calculateOHP(income: number): number {
+    if (income <= 20000) return 0;
+    if (income <= 36000) return 300;
+    if (income <= 48000) return 450;
+    if (income <= 72000) return 600;
+    if (income <= 200000) return 750;
     return 900;
 }
 
 function calculateOntarioSurtax(basicProvTax: number, inflationFactor: number = 1.0): number {
     if (basicProvTax <= 0) return 0;
 
-    // 2025 Thresholds
+    // 2025 Thresholds (not indexed — Ontario surtax thresholds are frozen)
     const tier1Threshold = 5710 * inflationFactor;
     const tier2Threshold = 7307 * inflationFactor;
 
     let surtax = 0;
 
-    // Tier 1: 20% of tax > $5,315
+    // Tier 1: 20% of provincial tax > $5,710
     if (basicProvTax > tier1Threshold) {
         surtax += (basicProvTax - tier1Threshold) * 0.20;
     }
 
-    // Tier 2: 36% of tax > $6,802
+    // Tier 2: 36% of provincial tax > $7,307
     if (basicProvTax > tier2Threshold) {
         surtax += (basicProvTax - tier2Threshold) * 0.36;
     }

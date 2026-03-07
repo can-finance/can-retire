@@ -22,12 +22,11 @@ export interface TaxBracket {
     rate: number;
 }
 
-export type AccountType = 'RRSP' | 'TFSA' | 'NonRegistered' | 'Corp';
+export type AccountType = 'RRSP' | 'TFSA' | 'NonRegistered';
 export const AccountTypeVals = {
     RRSP: 'RRSP' as AccountType,
     TFSA: 'TFSA' as AccountType,
     NonRegistered: 'NonRegistered' as AccountType,
-    Corp: 'Corp' as AccountType
 };
 
 
