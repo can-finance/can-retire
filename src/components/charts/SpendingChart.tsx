@@ -2,8 +2,10 @@ import React, { useMemo } from 'react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { SimulationResult } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
-import { formatCurrencyShort, formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
+import { ChartTooltip } from './ChartTooltip';
+import type { TooltipRow } from './ChartTooltip';
 
 interface SpendingChartProps {
     data: SimulationResult[];
@@ -77,27 +79,19 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                         tick={{ fontSize: 12 }}
                         tickLine={false}
                         axisLine={false}
-                        domain={domainMax ? [0, domainMax] : ['auto', 'auto']}
+                        domain={domainMax
+                            ? [(dataMin: number) => Math.min(0, dataMin), domainMax]
+                            : ['auto', 'auto']}
                     />
                     <Tooltip
-                        content={({ active, payload }) => {
-                            if (!active || !payload || !payload.length) return null;
-                            const d = payload[0]?.payload;
-                            return (
-                                <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-200">
-                                    <p className="font-semibold text-slate-900 mb-2">Age {d?.age}</p>
-                                    {payload.map((e: any, i: number) => {
-                                        if (Math.abs(e.value) < 1) return null;
-                                        return (
-                                            <div key={i} className="flex justify-between gap-4 text-sm">
-                                                <span style={{ color: e.color }}>{LABEL_MAP[e.dataKey] || e.name}</span>
-                                                <span className="font-semibold text-slate-900">{formatCurrencyCAD(Math.abs(e.value))}</span>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        }}
+                        content={({ active, payload }) => (
+                            <ChartTooltip
+                                active={active}
+                                payload={payload as unknown as TooltipRow[]}
+                                labelMap={LABEL_MAP}
+                                absValues
+                            />
+                        )}
                         cursor={{ fill: '#f1f5f9' }}
                     />
                     <Legend

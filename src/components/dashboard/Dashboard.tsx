@@ -8,63 +8,29 @@ import { AssetMixInput } from '../inputs/AssetMixInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { Toggle } from '../ui/Toggle';
+import { HelpTooltip } from '../ui/HelpTooltip';
 import { WealthChart } from '../charts/WealthChart';
 import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
 import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { runSimulation, runMonteCarlo } from '../../engine/projection';
-import { AccountTypeVals } from '../../engine/types';
-import type { Person, SimulationInputs, NonRegisteredAccount, MonteCarloResult } from '../../engine/types';
+import type { SimulationInputs, MonteCarloResult } from '../../engine/types';
+import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
+import { formatCurrencyCAD } from '../../utils/formatters';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
 import { ScenarioManager } from './ScenarioManager';
 
-const createDefaultPerson = (isSpouse = false): Person => ({
-    age: isSpouse ? 45 : 48,
-    retirementAge: 60,
-    lifeExpectancy: 90,
-    currentIncome: isSpouse ? 50000 : 85000,
-    cppStartAge: 65,
-    cppContributedYears: 35,
-    oasStartAge: 65,
-    rrspMeltStartAge: 55,
-    rrspMeltAmount: isSpouse ? 10000 : 20000,
-    rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 500000 },
-    tfsa: { type: AccountTypeVals.TFSA, balance: isSpouse ? 100000 : 150000 },
-    nonRegistered: {
-        type: 'NonRegistered',
-        balance: isSpouse ? 100000 : 200000,
-        adjustedCostBase: isSpouse ? 50000 : 100000,
-        assetMix: { interest: 0.1, dividend: 0.3, capitalGain: 0.6 }
-    } as NonRegisteredAccount
-});
-
-const INITIAL_INPUTS: SimulationInputs = {
-    person: createDefaultPerson(),
-    spouse: undefined,
-    province: 'ON',
-    inflationRate: 0.025,
-    preRetirementSpend: 60000,
-    postRetirementSpend: 55000,
-    oneTimeExpenses: [],
-    withdrawalStrategy: 'rrsp-first',
-    useIncomeSplitting: true,
-    returnRates: {
-        interest: 0.02,
-        dividend: 0.03,
-        capitalGrowth: 0.05,
-        volatility: 0.10
-    }
-};
-
 export function Dashboard() {
-    const [inputs, setInputs] = usePersistentState<SimulationInputs>('retirement_sim_v2', INITIAL_INPUTS);
+    const [inputs, setInputs] = usePersistentState<SimulationInputs>('retirement_sim_v2', INITIAL_INPUTS, sanitizeSimulationInputs);
     const { scenarios, saveScenario, updateScenario, deleteScenario } = useScenarios();
     const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
-    const [hasSpouse, setHasSpouse] = useState(!!inputs.spouse);
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
     const [isMonteCarlo, setIsMonteCarlo] = useState(false);
+
+    // Derived, not stored — keeps spouse UI in sync with every load path (hash, scenario, reset)
+    const hasSpouse = !!inputs.spouse;
 
     // Hydrate from URL Hash on mount
     useEffect(() => {
@@ -74,14 +40,18 @@ export function Dashboard() {
                 const compressed = hash.replace('#start=', '');
                 const json = LZString.decompressFromEncodedURIComponent(compressed);
                 if (json) {
-                    const parsed = JSON.parse(json);
-                    if (parsed && parsed.person) {
-                        setInputs(parsed);
+                    // Untrusted payload (often truncated by mail clients) — sanitize before
+                    // applying, since setInputs persists it to localStorage.
+                    const clean = sanitizeSimulationInputs(JSON.parse(json));
+                    if (clean) {
+                        setInputs(clean);
                     }
                 }
             } catch (e) {
                 console.error("Failed to hydrate from URL", e);
             }
+            // Clear the hash either way so a reload doesn't keep overwriting user edits
+            window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }
     }, []); // Run once on mount
 
@@ -111,7 +81,7 @@ export function Dashboard() {
         };
     }, [inputs, isMonteCarlo]);
 
-    const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object) => {
+    const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object | undefined) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
         if (!target) return;
         setInputs({ ...inputs, [who]: { ...target, [field]: value } });
@@ -133,13 +103,7 @@ export function Dashboard() {
     };
 
     const toggleSpouse = () => {
-        if (hasSpouse) {
-            setHasSpouse(false);
-            setInputs({ ...inputs, spouse: undefined });
-        } else {
-            setHasSpouse(true);
-            setInputs({ ...inputs, spouse: createDefaultPerson(true) });
-        }
+        setInputs({ ...inputs, spouse: hasSpouse ? undefined : createDefaultPerson(true) });
     };
 
     const handleSaveScenario = (name: string) => {
@@ -147,20 +111,19 @@ export function Dashboard() {
     };
 
     const loadScenario = (savedScenario: SavedScenario) => {
-        setInputs(savedScenario.inputs);
-        setHasSpouse(!!savedScenario.inputs.spouse);
+        // Saved scenarios may predate schema changes — sanitize on the way in
+        setInputs(sanitizeSimulationInputs(savedScenario.inputs) ?? INITIAL_INPUTS);
         setActiveScenarioId(savedScenario.id);
     };
 
-    const handleUpdateScenario = () => {
+    const handleUpdateScenario = (newName?: string) => {
         if (activeScenarioId) {
-            updateScenario(activeScenarioId, inputs);
+            updateScenario(activeScenarioId, inputs, newName);
         }
     };
 
     const handleCreateNew = () => {
         setInputs(INITIAL_INPUTS);
-        setHasSpouse(!!INITIAL_INPUTS.spouse);
         setActiveScenarioId(null);
     };
 
@@ -180,7 +143,8 @@ export function Dashboard() {
                 netEstateValue: 0,
                 totalNetValue: 0,
                 initialWithdrawalRate: 0,
-                outOfMoneyAge: null
+                outOfMoneyAge: null as number | null,
+                totalShortfall: 0
             };
         }
 
@@ -206,8 +170,10 @@ export function Dashboard() {
         const totalTaxPlusEstate = annualTaxRetirement + adjustedEstateTax;
 
         const effectiveTaxRateRetirement = totalRetirementIncome > 0 ? (annualTaxRetirement / totalRetirementIncome) * 100 : 0;
-        const outOfMoneyYear = simulationResults.find(r => r.totalAssets < 1000 && r.age >= inputs.person.retirementAge);
-        const outOfMoneyAge = outOfMoneyYear ? outOfMoneyYear.age : null;
+        // A shortfall year is one where the engine could not fund target spending
+        const firstShortfallYear = simulationResults.find(r => r.shortfall > 1);
+        const outOfMoneyAge = firstShortfallYear ? firstShortfallYear.age : null;
+        const totalShortfall = simulationResults.reduce((acc, curr) => acc + adj(curr.shortfall, curr.inflationFactor), 0);
 
         const effectiveTaxRateEstate = estateValue > 0 ? (adjustedEstateTax / estateValue) * 100 : 0;
         const totalEffectiveTaxRate = (totalRetirementIncome + estateValue) > 0 ? (totalTaxPlusEstate / (totalRetirementIncome + estateValue)) * 100 : 0;
@@ -256,7 +222,8 @@ export function Dashboard() {
             netEstateValue,
             totalNetValue,
             outOfMoneyAge,
-            initialWithdrawalRate
+            initialWithdrawalRate,
+            totalShortfall
         };
     }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegistered.balance, inputs.spouse]);
 
@@ -357,12 +324,14 @@ export function Dashboard() {
                     <CollapsibleSection title="Assumptions" accent="slate" defaultOpen={false}>
                         <div className="space-y-4">
                             <div className="flex flex-col gap-1.5">
-                                <label
-                                    className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300 w-fit"
-                                    title="Determines provincial income tax rates, brackets, surtaxes (e.g. Ontario Health Premium), and tax credits used in the simulation."
+                                <HelpTooltip
+                                    text="Determines provincial income tax rates, brackets, surtaxes (e.g. Ontario Health Premium), and tax credits used in the simulation."
+                                    className="w-fit"
                                 >
-                                    Province
-                                </label>
+                                    <label className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300 w-fit">
+                                        Province
+                                    </label>
+                                </HelpTooltip>
                                 <select
                                     className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
                                     value={inputs.province}
@@ -501,7 +470,8 @@ export function Dashboard() {
                             <div className="min-w-0">
                                 <p className="text-sm font-bold text-red-900">Projected Shortfall at Age {metrics.outOfMoneyAge}</p>
                                 <p className="text-sm text-red-700 mt-0.5">
-                                    Liquid assets run out based on current spending. Consider reducing post-retirement spending or increasing savings.
+                                    Spending can no longer be funded from income and accounts — {formatCurrencyCAD(metrics.totalShortfall)} of planned spending
+                                    goes unfunded over the plan. Consider reducing post-retirement spending or increasing savings.
                                 </p>
                             </div>
                         </div>

@@ -116,7 +116,9 @@ function simulatePersonBaseYear(
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
     const cppIncome = (age >= person.cppStartAge)
-        ? calculateEstimatedCPP(person.cppContributedYears ?? 40, person.cppStartAge, inflationFactor)
+        ? (person.cppAnnualOverride != null
+            ? person.cppAnnualOverride * inflationFactor
+            : calculateEstimatedCPP(person.cppContributedYears ?? 40, person.cppStartAge, inflationFactor))
         : 0;
 
     const oasIncome = calculateOAS(age, person.oasStartAge, inflationFactor);
@@ -272,7 +274,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // Tracking Drawdowns
         let pExtraRRSPGross = 0; let sExtraRRSPGross = 0;
         let pTFSAWithdrawal = 0; let sTFSAWithdrawal = 0;
-        let pNonRegWithdrawal = 0; let sNonRegWithdrawal = 0;
+        let pNonRegWithdrawal = 0; let sNonRegWithdrawal = 0; // Gross sale amounts (principal + gains)
+        let pNonRegNet = 0; let sNonRegNet = 0; // Net cash to spending after the sale's own tax
         let pRealizedGains = 0; let sRealizedGains = 0;
 
         // Tracking Reinvestment
@@ -280,47 +283,87 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         let reinvestedRRSP = 0;
         let reinvestedNonReg = 0;
 
+        // Spending the household could not fund this year (all accounts drained)
+        let shortfall = 0;
+
         // --- Step 3: Deficit Resolution (Filling the Gap) ---
         if (deficit > 0) {
             let remainingDeficit = deficit;
 
-            // Strategy Helper
+            // Strategy Helpers
+
+            // Sell enough Non-Reg to net `netTarget` AFTER the incremental tax the sale
+            // itself triggers (capital gains + any extra OAS clawback), so the tax bill
+            // is funded by the withdrawal instead of silently vanishing.
+            const sellNonReg = (personObj: Person, base: PersonAnnualBase, netTarget: number, age: number): { gross: number, net: number, gains: number } => {
+                const bal = personObj.nonRegistered.balance;
+                if (netTarget <= 0 || bal <= 0) return { gross: 0, net: 0, gains: 0 };
+
+                // Pro-rata sale realizes a constant share of gains per dollar sold
+                const gainRatio = Math.max(0, 1 - (personObj.nonRegistered.adjustedCostBase / bal));
+                const isPrimary = personObj === p;
+                const priorGains = isPrimary ? pRealizedGains : sRealizedGains;
+                // Taxable income so far this year: base sources + any extra RRSP already drawn
+                const taxableBase = base.taxableIncome + (isPrimary ? pExtraRRSPGross : sExtraRRSPGross);
+
+                const totalTaxAt = (realizedGains: number) => {
+                    const taxable = taxableBase + calculateTaxableCapitalGains(realizedGains);
+                    return calculateIncomeTax(taxable, province, inflationFactor, undefined, age)
+                        + calculateOASClawback(taxable, base.oasIncome, inflationFactor);
+                };
+                const baselineTax = totalTaxAt(priorGains);
+                const netFor = (gross: number) => gross - (totalTaxAt(priorGains + gross * gainRatio) - baselineTax);
+
+                // If even a full liquidation can't net the target, sell everything
+                let gross: number;
+                if (netFor(bal) <= netTarget) {
+                    gross = bal;
+                } else {
+                    // Binary search; netFor is monotonic and tax drag is well under 50%,
+                    // so gross is bracketed by [netTarget, 2 * netTarget]
+                    let low = netTarget;
+                    let high = Math.min(bal, netTarget * 2);
+                    gross = high;
+                    for (let i = 0; i < 20; i++) {
+                        const mid = (low + high) / 2;
+                        const net = netFor(mid);
+                        gross = mid;
+                        if (Math.abs(net - netTarget) < 1) break;
+                        if (net < netTarget) low = mid; else high = mid;
+                    }
+                }
+
+                const net = netFor(gross);
+                const gains = gross * gainRatio;
+                personObj.nonRegistered.adjustedCostBase *= (1 - gross / bal);
+                personObj.nonRegistered.balance -= gross;
+                return { gross, net, gains };
+            };
+
             const withdrawNonReg = () => {
-                if (remainingDeficit <= 0) return;
-                // Household Non-Reg Pool
-                const pBal = pAlive ? p.nonRegistered.balance : 0;
-                const sBal = sAlive && s ? s.nonRegistered.balance : 0;
-                const total = pBal + sBal;
+                // Two passes: if one spouse's account caps out, the other covers the remainder
+                for (let pass = 0; pass < 2 && remainingDeficit > 1; pass++) {
+                    const pBal = pAlive ? p.nonRegistered.balance : 0;
+                    const sBal = sAlive && s ? s.nonRegistered.balance : 0;
+                    const total = pBal + sBal;
+                    if (total <= 0) return;
 
-                if (total > 0) {
-                    const take = Math.min(total, remainingDeficit);
-                    // Pro-rate based on balance
-                    const pShare = pBal > 0 ? (pBal / total) * take : 0;
-                    const sShare = sBal > 0 ? (sBal / total) * take : 0;
-
-                    if (pShare > 0) {
-                        const gainRatio = Math.max(0, 1 - (p.nonRegistered.adjustedCostBase / pBal));
-                        pRealizedGains += pShare * gainRatio;
-                        p.nonRegistered.adjustedCostBase *= (1 - pShare / pBal);
-                        p.nonRegistered.balance -= pShare;
-                        pNonRegWithdrawal += pShare;
+                    // Split the NET requirement pro-rata by balance
+                    const need = remainingDeficit;
+                    if (pBal > 0 && pAlive && pBase) {
+                        const res = sellNonReg(p, pBase, (pBal / total) * need, pAge);
+                        pRealizedGains += res.gains;
+                        pNonRegWithdrawal += res.gross;
+                        pNonRegNet += res.net;
+                        remainingDeficit -= res.net;
                     }
-                    if (sShare > 0 && s) {
-                        const gainRatio = Math.max(0, 1 - (s.nonRegistered.adjustedCostBase / sBal));
-                        sRealizedGains += sShare * gainRatio;
-                        s.nonRegistered.adjustedCostBase *= (1 - sShare / sBal);
-                        s.nonRegistered.balance -= sShare;
-                        sNonRegWithdrawal += sShare;
+                    if (sBal > 0 && sAlive && s && sBase) {
+                        const res = sellNonReg(s, sBase, (sBal / total) * need, sAge!);
+                        sRealizedGains += res.gains;
+                        sNonRegWithdrawal += res.gross;
+                        sNonRegNet += res.net;
+                        remainingDeficit -= res.net;
                     }
-
-                    // Note: Cap Gains Tax is paid NEXT year effectively (or end of this year), 
-                    // but for "filling the gap" we treat Non-Reg Capital withdrawals as Net Cash 
-                    // and assume the tax bill is covered by the gross withdrawal or next year's planning.
-                    // To be strictly simpler: We just assume Non-Reg draws are AFTER tax money availability.
-                    // The tax on gains calculates into the FINAL tax bill for the year, reducing the "Effective Net"
-                    // checking later. But for filling the gap, $1 sold is $1 cash in hand.
-
-                    remainingDeficit -= take;
                 }
             };
 
@@ -349,19 +392,19 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 // We split the request 50/50 between spouses if both have room, or pro-rata?
                 // Simple approach: Split Net requirement 50/50
 
-                let pNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (pAlive ? remainingDeficit : 0);
-                let sNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (sAlive && s ? remainingDeficit : 0);
+                const pNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (pAlive ? remainingDeficit : 0);
+                const sNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (sAlive && s ? remainingDeficit : 0);
 
                 // function to execute withdrawal for one person
                 const doWithdraw = (personObj: Person, base: PersonAnnualBase, netReq: number): { gross: number, netObtained: number } => {
                     if (netReq <= 0 || personObj.rrsp.balance <= 0) return { gross: 0, netObtained: 0 };
 
-                    // Solve for Gross
-                    // Current Taxable = Base Taxable + (RealizedGains * 0.5) <--- We add gains from NonReg sale here
-                    // Note: We haven't finalized gains yet if order is mixed, but typically NonReg is done.
-                    // IMPORTANT: The definition of 'Base' above didn't include Cap Gains yet.
-
-                    const currentTaxable = base.taxableIncome + (personObj === p ? calculateTaxableCapitalGains(pRealizedGains) : calculateTaxableCapitalGains(sRealizedGains));
+                    // Solve for Gross on top of everything already taxable this year:
+                    // base sources + taxable share of realized Non-Reg gains + any extra
+                    // RRSP gross already withdrawn (matters for the fallback round below)
+                    const currentTaxable = base.taxableIncome + (personObj === p
+                        ? calculateTaxableCapitalGains(pRealizedGains) + pExtraRRSPGross
+                        : calculateTaxableCapitalGains(sRealizedGains) + sExtraRRSPGross);
 
                     const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, personObj.age);
 
@@ -393,7 +436,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 if (pAlive && pBase) {
                     const res = doWithdraw(p, pBase, pNetReq);
                     pExtraRRSPGross += res.gross;
-                    remainingDeficit -= res.netObtained; // Assuming we got it
+                    remainingDeficit -= res.netObtained;
                 }
                 if (sAlive && s && sBase) {
                     const res = doWithdraw(s, sBase, sNetReq);
@@ -401,7 +444,17 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                     remainingDeficit -= res.netObtained;
                 }
 
-                // If one couldn't cover their half, the other tries? (skipped for simplicity in v1)
+                // Fallback: if one spouse's RRSP couldn't cover their half, the other tops up
+                if (remainingDeficit > 1 && pAlive && pBase && p.rrsp.balance > 0) {
+                    const res = doWithdraw(p, pBase, remainingDeficit);
+                    pExtraRRSPGross += res.gross;
+                    remainingDeficit -= res.netObtained;
+                }
+                if (remainingDeficit > 1 && sAlive && s && sBase && s.rrsp.balance > 0) {
+                    const res = doWithdraw(s, sBase, remainingDeficit);
+                    sExtraRRSPGross += res.gross;
+                    remainingDeficit -= res.netObtained;
+                }
             };
 
             if (withdrawalStrategy === 'rrsp-first') {
@@ -413,6 +466,10 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 withdrawTFSA();
                 withdrawRRSP();
             }
+
+            // Whatever deficit survives all withdrawal sources is unfunded spending.
+            // Do NOT drop it silently — report it so the UI can flag plan failure.
+            shortfall = Math.max(0, remainingDeficit);
         }
 
         // --- Step 4: Surplus Allocation (Reinvestment) ---
@@ -490,20 +547,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             // Pass totalRRSP as eligible pension income, grossedUpDivs for dividend tax credit
             const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, totalRRSP, grossedUpDivs) + oasRecovery;
 
-            // Net Cash "In Hand" from this person (excluding shared withdrawals which were tracked separately? No, include all sourced from them)
-            // Wait, "Net Cash" for the Spending Chart needs to be pure.
-            // Net = (Gross Sources - Tax).
-
-            // Let's apportion Tax to sources pro-rata for the chart?
-            // Or just return Gross and Tax, and let the Chart handle "Net" Visualization by subtracting?
-            // The Task asked for "Accurate" Spending chart.
-
-
-            /* 
-               Actually, to be perfect for the chart:
-               Net Salary = Salary - (Salary / TotalGross) * TotalTax
-            */
-
+            // Net cash per source for the charts is derived later by apportioning
+            // the total tax pro-rata: Net Salary = Salary - (Salary / TotalGross) * TotalTax.
             return {
                 finalTaxable,
                 finalTax,
@@ -549,12 +594,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         // --- Step 6: Asset Growth (End of Year) ---
 
-        // Non-Reg growth (already handled interest/divs as cash flow, so only grow Capital)
-        // Note: The 'interest' and 'div' portions were paid out. The 'capital' portion grows.
-        // Actually, in the simple model, we assume the whole balance grows by the 'Capital Growth' rate assigned to the equity portion?
-        // Or do we assume price appreciation on the whole bag?
-        // Let's stick to previous logic: mix.capitalGain * returnRates.capitalGrowth
-        // Let's stick to previous logic: mix.capitalGain * returnRates.capitalGrowth
+        // Non-Reg: interest/dividends were already paid out as cash above, so only the
+        // capital-gain share of the balance appreciates: mix.capitalGain * capitalGrowth.
+        // RRSP/TFSA grow at the full capitalGrowth rate (implicitly 100% growth assets).
         if (pAlive) {
             p.rrsp.balance *= (1 + currentYearRates.capitalGrowth);
             p.tfsa.balance *= (1 + currentYearRates.capitalGrowth);
@@ -601,9 +643,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const sInvTax = (sGrossTotal > 0) ? (((sBase?.interestIncome || 0) + (sBase?.divIncome || 0) * 1.38) / sGrossTotal) * (sFinal?.finalTax || 0) : 0;
         const sNetInvCash = ((sBase?.interestIncome || 0) + (sBase?.divIncome || 0)) - sInvTax;
 
-        // TFSA / Non-Reg Withdrawals are already Net (Tax Free / Tax Paid on Prev Year or handling)
-        // (Technically realized gains invoke tax, but we treated them as accessible cash for deficit. 
-        // The tax bill generated by them reduces the 'Net Analysis' of next year or is absorbed by the gap filler.)
+        // TFSA withdrawals are tax-free (net = gross). Non-Reg sales are grossed-up by
+        // sellNonReg so the sale's own tax is funded: pNonRegWithdrawal is the gross
+        // debit from the account, pNonRegNet is the cash that went to spending.
 
         // --- Step 7: Terminal Tax (Death Year Calculations) ---
         // Detect if this is the death year for either person
@@ -768,8 +810,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             spouseNetRRSP: sNetRRSP,
             personNetTFSA: pTFSAWithdrawal,
             spouseNetTFSA: sTFSAWithdrawal,
-            personNetNonReg: pNonRegWithdrawal,
-            spouseNetNonReg: sNonRegWithdrawal,
+            personNetNonReg: pNonRegNet,
+            spouseNetNonReg: sNonRegNet,
 
             // Raw
             totalTFSAWithdrawal: pTFSAWithdrawal + sTFSAWithdrawal,
@@ -779,13 +821,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             // Just for checking
             netRRSPWithdrawal: pNetRRSP + sNetRRSP,
             netTFSAWithdrawal: pTFSAWithdrawal + sTFSAWithdrawal,
-            netNonRegWithdrawal: pNonRegWithdrawal + sNonRegWithdrawal,
+            netNonRegWithdrawal: pNonRegNet + sNonRegNet,
 
             employmentIncome: (pBase?.employmentIncome || 0) + (sBase?.employmentIncome || 0),
             investmentIncome: (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0),
             totalRealizedCapGains: pRealizedGains + sRealizedGains,
             inflationFactor,
             householdSurplus: surplus, // The initial surplus before reinvestment
+            shortfall,
 
             // Income Splitting
             pensionSplitAmount,
@@ -833,11 +876,15 @@ export function runMonteCarlo(inputs: SimulationInputs, iterations: number = 200
         rawRuns.push(runSimulation(inputs, true));
     }
 
+    // Guard: runSimulation returns [] for invalid age configurations
+    if (rawRuns[0].length === 0) {
+        return { percentiles: [], successRate: 0, medianEndOfPlanAssets: 0 };
+    }
+
     // Process Results
-    // We assume all runs have same length (same life expectancy inputs)
+    // All runs have the same length (same life expectancy inputs)
     const years = rawRuns[0].length;
     const percentiles: MonteCarloPercentile[] = [];
-
 
     for (let i = 0; i < years; i++) {
         // Extract total assets for this specific year across all runs
@@ -848,16 +895,6 @@ export function runMonteCarlo(inputs: SimulationInputs, iterations: number = 200
         assetsAtYear.sort((a, b) => a - b);
 
         const getP = (p: number) => assetsAtYear[Math.floor(p * iterations)];
-
-        // At end of plan (last year), count runs where assets < 0 (or close to 0)
-        // Actually, our engine might not allow negative assets (it stops at 0?), 
-        // let's check. Engine allows balance -= withdrawal. If balance < 0, it stays negative?
-        // Let's check: "person.rrsp.balance -= rrifWithdrawal".
-        // If balance is 0, withdrawal is 0?
-        // Ah, in "Step 3" withdraw function checks: "Math.min(total, remainingDeficit)". 
-        // So balance shouldn't go negative, it just hits 0.
-        // But for success rate, we check if they ran out of money BEFORE life expectancy.
-        // Or simply: check if assets at end are > 0.
 
         percentiles.push({
             year: refRun.year,
@@ -870,16 +907,15 @@ export function runMonteCarlo(inputs: SimulationInputs, iterations: number = 200
         });
     }
 
-    // Success Rate Calculation
-    // A run is a "failure" if at any point in the retired phase assets hit 0 while deficit exists?
-    // Or simpler: Is the Final Asset Value > 0?
-    // Using final value is easiest Proxy.
-    const lastYearAssets = rawRuns.map(run => run[run.length - 1].totalAssets);
-    const successes = lastYearAssets.filter(val => val > 1000).length; // Tolerance $1000
+    // Success Rate: a run fails if it ever left spending unfunded.
+    // (Cumulative tolerance of $1,000 to ignore rounding-level gaps.)
+    const failures = rawRuns.filter(run =>
+        run.reduce((sum, year) => sum + year.shortfall, 0) > 1000
+    ).length;
 
     return {
         percentiles,
-        successRate: (successes / iterations) * 100,
+        successRate: ((iterations - failures) / iterations) * 100,
         medianEndOfPlanAssets: percentiles[percentiles.length - 1].p50
     };
 }

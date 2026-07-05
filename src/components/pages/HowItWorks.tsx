@@ -196,7 +196,7 @@ export function HowItWorks() {
             </section>
 
             {/* Disclaimer Footer */}
-            <footer className="pt-12 border-t border-slate-200 space-y-6">
+            <footer id="full-disclaimer" className="pt-12 border-t border-slate-200 space-y-6">
                 <div className="bg-slate-50 rounded-2xl p-8 border border-slate-200">
                     <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-4">Important Legal Disclaimer</p>
                     <div className="text-[11px] text-slate-500 leading-relaxed space-y-4">
@@ -216,6 +216,26 @@ export function HowItWorks() {
                 </div>
                 <p className="text-[10px] text-slate-400 text-center">
                     &copy; {new Date().getFullYear()} Canadian Retirement Asset Planning tool. All rights reserved.
+                </p>
+                <p className="text-[10px] text-slate-400 text-center">
+                    Version {__APP_VERSION__} · Calculations use 2025 federal and provincial tax rules ·{' '}
+                    <a
+                        href="https://github.com/can-finance/can-retire"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                    >
+                        Source on GitHub
+                    </a>
+                    {' '}·{' '}
+                    <a
+                        href="https://github.com/can-finance/can-retire/blob/main/CHANGELOG.md"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                    >
+                        Changelog
+                    </a>
                 </p>
             </footer>
         </div>

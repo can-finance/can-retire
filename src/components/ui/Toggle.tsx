@@ -7,17 +7,21 @@ interface ToggleProps {
 }
 
 import React from 'react';
+import { HelpTooltip } from './HelpTooltip';
 
 export function Toggle({ checked, onChange, label, tooltip, badge }: ToggleProps) {
+    const labelEl = (
+        <label
+            className={`text-sm font-medium text-slate-700 flex items-center gap-2 ${tooltip ? 'cursor-help border-b border-dashed border-slate-300 w-fit' : ''}`}
+        >
+            {label}
+            {badge}
+        </label>
+    );
+
     return (
         <div className="flex items-center justify-between py-2 border-t border-slate-100">
-            <label
-                className={`text-sm font-medium text-slate-700 flex items-center gap-2 ${tooltip ? 'cursor-help border-b border-dashed border-slate-300 w-fit' : ''}`}
-                title={tooltip}
-            >
-                {label}
-                {badge}
-            </label>
+            {tooltip ? <HelpTooltip text={tooltip} className="w-fit">{labelEl}</HelpTooltip> : labelEl}
             <button
                 role="switch"
                 aria-checked={checked}

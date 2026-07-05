@@ -141,6 +141,8 @@ export function calculateIncomeTax(
     const provTax = calculateTieredTax(taxableIncome, taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'], inflationFactor);
 
     // Indexed Credits
+    // Note: credits use the statutory 15% lowest rate; the first bracket's 14.5% is the
+    // 2025 transitional rate (mid-year cut), so credit value is slightly overstated for 2025.
     const fedCredits = (taxRates.basicPersonalAmount.federal * inflationFactor) * 0.15;
     const provRate = (taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'])[0].rate;
     const provCredits = (taxRates.basicPersonalAmount[province] || taxRates.basicPersonalAmount['ON']) * inflationFactor * provRate;
@@ -231,7 +233,7 @@ function calculateOHP(income: number): number {
 function calculateOntarioSurtax(basicProvTax: number, inflationFactor: number = 1.0): number {
     if (basicProvTax <= 0) return 0;
 
-    // 2025 Thresholds (not indexed — Ontario surtax thresholds are frozen)
+    // 2025 thresholds — indexed to inflation annually (unlike the OHP bands above)
     const tier1Threshold = 5710 * inflationFactor;
     const tier2Threshold = 7307 * inflationFactor;
 

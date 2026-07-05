@@ -6,7 +6,7 @@ import { CHART_COLORS } from '../../constants/chartColors';
 interface PersonSectionProps {
     title: string;
     person: Person;
-    onChange: (field: string, value: number) => void;
+    onChange: (field: string, value: number | undefined) => void;
     onAccountChange: (account: 'rrsp' | 'tfsa' | 'nonRegistered', field: 'balance' | 'adjustedCostBase', value: number) => void;
     showRemove?: boolean;
     onRemove?: () => void;
@@ -124,6 +124,24 @@ export function PersonSection({
                     <FinancialInput label="OAS Start Age" prefix="" value={person.oasStartAge}
                         onChange={(e) => onChange('oasStartAge', Number(e.target.value))} />
                 </div>
+
+                {person.cppAnnualOverride != null && (
+                    <div className="flex items-center justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                        <p className="text-xs text-sky-800">
+                            Using CPP Calculator estimate:{' '}
+                            <span className="font-bold">
+                                {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(person.cppAnnualOverride)}/yr
+                            </span>{' '}
+                            (Years Contributed is ignored)
+                        </p>
+                        <button
+                            onClick={() => onChange('cppAnnualOverride', undefined)}
+                            className="text-xs font-medium text-sky-600 hover:text-sky-800 underline decoration-dotted whitespace-nowrap"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                )}
 
                 <FinancialInput label="Annual Income" value={person.currentIncome}
                     onChange={(e) => onChange('currentIncome', Number(e.target.value))} />

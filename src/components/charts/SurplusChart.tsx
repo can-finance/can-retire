@@ -2,8 +2,10 @@ import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { SimulationResult } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
-import { formatCurrencyShort, formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
+import { ChartTooltip } from './ChartTooltip';
+import type { TooltipRow } from './ChartTooltip';
 
 interface SurplusChartProps {
     data: SimulationResult[];
@@ -55,32 +57,15 @@ export const SurplusChart = React.memo(function SurplusChart({ data, inflationAd
                         domain={domainMax ? [0, domainMax] : ['auto', 'auto']}
                     />
                     <Tooltip
-                        content={({ active, payload }) => {
-                            if (!active || !payload || !payload.length) return null;
-                            const d = payload[0]?.payload;
-                            let total = 0;
-                            return (
-                                <div className="bg-white p-4 rounded-xl shadow-lg border border-slate-200">
-                                    <p className="font-semibold text-slate-900 mb-2">Age {d?.age}</p>
-                                    {payload.map((e: any, i: number) => {
-                                        if (Math.abs(e.value) < 1) return null;
-                                        total += e.value;
-                                        return (
-                                            <div key={i} className="flex justify-between gap-4 text-sm">
-                                                <span style={{ color: e.color }}>{LABEL_MAP[e.dataKey] || e.name}</span>
-                                                <span className="font-semibold text-slate-900">{formatCurrencyCAD(e.value)}</span>
-                                            </div>
-                                        );
-                                    })}
-                                    {total > 0 && (
-                                        <div className="border-t border-slate-200 mt-2 pt-2 flex justify-between gap-4 text-sm font-semibold">
-                                            <span className="text-slate-900">Total Surplus</span>
-                                            <span className="text-slate-900">{formatCurrencyCAD(total)}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        }}
+                        content={({ active, payload }) => (
+                            <ChartTooltip
+                                active={active}
+                                payload={payload as unknown as TooltipRow[]}
+                                labelMap={LABEL_MAP}
+                                showTotal
+                                totalLabel="Total Surplus"
+                            />
+                        )}
                         cursor={{ fill: '#f1f5f9' }}
                     />
                     <Legend

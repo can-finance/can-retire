@@ -1,9 +1,11 @@
 import React from 'react';
 
+export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works';
+
 interface AppLayoutProps {
     children: React.ReactNode;
-    currentPage: 'dashboard' | 'how-it-works';
-    onNavigate: (page: 'dashboard' | 'how-it-works') => void;
+    currentPage: PageId;
+    onNavigate: (page: PageId) => void;
 }
 
 function CrapLogo() {
@@ -51,9 +53,9 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
                         </h1>
                     </div>
 
-                    <div className="hidden md:flex items-center gap-2 text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                    <div className="hidden xl:flex items-center gap-2 whitespace-nowrap text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                        Local Browser Execution Only • No Data Sent to Server
+                        Runs Entirely in Your Browser • Your Data Never Leaves Your Device
                     </div>
 
                     <nav className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl">
@@ -65,6 +67,15 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
                                 }`}
                         >
                             Dashboard
+                        </button>
+                        <button
+                            onClick={() => onNavigate('cpp-calculator')}
+                            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'cpp-calculator'
+                                ? 'bg-white text-slate-900 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-900'
+                                }`}
+                        >
+                            CPP Calculator
                         </button>
                         <button
                             onClick={() => onNavigate('how-it-works')}
@@ -81,6 +92,31 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
             <main className="container mx-auto px-4 py-8">
                 {children}
             </main>
+            {currentPage !== 'how-it-works' && (
+                <footer className="border-t border-slate-200/70 mt-4">
+                    <div className="container mx-auto px-4 py-6 text-center space-y-1.5">
+                        <p className="text-xs text-slate-400">
+                            For planning and educational purposes only — not financial, tax, or investment advice.
+                            Projections are estimates based on simplified assumptions.{' '}
+                            <button
+                                onClick={() => {
+                                    onNavigate('how-it-works');
+                                    // Scroll after the page has rendered
+                                    setTimeout(() => {
+                                        document.getElementById('full-disclaimer')?.scrollIntoView({ behavior: 'smooth' });
+                                    }, 100);
+                                }}
+                                className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                            >
+                                Full disclaimer
+                            </button>
+                        </p>
+                        <p className="text-[11px] text-slate-400">
+                            Calculations use 2025 federal and provincial tax rules.
+                        </p>
+                    </div>
+                </footer>
+            )}
         </div>
     );
 }

@@ -37,6 +37,7 @@ const getColumns = (hasSpouse: boolean) => {
         { key: 'netCPP', label: 'Net CPP', tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).', align: 'right', color: 'blue' },
         { key: 'netOAS', label: 'Net OAS', tooltip: 'Combined Old Age Security benefits (Net of Tax).', align: 'right', color: 'blue' },
         { key: 'netIncome', label: 'Total Spend', tooltip: 'Household cash available for spending after taxes (Target Spend)', align: 'right', color: 'green' },
+        { key: 'shortfall', label: 'Shortfall', tooltip: 'Target spending that could NOT be funded this year after draining all accounts', align: 'right', color: 'red' },
         { key: 'taxPaid', label: 'Tax Paid', tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback', align: 'right', color: 'red' }
     ];
 
@@ -94,6 +95,9 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                 <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netCPPIncome)}</td>
                                 <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netOASIncome)}</td>
                                 <td className="px-3 py-2 text-right text-green-600">{formatCurrencyCAD(row.netIncome)}</td>
+                                <td className={`px-3 py-2 text-right ${row.shortfall > 1 ? 'font-bold text-red-600' : 'text-slate-300'}`}>
+                                    {row.shortfall > 1 ? formatCurrencyCAD(row.shortfall) : '—'}
+                                </td>
                                 <td className="px-3 py-2 text-right text-red-500">{formatCurrencyCAD(row.taxPaid)}</td>
                             </tr>
                         ))}

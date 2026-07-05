@@ -10,8 +10,21 @@ export interface SavedScenario {
 
 export function useScenarios() {
     const [scenarios, setScenarios] = useState<SavedScenario[]>(() => {
-        const saved = localStorage.getItem('retirement_saved_scenarios');
-        return saved ? JSON.parse(saved) : [];
+        // Guard against corrupted or wrong-shaped localStorage — a broken list
+        // should degrade to empty, not crash the app on mount
+        try {
+            const saved = localStorage.getItem('retirement_saved_scenarios');
+            const parsed = saved ? JSON.parse(saved) : [];
+            if (!Array.isArray(parsed)) return [];
+            return parsed.filter((s): s is SavedScenario =>
+                !!s && typeof s === 'object' &&
+                typeof s.id === 'string' && typeof s.name === 'string' &&
+                !!s.inputs && typeof s.inputs === 'object'
+            );
+        } catch (error) {
+            console.error('Failed to load saved scenarios', error);
+            return [];
+        }
     });
 
     useEffect(() => {
@@ -28,10 +41,15 @@ export function useScenarios() {
         setScenarios(prev => [...prev, newScenario]);
     };
 
-    const updateScenario = (id: string, inputs: SimulationInputs) => {
+    const updateScenario = (id: string, inputs: SimulationInputs, newName?: string) => {
         setScenarios(prev => prev.map(s =>
             s.id === id
-                ? { ...s, inputs: JSON.parse(JSON.stringify(inputs)), lastSaved: new Date().toISOString() }
+                ? {
+                    ...s,
+                    name: newName?.trim() ? newName.trim() : s.name,
+                    inputs: JSON.parse(JSON.stringify(inputs)),
+                    lastSaved: new Date().toISOString()
+                }
                 : s
         ));
     };

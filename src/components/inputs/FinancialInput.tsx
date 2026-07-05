@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { ChangeEvent, FocusEvent as ReactFocusEvent } from 'react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { HelpTooltip } from '../ui/HelpTooltip';
 
 interface FinancialInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> {
     label: string;
@@ -34,10 +35,12 @@ export function FinancialInput({
     maxFractionDigits = 2,
     accentColor,
     className,
+    min,
+    max,
     ...props
 }: FinancialInputProps) {
-    // Format initial value
-    const [displayValue, setDisplayValue] = useState(() => value ? formatNumber(value, minFractionDigits, maxFractionDigits) : '');
+    // Format initial value (0 is a real value and must render as "0", not blank)
+    const [displayValue, setDisplayValue] = useState(() => formatNumber(value, minFractionDigits, maxFractionDigits));
 
     // Sync with external value updates
     useEffect(() => {
@@ -45,7 +48,7 @@ export function FinancialInput({
         // This prevents cursor jumping when typing if we were to format on every keystroke
         const numericDisplay = parseFloat(displayValue.replace(/,/g, ''));
         if (numericDisplay !== value) {
-            setDisplayValue(value ? formatNumber(value, minFractionDigits, maxFractionDigits) : '');
+            setDisplayValue(formatNumber(value, minFractionDigits, maxFractionDigits));
         }
     }, [value, minFractionDigits, maxFractionDigits]); // minimal dependency to avoid loop
 
@@ -62,7 +65,11 @@ export function FinancialInput({
 
     const commitValue = () => {
         const numericValue = parseFloat(displayValue.replace(/,/g, ''));
-        const finalValue = isNaN(numericValue) ? 0 : numericValue;
+        let finalValue = isNaN(numericValue) ? 0 : numericValue;
+
+        // min/max don't work on type="text" inputs — enforce them on commit instead
+        if (min !== undefined) finalValue = Math.max(Number(min), finalValue);
+        if (max !== undefined) finalValue = Math.min(Number(max), finalValue);
 
         // Only trigger update if the value actually changed from the prop
         if (finalValue !== value) {
@@ -93,20 +100,23 @@ export function FinancialInput({
         // Note: We no longer call onChange here to avoid expensive re-simulations on every keypress
     };
 
+    const labelEl = (
+        <label
+            className={twMerge(
+                "text-sm font-semibold",
+                tooltip && "cursor-help border-b border-dashed w-fit",
+                accentColor ? "" : "text-slate-700",
+                tooltip && !accentColor && "border-slate-300"
+            )}
+            style={accentColor ? { color: accentColor, borderColor: accentColor + '80' } : undefined}
+        >
+            {label}
+        </label>
+    );
+
     return (
         <div className={clsx("flex flex-col gap-1.5", className)}>
-            <label
-                className={twMerge(
-                    "text-sm font-semibold",
-                    tooltip && "cursor-help border-b border-dashed w-fit",
-                    accentColor ? "" : "text-slate-700",
-                    tooltip && !accentColor && "border-slate-300"
-                )}
-                style={accentColor ? { color: accentColor, borderColor: accentColor + '80' } : undefined}
-                title={tooltip}
-            >
-                {label}
-            </label>
+            {tooltip ? <HelpTooltip text={tooltip} className="w-fit">{labelEl}</HelpTooltip> : labelEl}
             <div className="relative flex items-center">
                 {prefix && (
                     <span className="absolute left-3 text-slate-500 font-medium">

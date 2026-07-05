@@ -9,7 +9,7 @@ interface ScenarioManagerProps {
     activeScenarioId: string | null;
     currentInputs: SimulationInputs;
     onSave: (name: string) => void;
-    onUpdate: () => void;
+    onUpdate: (newName?: string) => void;
     onLoad: (scenario: SavedScenario) => void;
     onDelete: (id: string) => void;
     onCreateNew: () => void;
@@ -28,17 +28,24 @@ export function ScenarioManager({
 
 }: ScenarioManagerProps) {
     const [name, setName] = useState('');
+    const activeName = activeScenarioId
+        ? scenarios.find(s => s.id === activeScenarioId)?.name
+        : undefined;
 
     const handleSaveSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim()) return;
-        onSave(name);
+        // "Save as copy" with an empty name falls back to "<active> (copy)"
+        const finalName = name.trim() || (activeName ? `${activeName} (copy)` : '');
+        if (!finalName) return;
+        onSave(finalName);
         setName('');
     };
 
     const handleUpdateSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onUpdate();
+        // A typed name renames the scenario; empty keeps the current name
+        onUpdate(name.trim() || undefined);
+        setName('');
     };
 
     // --- Sharing Logic ---
@@ -106,7 +113,7 @@ export function ScenarioManager({
                 <div className="flex gap-2">
                     <input
                         type="text"
-                        placeholder="Scenario name..."
+                        placeholder={activeName ? `Rename "${activeName}"... (optional)` : 'Scenario name...'}
                         className="flex-1 text-sm rounded-lg border border-slate-200 px-3 py-2 focus:ring-2 focus:ring-brand-500 outline-none"
                         value={name}
                         onChange={(e) => setName(e.target.value)}

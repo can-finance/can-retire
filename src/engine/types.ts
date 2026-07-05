@@ -54,6 +54,7 @@ export interface Person {
     currentIncome: number;
     cppStartAge: number;
     cppContributedYears: number; // Years contributed to CPP (Max 40)
+    cppAnnualOverride?: number; // Annual CPP in today's dollars from the CPP Calculator page; replaces the simple estimate
     oasStartAge: number; // Usually 65
     rrspMeltStartAge?: number; // When to start voluntary RRSP meltdown (default: retirementAge)
     rrspMeltAmount?: number; // Annual voluntary withdrawal amount
@@ -118,6 +119,7 @@ export interface SimulationResult {
     totalRealizedCapGains: number;
     inflationFactor: number;
     householdSurplus: number;
+    shortfall: number; // Target spending the household could NOT fund after draining all accounts
 
     // Income Splitting
     pensionSplitAmount?: number;     // Amount of pension income split to spouse
