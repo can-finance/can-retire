@@ -1,0 +1,15 @@
+# Mirrors .gitignore to keep the build context small
+node_modules
+dist
+dist-ssr
+.git
+.github
+logs
+*.log
+*.local
+.vscode
+.idea
+.DS_Store
+.claude
+Dockerfile.dev
+docker-compose.yml

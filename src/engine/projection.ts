@@ -769,6 +769,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const netEstateValue = grossEstateValue - totalTerminalTax;
 
 
+        // Cash-basis gross income: actual dollars received, unlike finalTaxable which
+        // includes the 38% dividend gross-up and the taxable share of realized gains
+        // (the gains cash arrives via the gross Non-Reg sale added below).
+        const pCashGross = (pBase?.employmentIncome || 0) + (pBase?.cppIncome || 0) + (pBase?.oasIncome || 0) +
+            (pFinal?.totalRRSP || 0) + (pBase?.interestIncome || 0) + (pBase?.divIncome || 0);
+        const sCashGross = (sBase?.employmentIncome || 0) + (sBase?.cppIncome || 0) + (sBase?.oasIncome || 0) +
+            (sFinal?.totalRRSP || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0);
+
         results.push({
             year: new Date().getFullYear() + yearOffset,
             age: pAge,
@@ -778,7 +786,12 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             grossIncome: pGrossTotal + sGrossTotal,
             cppIncome: (pBase?.cppIncome || 0) + (sBase?.cppIncome || 0),
             oasIncome: (pBase?.oasIncome || 0) + (sBase?.oasIncome || 0),
-            netIncome: (pGrossTotal + sGrossTotal) - totalTaxPaid + pTFSAWithdrawal + sTFSAWithdrawal + pNonRegWithdrawal + sNonRegWithdrawal, // Total Cash In Hand
+            // Actual spending funded this year: after-tax cash minus the surplus that was
+            // reinvested rather than spent (RRIF minimums / CPP can force income past the
+            // target). Equals targetSpend when funded, targetSpend - shortfall when not.
+            netIncome: pCashGross + sCashGross + annualOneTimeInflows - totalTaxPaid
+                + pTFSAWithdrawal + sTFSAWithdrawal + pNonRegWithdrawal + sNonRegWithdrawal
+                - (reinvestedTFSA + reinvestedRRSP + reinvestedNonReg),
             spending: targetSpend,
             taxPaid: totalTaxPaid,
             accounts: {

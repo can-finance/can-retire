@@ -36,9 +36,10 @@ const getColumns = (hasSpouse: boolean) => {
         { key: 'total', label: 'Total Assets', tooltip: 'Sum of all account balances (yours + spouse if applicable)', align: 'right' },
         { key: 'netCPP', label: 'Net CPP', tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).', align: 'right', color: 'blue' },
         { key: 'netOAS', label: 'Net OAS', tooltip: 'Combined Old Age Security benefits (Net of Tax).', align: 'right', color: 'blue' },
-        { key: 'netIncome', label: 'Total Spend', tooltip: 'Household cash available for spending after taxes (Target Spend)', align: 'right', color: 'green' },
-        { key: 'shortfall', label: 'Shortfall', tooltip: 'Target spending that could NOT be funded this year after draining all accounts', align: 'right', color: 'red' },
-        { key: 'taxPaid', label: 'Tax Paid', tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback', align: 'right', color: 'red' }
+        { key: 'netIncome', label: 'Total Spend', tooltip: 'Actual household spending funded this year (after-tax cash minus reinvested surplus). Matches Target Spend when funded; reduced by any Shortfall.', align: 'right', color: 'green' },
+        { key: 'surplusShortfall', label: 'Surplus / Shortfall', tooltip: 'Green (+): income exceeded the spending target; the excess was reinvested into TFSA/RRSP/Non-Reg. Red (−): spending that could NOT be funded after draining all accounts.', align: 'right' },
+        { key: 'taxPaid', label: 'Tax Paid', tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback', align: 'right', color: 'red' },
+        { key: 'estateTax', label: 'Estate Tax', tooltip: 'Terminal tax at death: deemed disposition of RRSP/RRIF plus unrealized capital gains. Already deducted from the account balances shown on this row.', align: 'right', color: 'red' }
     ];
 
     return [...baseColumns, ...accountColumns, ...incomeColumns];
@@ -64,9 +65,9 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                 <h2 className="text-xl font-bold text-slate-900">Year-by-Year Breakdown</h2>
                 <p className="text-xs text-slate-500 mt-1">Hover over column headers for calculation details</p>
             </div>
-            <div className="overflow-x-auto max-h-[800px]">
+            <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                    <thead className="bg-slate-50 sticky top-0">
+                    <thead className="bg-slate-50">
                         <tr>
                             {columns.map(col => (
                                 <HeaderCell key={col.key} label={col.label} tooltip={col.tooltip} align={col.align} />
@@ -74,7 +75,9 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {data.map((row, idx) => (
+                        {data.map((row, idx) => {
+                            const reinvested = row.reinvestedTFSA + row.reinvestedRRSP + row.reinvestedNonReg;
+                            return (
                             <tr key={row.year} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                                 <td className="px-3 py-2 text-slate-700">{row.year}</td>
                                 <td className="px-3 py-2 text-slate-700">{row.age}</td>
@@ -95,12 +98,16 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                 <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netCPPIncome)}</td>
                                 <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netOASIncome)}</td>
                                 <td className="px-3 py-2 text-right text-green-600">{formatCurrencyCAD(row.netIncome)}</td>
-                                <td className={`px-3 py-2 text-right ${row.shortfall > 1 ? 'font-bold text-red-600' : 'text-slate-300'}`}>
-                                    {row.shortfall > 1 ? formatCurrencyCAD(row.shortfall) : '—'}
+                                <td className={`px-3 py-2 text-right ${row.shortfall > 1 ? 'font-bold text-red-600' : reinvested > 1 ? 'text-emerald-600' : 'text-slate-300'}`}>
+                                    {row.shortfall > 1 ? `−${formatCurrencyCAD(row.shortfall)}` : reinvested > 1 ? `+${formatCurrencyCAD(reinvested)}` : '—'}
                                 </td>
                                 <td className="px-3 py-2 text-right text-red-500">{formatCurrencyCAD(row.taxPaid)}</td>
+                                <td className={`px-3 py-2 text-right ${(row.totalTerminalTax ?? 0) > 1 ? 'font-bold text-red-600' : 'text-slate-300'}`}>
+                                    {(row.totalTerminalTax ?? 0) > 1 ? formatCurrencyCAD(row.totalTerminalTax!) : '—'}
+                                </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

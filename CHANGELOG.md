@@ -5,6 +5,35 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-09
+
+### Fixed
+- **"Total Spend" (`netIncome`) is now cash-basis actual spending.** Previously it was
+  derived from taxable income, which (a) counted the 38% dividend gross-up as cash,
+  (b) double-counted the taxable share of realized capital gains on top of the gross
+  non-registered sale, and (c) excluded one-time inflows — in a year funded by
+  non-registered sales it could overstate spending by 30%+. It also reported forced
+  income (RRIF minimums, CPP above the target) as spending even though the excess was
+  reinvested. It now equals the spending target when funded and target-minus-shortfall
+  when accounts run dry. Covered by six new regression tests (79 total).
+
+### Added
+- **Estate Tax column** in the Year-by-Year Breakdown table: shows the terminal tax
+  (deemed disposition of RRSP/RRIF + unrealized gains) on the death-year row. The tax
+  was previously deducted from balances without appearing anywhere in the table, so the
+  death-year "Tax Paid" understated the real bill.
+- **Surplus / Shortfall column** (replaces Shortfall): green `+` shows surplus income
+  reinvested into TFSA/RRSP/Non-Reg, red `−` shows unfunded spending — so every row's
+  cash fully reconciles: Total Spend + Tax + reinvested = cash in.
+- Tooltips on the Scenarios panel and Share button clarifying that scenarios live in
+  browser localStorage on your PC and share links carry all data in the URL itself —
+  nothing is stored on any server.
+- Dockerized dev environment (`Dockerfile.dev`, `docker-compose.yml`) with file-watch
+  polling so Vite HMR works through Windows bind mounts.
+
+### Changed
+- The Year-by-Year table now renders at full height (no inner 800px scrollbox).
+
 ## [0.2.0] - 2026-07-05
 
 ### Added

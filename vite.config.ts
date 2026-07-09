@@ -14,6 +14,9 @@ export default defineConfig({
   server: {
     // Respect an externally assigned port (e.g. preview tooling); default 5173
     port: process.env.PORT ? Number(process.env.PORT) : 5173,
+    // Windows bind mounts don't forward file-change events into Docker;
+    // poll instead so HMR works (set in docker-compose.yml)
+    watch: process.env.VITE_USE_POLLING ? { usePolling: true, interval: 300 } : undefined,
   },
   build: {
     rollupOptions: {

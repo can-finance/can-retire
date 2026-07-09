@@ -113,6 +113,77 @@ describe('spousal fallback', () => {
     });
 });
 
+describe('netIncome is cash-basis (Total Spend column)', () => {
+    it('non-reg funded spending: no double count of taxable gains', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                nonRegistered: { type: 'NonRegistered', balance: 1_500_000, adjustedCostBase: 300_000, assetMix: { interest: 0, dividend: 0, capitalGain: 1 } }
+            })
+        }));
+        // Cash available = net sale proceeds = target; the 50% taxable-gains
+        // inclusion is a tax construct, not cash
+        expect(res[0].netIncome).toBeCloseTo(80_000, -1);
+    });
+
+    it('dividend gross-up is not counted as cash', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                nonRegistered: { type: 'NonRegistered', balance: 1_500_000, adjustedCostBase: 1_500_000, assetMix: { interest: 0, dividend: 0.5, capitalGain: 0.5 } }
+            }),
+            returnRates: { interest: 0, dividend: 0.04, capitalGrowth: 0 }
+        }));
+        // $30k actual dividend cash + $50k all-ACB sale = $80k target; the 38%
+        // gross-up must not inflate this
+        expect(res[0].netIncome).toBeCloseTo(80_000, -1);
+    });
+
+    it('one-time inflows count toward cash available', () => {
+        const res = runSimulation(inputs({
+            person: person({ tfsa: { type: 'TFSA', balance: 1_000_000 } }),
+            oneTimeExpenses: [{ id: '1', name: 'Sale of cottage', amount: 20_000, age: 65, type: 'inflow' }]
+        }));
+        // $20k inflow + $60k TFSA withdrawal = $80k target
+        expect(res[0].netIncome).toBeCloseTo(80_000, 0);
+        expect(res[0].totalTFSAWithdrawal).toBeCloseTo(60_000, 0);
+    });
+
+    it('forced RRIF minimums beyond the target are reinvested, not shown as spending', () => {
+        const res = runSimulation(inputs({
+            person: person({ age: 72, lifeExpectancy: 78, rrsp: { type: 'RRSP', balance: 1_000_000 } }),
+            postRetirementSpend: 20_000
+        }));
+        const y = res[0];
+        // RRIF minimum (5.28% of $1M gross) far exceeds the $20k target
+        expect(y.totalRRSPWithdrawal).toBeGreaterThan(50_000);
+        expect(y.reinvestedTFSA + y.reinvestedRRSP + y.reinvestedNonReg).toBeGreaterThan(10_000);
+        // Total Spend reports what was spent, not the forced income
+        expect(y.netIncome).toBeCloseTo(20_000, 0);
+    });
+
+    it('unfunded years: Total Spend = target minus shortfall', () => {
+        const res = runSimulation(inputs({
+            person: person({ tfsa: { type: 'TFSA', balance: 100_000 } }),
+            postRetirementSpend: 200_000
+        }));
+        // Year 0: $100k TFSA covers half; year 1: nothing left
+        expect(res[0].netIncome).toBeCloseTo(200_000 - res[0].shortfall, 0);
+        expect(res[1].netIncome).toBeCloseTo(0, 0);
+    });
+
+    it('CPP start year: cash available stays at target as CPP displaces withdrawals', () => {
+        const res = runSimulation(inputs({
+            person: person({ age: 65, lifeExpectancy: 75, cppStartAge: 70, cppContributedYears: 40, rrsp: { type: 'RRSP', balance: 1_500_000 } })
+        }));
+        const before = res.find(r => r.age === 69)!;
+        const after = res.find(r => r.age === 70)!;
+        expect(after.cppIncome).toBeGreaterThan(24_000); // 17,196 × 1.42 deferral
+        // Total Spend unchanged across the CPP start boundary
+        expect(after.netIncome).toBeCloseTo(before.netIncome, 0);
+        // CPP reduces the RRSP draw needed
+        expect(after.totalRRSPWithdrawal).toBeLessThan(before.totalRRSPWithdrawal - 20_000);
+    });
+});
+
 describe('shortfall reporting', () => {
     it('unfundable spending is reported, not silently dropped', () => {
         const res = runSimulation(inputs({

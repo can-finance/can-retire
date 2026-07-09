@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      # Host 5174 (5173 is taken by tradingclocks-dev) -> container 5173
+      - "5174:5173"
+    environment:
+      # File-change events don't cross the Windows bind mount; poll for HMR
+      - VITE_USE_POLLING=1
+    volumes:
+      # Bind-mount the project for live edits / HMR
+      - .:/workspace
+      # Anonymous volume isolates the container's node_modules from the host (OneDrive)
+      - /workspace/node_modules
