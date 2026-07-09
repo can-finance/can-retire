@@ -35,6 +35,7 @@ export const INITIAL_INPUTS: SimulationInputs = {
     returnRates: {
         interest: 0.02,
         dividend: 0.03,
+        foreignYield: 0.02,
         capitalGrowth: 0.05,
         volatility: 0.10
     }
@@ -146,6 +147,8 @@ export function sanitizeSimulationInputs(raw: unknown): SimulationInputs | null 
         returnRates: {
             interest: num(rates.interest, defRates.interest),
             dividend: num(rates.dividend, defRates.dividend),
+            // Payloads predating this field keep their old behavior (foreign = dividend yield)
+            foreignYield: num(rates.foreignYield, num(rates.dividend, defRates.foreignYield!)),
             capitalGrowth: num(rates.capitalGrowth, defRates.capitalGrowth),
             volatility: optNum(rates.volatility, defRates.volatility)
         }

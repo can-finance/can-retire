@@ -176,6 +176,7 @@ export interface SimulationInputs {
     returnRates: {
         interest: number;
         dividend: number;
+        foreignYield?: number; // Yield on the foreign-dividend slice; falls back to `dividend`
         capitalGrowth: number;
         volatility?: number; // Standard Deviation (e.g., 0.1 for 10% std dev)
     };

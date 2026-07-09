@@ -107,7 +107,7 @@ function simulatePersonBaseYear(
     person: Person,
     age: number,
     province: string,
-    returnRates: { interest: number; dividend: number; capitalGrowth: number },
+    returnRates: { interest: number; dividend: number; foreignYield?: number; capitalGrowth: number },
     inflationFactor: number
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
@@ -149,7 +149,7 @@ function simulatePersonBaseYear(
     // Foreign dividends: fully taxable at marginal rates, no gross-up or dividend
     // tax credit. (The ~15% foreign withholding is creditable against Canadian tax,
     // so marginal-rate treatment approximates the all-in result.)
-    const foreignDivIncome = nonRegBalance * (mix.foreignDividend || 0) * returnRates.dividend;
+    const foreignDivIncome = nonRegBalance * (mix.foreignDividend || 0) * (returnRates.foreignYield ?? returnRates.dividend);
     const divGrossUp = divIncome * 1.38;
 
     // Fund turnover: a slice of unrealized gains is realized (and its distribution
@@ -897,7 +897,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             netNonRegWithdrawal: pNonRegNet + sNonRegNet,
 
             employmentIncome: (pBase?.employmentIncome || 0) + (sBase?.employmentIncome || 0),
-            investmentIncome: (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0),
+            investmentIncome: (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (pBase?.foreignDivIncome || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0) + (sBase?.foreignDivIncome || 0),
             totalRealizedCapGains: pRealizedGains + sRealizedGains,
             inflationFactor,
             householdSurplus: surplus, // The initial surplus before reinvestment

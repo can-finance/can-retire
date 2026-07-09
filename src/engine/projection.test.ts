@@ -275,6 +275,21 @@ describe('non-registered tax modeling', () => {
     });
 });
 
+describe('foreign yield input', () => {
+    it('foreign slice uses foreignYield; falls back to dividend yield when unset', () => {
+        const scenario = (foreignYield?: number) => inputs({
+            person: person({
+                tfsa: { type: 'TFSA', balance: 2_000_000 },
+                nonRegistered: { type: 'NonRegistered', balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: { interest: 0, dividend: 0, foreignDividend: 1, capitalGain: 0 } }
+            }),
+            returnRates: { interest: 0, dividend: 0.04, foreignYield, capitalGrowth: 0 }
+        });
+        // investmentIncome = foreign dividend cash
+        expect(runSimulation(scenario(0.02))[0].investmentIncome).toBeCloseTo(20_000, 0);
+        expect(runSimulation(scenario(undefined))[0].investmentIncome).toBeCloseTo(40_000, 0);
+    });
+});
+
 describe('investment tax attribution by source', () => {
     it('a gains-funded year attributes essentially all tax to capital gains', () => {
         const res = runSimulation(inputs({

@@ -31,9 +31,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Link from the CPP Start Age inputs to the CPP Calculator with an explanation of the
   simple estimate vs. the detailed one.
 
+- **Foreign Yield** input under Assumptions (default 2%): sets the yield on the
+  Foreign Dividends slice independently of the Canadian dividend yield. Older saved
+  scenarios/links keep their previous behavior (foreign slice earned the dividend yield).
+
 ### Changed
 - The Asset Mix (and turnover) is now explicitly a household setting: the spouse's
   non-registered account always uses the same mix, regardless of stored scenario data.
+- Label clarity: "Equity Turnover" → **Fund Turnover** (it realizes the account's
+  blended unrealized gains, not just the equity slice); "Equity Returns" →
+  **Capital Growth** (price appreciation only — yields are separate inputs);
+  "Dividend Yield" → **Cdn Dividend Yield**. Tooltips explain each.
+- The cash-flow chart's investment income now includes foreign dividends.
 - HelpTooltip renders line breaks (`whitespace-pre-line`).
 
 ## [0.2.1] - 2026-07-09

@@ -374,7 +374,7 @@ export function Dashboard() {
                                     onChange={(e) => setInputs({ ...inputs, inflationRate: Number(e.target.value) / 100 })}
                                 />
                                 <FinancialInput
-                                    label="Equity Returns"
+                                    label="Capital Growth"
                                     prefix="%"
                                     minFractionDigits={1}
                                     maxFractionDigits={1}
@@ -383,9 +383,10 @@ export function Dashboard() {
                                         ...inputs,
                                         returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
                                     })}
+                                    tooltip="Price appreciation only. Applies to RRSP and TFSA balances in full, and to the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
                                 />
                                 <FinancialInput
-                                    label="Dividend Yield"
+                                    label="Cdn Dividend Yield"
                                     prefix="%"
                                     minFractionDigits={1}
                                     maxFractionDigits={1}
@@ -394,6 +395,19 @@ export function Dashboard() {
                                         ...inputs,
                                         returnRates: { ...inputs.returnRates, dividend: Number(e.target.value) / 100 }
                                     })}
+                                    tooltip="Yield on the Cdn Dividends slice of the non-registered mix. Eligible dividends: 38% gross-up plus dividend tax credit."
+                                />
+                                <FinancialInput
+                                    label="Foreign Yield"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number(((inputs.returnRates.foreignYield ?? inputs.returnRates.dividend) * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        returnRates: { ...inputs.returnRates, foreignYield: Number(e.target.value) / 100 }
+                                    })}
+                                    tooltip="Yield on the Foreign Dividends slice of the non-registered mix (e.g. US ETFs). Taxed as ordinary income."
                                 />
                                 <FinancialInput
                                     label="Interest Rate"

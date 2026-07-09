@@ -90,14 +90,14 @@ export function AssetMixInput({ mix, turnoverRate = 0, onChange, onTurnoverChang
             <div className="pt-2 border-t border-slate-200">
                 <div className="grid grid-cols-2 gap-2 items-end">
                     <FinancialInput
-                        label="Equity Turnover"
+                        label="Fund Turnover"
                         value={Math.round(turnoverRate * 100)}
                         onChange={(e) => onTurnoverChange(Math.max(0, Math.min(100, Number(e.target.value))) / 100)}
                         prefix="%"
                         min={0}
                         max={100}
                     />
-                    <HelpTooltip text="Share of unrealized gains your funds realize and distribute each year (0% for buy-and-hold index ETFs; ~10–30% for typical mutual funds). Taxed annually as capital gains and reinvested, raising the cost base — the yearly tax drag of active funds.">
+                    <HelpTooltip text="Share of the account's unrealized gains realized and distributed each year (0% for buy-and-hold index ETFs; ~10–30% for typical mutual funds). Taxed annually as capital gains and reinvested, raising the cost base — the yearly tax drag of active funds.">
                         <span className="text-xs text-slate-400 cursor-help border-b border-dashed border-slate-300 pb-1 inline-block">What is this?</span>
                     </HelpTooltip>
                 </div>
