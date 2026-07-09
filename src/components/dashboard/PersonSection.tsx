@@ -1,5 +1,6 @@
 import { FinancialInput } from '../inputs/FinancialInput';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
+import { HelpTooltip } from '../ui/HelpTooltip';
 import type { Person } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
 
@@ -124,6 +125,17 @@ export function PersonSection({
                     <FinancialInput label="OAS Start Age" prefix="" value={person.oasStartAge}
                         onChange={(e) => onChange('oasStartAge', Number(e.target.value))} />
                 </div>
+
+                {person.cppAnnualOverride == null && (
+                    <HelpTooltip text="The plan estimates CPP simply as Years Contributed ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings (with drop-out and child-rearing provisions) and can feed the result back into this plan.">
+                        <a
+                            href="#cpp-calculator"
+                            className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
+                        >
+                            Want a more accurate CPP estimate? Try the CPP Calculator →
+                        </a>
+                    </HelpTooltip>
+                )}
 
                 {person.cppAnnualOverride != null && (
                     <div className="flex items-center justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">

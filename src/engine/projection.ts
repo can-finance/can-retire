@@ -15,29 +15,25 @@ function boxMullerRandom(): number {
 }
 
 function calculateTaxableCapitalGains(totalGains: number): number {
-    // Current Canadian Tax Law (Post-June 25, 2024):
-    // 50% inclusion rate for first $250,000 of realized gains per year (for individuals).
-    // 2/3 (66.67%) inclusion rate for any gains above $250,000.
-    const threshold = 250000;
-    if (totalGains <= threshold) {
-        return totalGains * 0.5;
-    } else {
-        return (threshold * 0.5) + ((totalGains - threshold) * (2 / 3));
-    }
+    // Flat 50% inclusion rate. The June 2024 proposal to raise the rate to 2/3
+    // above $250,000 was deferred and then cancelled (March 2025) — never enacted.
+    return totalGains * 0.5;
 }
 
 interface PersonAnnualBase {
-    taxableIncome: number;
+    taxableIncome: number; // Excludes taxable capital gains (tracked via realized-gains totals)
     tax: number;
     cppIncome: number;
     oasIncome: number;
     rrifWithdrawal: number;
     voluntaryRRSPWithdrawal: number;
     interestIncome: number;
-    divIncome: number;
+    divIncome: number; // Canadian eligible dividends (cash, before gross-up)
+    foreignDivIncome: number; // Foreign dividends: fully taxable, no gross-up or credit
     employmentIncome: number;
     investmentIncomeNet: number; // Interest + Dividends (After Tax share approx)
     baseNetCash: number; // Employment + CPP/OAS + RRIF/Melt + Invest (Net)
+    turnoverRealizedGains: number; // Gains realized by fund turnover this year (no cash; ACB bumped)
 }
 
 // --- Helper: Solve Gross Withdrawal from Net Needed ---
@@ -150,7 +146,19 @@ function simulatePersonBaseYear(
     const mix = person.nonRegistered.assetMix;
     const interestIncome = nonRegBalance * mix.interest * returnRates.interest;
     const divIncome = nonRegBalance * mix.dividend * returnRates.dividend;
+    // Foreign dividends: fully taxable at marginal rates, no gross-up or dividend
+    // tax credit. (The ~15% foreign withholding is creditable against Canadian tax,
+    // so marginal-rate treatment approximates the all-in result.)
+    const foreignDivIncome = nonRegBalance * (mix.foreignDividend || 0) * returnRates.dividend;
     const divGrossUp = divIncome * 1.38;
+
+    // Fund turnover: a slice of unrealized gains is realized (and its distribution
+    // reinvested) each year even without withdrawals — the annual tax drag of
+    // non-index funds. No cash changes hands; ACB rises by the realized amount.
+    const turnoverRate = Math.min(1, Math.max(0, person.nonRegistered.equityTurnoverRate ?? 0));
+    const unrealizedGains = Math.max(0, nonRegBalance - person.nonRegistered.adjustedCostBase);
+    const turnoverRealizedGains = turnoverRate * unrealizedGains;
+    person.nonRegistered.adjustedCostBase += turnoverRealizedGains;
 
     // Employment
     const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
@@ -158,14 +166,18 @@ function simulatePersonBaseYear(
     // Calculate Base Tax
     // Eligible pension income for pension credit: RRIF + voluntary RRSP melt
     const eligiblePensionIncome = rrifWithdrawal + voluntaryRRSPWithdrawal;
-    const baseTaxable = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp;
-    const oasRecovery = calculateOASClawback(baseTaxable, oasIncome, inflationFactor);
-    const totalTax = calculateIncomeTax(baseTaxable, province, inflationFactor, undefined, age, eligiblePensionIncome, divGrossUp) + oasRecovery;
+    const baseTaxable = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp + foreignDivIncome;
+    // Turnover gains are taxed in the base year (so the deficit funds their tax) but
+    // kept OUT of the returned taxableIncome — downstream withdrawal solvers add
+    // calculateTaxableCapitalGains(realizedGains) themselves, seeded with these gains.
+    const baseTaxableWithTurnover = baseTaxable + calculateTaxableCapitalGains(turnoverRealizedGains);
+    const oasRecovery = calculateOASClawback(baseTaxableWithTurnover, oasIncome, inflationFactor);
+    const totalTax = calculateIncomeTax(baseTaxableWithTurnover, province, inflationFactor, undefined, age, eligiblePensionIncome, divGrossUp) + oasRecovery;
 
     // Net Cash Calculation
     // Total Cash In = Emp + CPP + OAS + RRIF + Melt + Int + Div
-    // Note: Div is actual cash, not gross up.
-    const totalCashIn = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome;
+    // Note: Div is actual cash, not gross up. Turnover distributions are reinvested (no cash).
+    const totalCashIn = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome + foreignDivIncome;
     const baseNetCash = totalCashIn - totalTax;
 
     return {
@@ -177,9 +189,11 @@ function simulatePersonBaseYear(
         voluntaryRRSPWithdrawal,
         interestIncome,
         divIncome,
+        foreignDivIncome,
         employmentIncome,
-        investmentIncomeNet: (interestIncome + divIncome), // This is gross investment cash, we deduct tax globally later
-        baseNetCash
+        investmentIncomeNet: (interestIncome + divIncome + foreignDivIncome), // This is gross investment cash, we deduct tax globally later
+        baseNetCash,
+        turnoverRealizedGains
     };
 }
 
@@ -204,6 +218,13 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
     // Deep copy to avoid mutating inputs
     const p = JSON.parse(JSON.stringify(person)) as Person;
     const s = spouse ? JSON.parse(JSON.stringify(spouse)) as Person : undefined;
+
+    // The single Asset Mix input is a household setting: the spouse's non-registered
+    // account uses the same mix and turnover rate as the primary person's.
+    if (s) {
+        s.nonRegistered.assetMix = { ...p.nonRegistered.assetMix };
+        s.nonRegistered.equityTurnoverRate = p.nonRegistered.equityTurnoverRate;
+    }
 
     const startAge = p.age;
     const endAge = Math.max(
@@ -276,7 +297,10 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         let pTFSAWithdrawal = 0; let sTFSAWithdrawal = 0;
         let pNonRegWithdrawal = 0; let sNonRegWithdrawal = 0; // Gross sale amounts (principal + gains)
         let pNonRegNet = 0; let sNonRegNet = 0; // Net cash to spending after the sale's own tax
-        let pRealizedGains = 0; let sRealizedGains = 0;
+        // Seeded with turnover-realized gains: their tax is in baseNetCash, and the
+        // withdrawal solvers stack sale gains on top of them at the right brackets
+        let pRealizedGains = pBase?.turnoverRealizedGains || 0;
+        let sRealizedGains = sBase?.turnoverRealizedGains || 0;
 
         // Tracking Reinvestment
         let reinvestedTFSA = 0;
@@ -541,11 +565,25 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
             const taxableGains = calculateTaxableCapitalGains(realizedGains);
             const grossedUpDivs = base.divIncome * 1.38;
-            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + grossedUpDivs + taxableGains;
+            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + grossedUpDivs + base.foreignDivIncome + taxableGains;
 
             const oasRecovery = calculateOASClawback(finalTaxable, base.oasIncome, inflationFactor);
             // Pass totalRRSP as eligible pension income, grossedUpDivs for dividend tax credit
             const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, totalRRSP, grossedUpDivs) + oasRecovery;
+
+            // Marginal attribution of investment tax by source: the extra tax each
+            // source adds on top of all other income (tax with it minus tax without
+            // it, including its OAS-clawback effect). Dividend tax can be negative —
+            // at low income the dividend tax credit shelters other income too.
+            const taxWithout = (excludedTaxable: number, excludeDivCredit = false) => {
+                const taxable = finalTaxable - excludedTaxable;
+                const oas = calculateOASClawback(taxable, base.oasIncome, inflationFactor);
+                return calculateIncomeTax(taxable, province, inflationFactor, undefined, age, totalRRSP, excludeDivCredit ? 0 : grossedUpDivs) + oas;
+            };
+            const capGainsTax = taxableGains > 0 ? Math.max(0, finalTax - taxWithout(taxableGains)) : 0;
+            const dividendTax = grossedUpDivs > 0 ? finalTax - taxWithout(grossedUpDivs, true) : 0;
+            const interestTax = (base.interestIncome + base.foreignDivIncome) > 0
+                ? Math.max(0, finalTax - taxWithout(base.interestIncome + base.foreignDivIncome)) : 0;
 
             // Net cash per source for the charts is derived later by apportioning
             // the total tax pro-rata: Net Salary = Salary - (Salary / TotalGross) * TotalTax.
@@ -553,7 +591,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 finalTaxable,
                 finalTax,
                 totalRRSP,
-                taxableGains
+                taxableGains,
+                oasRecovery,
+                capGainsTax,
+                dividendTax,
+                interestTax
             };
         };
 
@@ -561,6 +603,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const sFinal = sAlive && s && sBase ? getFinalStats(sBase, sExtraRRSPGross, sRealizedGains, sAge!) : null;
 
         let totalTaxPaid = (pFinal?.finalTax || 0) + (sFinal?.finalTax || 0);
+        // Per-person tax for the table breakdown (replaced by post-split amounts below)
+        let pTaxPaid = pFinal?.finalTax || 0;
+        let sTaxPaid = sFinal?.finalTax || 0;
         let pensionSplitAmount = 0;
         let taxSavingsFromSplit = 0;
 
@@ -589,6 +634,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 taxSavingsFromSplit = splitResult.taxSavings;
                 // Apply the new optimized tax amounts
                 totalTaxPaid = splitResult.person1NewTax + splitResult.person2NewTax;
+                pTaxPaid = splitResult.person1NewTax;
+                sTaxPaid = splitResult.person2NewTax;
             }
         }
 
@@ -631,8 +678,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // Investment income (Interest + Divs) counts as taxable for tax allocation
         // But actual cash was purely Int + Div. We subtract the allocated tax from the CASH amount.
         // Tax allocated to investment was: (InvTaxable / Gross) * Tax.
-        const pInvTax = (pGrossTotal > 0) ? (((pBase?.interestIncome || 0) + (pBase?.divIncome || 0) * 1.38) / pGrossTotal) * (pFinal?.finalTax || 0) : 0;
-        const pNetInvCash = ((pBase?.interestIncome || 0) + (pBase?.divIncome || 0)) - pInvTax;
+        const pInvTax = (pGrossTotal > 0) ? (((pBase?.interestIncome || 0) + (pBase?.divIncome || 0) * 1.38 + (pBase?.foreignDivIncome || 0)) / pGrossTotal) * (pFinal?.finalTax || 0) : 0;
+        const pNetInvCash = ((pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (pBase?.foreignDivIncome || 0)) - pInvTax;
 
         // Spouse Nets
         const sNetEmp = calcNet(sBase?.employmentIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
@@ -640,8 +687,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const sNetOAS = calcNet(sBase?.oasIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
         const sNetRRSP = calcNet(sFinal?.totalRRSP || 0, sGrossTotal, sFinal?.finalTax || 0);
         // Spouse Inv
-        const sInvTax = (sGrossTotal > 0) ? (((sBase?.interestIncome || 0) + (sBase?.divIncome || 0) * 1.38) / sGrossTotal) * (sFinal?.finalTax || 0) : 0;
-        const sNetInvCash = ((sBase?.interestIncome || 0) + (sBase?.divIncome || 0)) - sInvTax;
+        const sInvTax = (sGrossTotal > 0) ? (((sBase?.interestIncome || 0) + (sBase?.divIncome || 0) * 1.38 + (sBase?.foreignDivIncome || 0)) / sGrossTotal) * (sFinal?.finalTax || 0) : 0;
+        const sNetInvCash = ((sBase?.interestIncome || 0) + (sBase?.divIncome || 0) + (sBase?.foreignDivIncome || 0)) - sInvTax;
 
         // TFSA withdrawals are tax-free (net = gross). Non-Reg sales are grossed-up by
         // sellNonReg so the sale's own tax is funded: pNonRegWithdrawal is the gross
@@ -773,9 +820,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // includes the 38% dividend gross-up and the taxable share of realized gains
         // (the gains cash arrives via the gross Non-Reg sale added below).
         const pCashGross = (pBase?.employmentIncome || 0) + (pBase?.cppIncome || 0) + (pBase?.oasIncome || 0) +
-            (pFinal?.totalRRSP || 0) + (pBase?.interestIncome || 0) + (pBase?.divIncome || 0);
+            (pFinal?.totalRRSP || 0) + (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (pBase?.foreignDivIncome || 0);
         const sCashGross = (sBase?.employmentIncome || 0) + (sBase?.cppIncome || 0) + (sBase?.oasIncome || 0) +
-            (sFinal?.totalRRSP || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0);
+            (sFinal?.totalRRSP || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0) + (sBase?.foreignDivIncome || 0);
 
         results.push({
             year: new Date().getFullYear() + yearOffset,
@@ -794,6 +841,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 - (reinvestedTFSA + reinvestedRRSP + reinvestedNonReg),
             spending: targetSpend,
             taxPaid: totalTaxPaid,
+            personTaxPaid: pTaxPaid,
+            spouseTaxPaid: sTaxPaid,
+            // Household OAS clawback (pre-split; splitting's effect is in taxSavingsFromSplit)
+            oasClawbackPaid: (pFinal?.oasRecovery || 0) + (sFinal?.oasRecovery || 0),
+            // Investment tax by source (household, marginal attribution, pre-split)
+            capGainsTaxPaid: (pFinal?.capGainsTax || 0) + (sFinal?.capGainsTax || 0),
+            dividendTaxPaid: (pFinal?.dividendTax || 0) + (sFinal?.dividendTax || 0),
+            interestTaxPaid: (pFinal?.interestTax || 0) + (sFinal?.interestTax || 0),
             accounts: {
                 rrsp: pAlive ? p.rrsp.balance : 0,
                 tfsa: pAlive ? p.tfsa.balance : 0,
@@ -811,6 +866,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             netEmploymentIncome: pNetEmp + sNetEmp,
             netCPPIncome: pNetCPP + sNetCPP,
             netOASIncome: pNetOAS + sNetOAS,
+            // Per-person nets for the table's You/Spouse hover breakdown
+            personNetCPP: pNetCPP,
+            spouseNetCPP: sNetCPP,
+            personNetOAS: pNetOAS,
+            spouseNetOAS: sNetOAS,
             netInvestmentIncome: pNetInvCash + sNetInvCash,
 
             // Reinvestments

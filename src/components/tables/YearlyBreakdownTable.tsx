@@ -1,6 +1,33 @@
 import type { SimulationResult } from '../../engine/types';
 import React from 'react';
 import { formatCurrencyCAD } from '../../utils/formatters';
+import { HelpTooltip } from '../ui/HelpTooltip';
+
+// Breakdown shown when hovering a Tax Paid cell
+function taxBreakdown(row: SimulationResult, hasSpouse: boolean): string {
+    const parts: string[] = [];
+    if (hasSpouse) {
+        parts.push(`You: ${formatCurrencyCAD(row.personTaxPaid)} · Spouse: ${formatCurrencyCAD(row.spouseTaxPaid)}`);
+    }
+    if (row.oasClawbackPaid > 1) {
+        parts.push(`Includes OAS clawback of ${formatCurrencyCAD(row.oasClawbackPaid)}`);
+    }
+    if ((row.taxSavingsFromSplit ?? 0) > 1) {
+        parts.push(`Pension splitting saved ${formatCurrencyCAD(row.taxSavingsFromSplit!)}`);
+    }
+    // Investment tax by source — only lines that are material this year
+    const bySource: string[] = [];
+    if (row.capGainsTaxPaid > 1) bySource.push(`cap gains ${formatCurrencyCAD(row.capGainsTaxPaid)}`);
+    if (Math.abs(row.dividendTaxPaid) > 1) bySource.push(`dividends ${formatCurrencyCAD(row.dividendTaxPaid)}`);
+    if (row.interestTaxPaid > 1) bySource.push(`interest/foreign div ${formatCurrencyCAD(row.interestTaxPaid)}`);
+    if (bySource.length > 0) {
+        parts.push(`Of which (marginal):\n${bySource.map(s => `  ${s}`).join('\n')}`);
+    }
+    if (row.grossIncome > 0 && row.taxPaid > 0) {
+        parts.push(`Effective rate: ${((row.taxPaid / row.grossIncome) * 100).toFixed(1)}% of taxable income`);
+    }
+    return parts.join('\n');
+}
 
 interface YearlyBreakdownTableProps {
     data: SimulationResult[];
@@ -95,13 +122,31 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                     </>
                                 )}
                                 <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrencyCAD(row.totalAssets)}</td>
-                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netCPPIncome)}</td>
-                                <td className="px-3 py-2 text-right text-blue-600">{formatCurrencyCAD(row.netOASIncome)}</td>
+                                <td className="px-3 py-2 text-right text-blue-600">
+                                    {hasSpouse && row.netCPPIncome > 1 ? (
+                                        <HelpTooltip text={`You: ${formatCurrencyCAD(row.personNetCPP)}\nSpouse: ${formatCurrencyCAD(row.spouseNetCPP)}`}>
+                                            <span className="cursor-help border-b border-dashed border-blue-200">{formatCurrencyCAD(row.netCPPIncome)}</span>
+                                        </HelpTooltip>
+                                    ) : formatCurrencyCAD(row.netCPPIncome)}
+                                </td>
+                                <td className="px-3 py-2 text-right text-blue-600">
+                                    {hasSpouse && row.netOASIncome > 1 ? (
+                                        <HelpTooltip text={`You: ${formatCurrencyCAD(row.personNetOAS)}\nSpouse: ${formatCurrencyCAD(row.spouseNetOAS)}`}>
+                                            <span className="cursor-help border-b border-dashed border-blue-200">{formatCurrencyCAD(row.netOASIncome)}</span>
+                                        </HelpTooltip>
+                                    ) : formatCurrencyCAD(row.netOASIncome)}
+                                </td>
                                 <td className="px-3 py-2 text-right text-green-600">{formatCurrencyCAD(row.netIncome)}</td>
                                 <td className={`px-3 py-2 text-right ${row.shortfall > 1 ? 'font-bold text-red-600' : reinvested > 1 ? 'text-emerald-600' : 'text-slate-300'}`}>
                                     {row.shortfall > 1 ? `−${formatCurrencyCAD(row.shortfall)}` : reinvested > 1 ? `+${formatCurrencyCAD(reinvested)}` : '—'}
                                 </td>
-                                <td className="px-3 py-2 text-right text-red-500">{formatCurrencyCAD(row.taxPaid)}</td>
+                                <td className="px-3 py-2 text-right text-red-500">
+                                    {row.taxPaid > 1 ? (
+                                        <HelpTooltip text={taxBreakdown(row, hasSpouse)}>
+                                            <span className="cursor-help border-b border-dashed border-red-200">{formatCurrencyCAD(row.taxPaid)}</span>
+                                        </HelpTooltip>
+                                    ) : formatCurrencyCAD(row.taxPaid)}
+                                </td>
                                 <td className={`px-3 py-2 text-right ${(row.totalTerminalTax ?? 0) > 1 ? 'font-bold text-red-600' : 'text-slate-300'}`}>
                                     {(row.totalTerminalTax ?? 0) > 1 ? formatCurrencyCAD(row.totalTerminalTax!) : '—'}
                                 </td>

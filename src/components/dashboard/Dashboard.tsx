@@ -307,6 +307,7 @@ export function Dashboard() {
                     <CollapsibleSection title="Non-Reg Asset Mix" accent="orange" defaultOpen={false}>
                         <AssetMixInput
                             mix={inputs.person.nonRegistered.assetMix}
+                            turnoverRate={inputs.person.nonRegistered.equityTurnoverRate}
                             onChange={(newMix) => setInputs({
                                 ...inputs,
                                 person: {
@@ -314,6 +315,16 @@ export function Dashboard() {
                                     nonRegistered: {
                                         ...inputs.person.nonRegistered,
                                         assetMix: newMix
+                                    }
+                                }
+                            })}
+                            onTurnoverChange={(rate) => setInputs({
+                                ...inputs,
+                                person: {
+                                    ...inputs.person,
+                                    nonRegistered: {
+                                        ...inputs.person.nonRegistered,
+                                        equityTurnoverRate: rate
                                     }
                                 }
                             })}

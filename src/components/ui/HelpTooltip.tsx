@@ -47,7 +47,7 @@ export function HelpTooltip({ text, children, className = '' }: HelpTooltipProps
                         width: TOOLTIP_WIDTH,
                         transform: pos.above ? 'translateY(-100%)' : undefined,
                     }}
-                    className="z-[100] pointer-events-none block rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-xl"
+                    className="z-[100] pointer-events-none block whitespace-pre-line rounded-lg bg-slate-900 px-3 py-2 text-xs font-normal leading-relaxed text-white shadow-xl"
                 >
                     {text}
                 </span>

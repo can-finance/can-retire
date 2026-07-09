@@ -17,7 +17,8 @@ export const createDefaultPerson = (isSpouse = false): Person => ({
         type: 'NonRegistered',
         balance: isSpouse ? 100000 : 200000,
         adjustedCostBase: isSpouse ? 50000 : 100000,
-        assetMix: { interest: 0.1, dividend: 0.3, capitalGain: 0.6 }
+        assetMix: { interest: 0.1, dividend: 0.3, foreignDividend: 0, capitalGain: 0.6 },
+        equityTurnoverRate: 0.02
     } as NonRegisteredAccount
 });
 
@@ -62,13 +63,16 @@ function sanitizePerson(raw: unknown, defaults: Person): Person {
     const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
     let mixInterest = clamp01(num(mix.interest, defMix.interest));
     let mixDividend = clamp01(num(mix.dividend, defMix.dividend));
+    let mixForeignDividend = clamp01(num(mix.foreignDividend, defMix.foreignDividend ?? 0));
     let mixCapitalGain = clamp01(num(mix.capitalGain, defMix.capitalGain));
-    const mixSum = mixInterest + mixDividend + mixCapitalGain;
+    const mixSum = mixInterest + mixDividend + mixForeignDividend + mixCapitalGain;
     if (mixSum > 1) {
         mixInterest /= mixSum;
         mixDividend /= mixSum;
+        mixForeignDividend /= mixSum;
         mixCapitalGain /= mixSum;
     }
+    const equityTurnoverRate = clamp01(num(nonReg.equityTurnoverRate, defaults.nonRegistered.equityTurnoverRate ?? 0));
 
     return {
         age: num(r.age, defaults.age),
@@ -90,8 +94,10 @@ function sanitizePerson(raw: unknown, defaults: Person): Person {
             assetMix: {
                 interest: mixInterest,
                 dividend: mixDividend,
+                foreignDividend: mixForeignDividend,
                 capitalGain: mixCapitalGain
-            }
+            },
+            equityTurnoverRate
         }
     };
 }

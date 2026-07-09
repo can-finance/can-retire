@@ -5,6 +5,37 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-09
+
+### Fixed
+- **Capital gains inclusion rate corrected to a flat 50%.** The engine applied the
+  June 2024 proposal (2/3 inclusion above $250k of gains), which was deferred and then
+  cancelled in March 2025 — never enacted. Death-year estate taxes on large unrealized
+  gains were overstated as a result.
+
+### Added
+- **Equity turnover** input in the Non-Reg Asset Mix card (default 2%): each year the
+  chosen share of unrealized gains is realized and taxed (fund turnover / distributions),
+  with the ACB stepped up accordingly — the annual tax drag of non-index funds.
+  0% models a buy-and-hold index ETF.
+- **Foreign dividends** as a fourth asset-mix slice: fully taxable as ordinary income
+  with no gross-up or dividend tax credit (the creditable ~15% withholding makes
+  marginal-rate treatment the right approximation). The existing Dividends slice is
+  now explicitly Canadian-eligible.
+- **Tax Paid breakdown tooltip** in the year-by-year table: You/Spouse split
+  (post-splitting), OAS clawback included in the total, pension-splitting savings,
+  marginal tax attribution by source (capital gains / dividends / interest+foreign —
+  dividends can be negative at low income thanks to the DTC), and effective rate.
+- **Net CPP and Net OAS You/Spouse tooltips** — clarifies household-combined columns,
+  e.g. a "jump" when the spouse's CPP starts at their own claiming age.
+- Link from the CPP Start Age inputs to the CPP Calculator with an explanation of the
+  simple estimate vs. the detailed one.
+
+### Changed
+- The Asset Mix (and turnover) is now explicitly a household setting: the spouse's
+  non-registered account always uses the same mix, regardless of stored scenario data.
+- HelpTooltip renders line breaks (`whitespace-pre-line`).
+
 ## [0.2.1] - 2026-07-09
 
 ### Fixed

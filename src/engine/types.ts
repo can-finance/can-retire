@@ -42,9 +42,13 @@ export interface NonRegisteredAccount extends AssetAccount {
     adjustedCostBase: number; // For accurate capital gains calculation
     assetMix: {
         interest: number; // 0-1
-        dividend: number; // 0-1
+        dividend: number; // 0-1: Canadian eligible dividends (gross-up + dividend tax credit)
+        foreignDividend?: number; // 0-1: foreign dividends, fully taxable as ordinary income
         capitalGain: number; // 0-1
     };
+    // Fraction of unrealized gains realized each year by fund turnover /
+    // distributions (0-1). Taxed annually and added to ACB (reinvested).
+    equityTurnoverRate?: number;
 }
 
 export interface Person {
@@ -74,6 +78,15 @@ export interface SimulationResult {
     netIncome: number;
     spending: number; // Desired spend for the year (household)
     taxPaid: number; // Combined tax
+    personTaxPaid: number; // Primary person's share (post-split when splitting applies)
+    spouseTaxPaid: number; // Spouse's share (post-split when splitting applies)
+    oasClawbackPaid: number; // Household OAS recovery tax included in taxPaid (pre-split)
+    // Investment tax by source (marginal attribution: extra tax that source adds
+    // on top of all other income). dividendTaxPaid can be negative — the dividend
+    // tax credit can shelter other income at low incomes.
+    capGainsTaxPaid: number;
+    dividendTaxPaid: number;
+    interestTaxPaid: number; // Interest + foreign dividends (both ordinary income)
     accounts: {
         rrsp: number;
         tfsa: number;
@@ -91,6 +104,11 @@ export interface SimulationResult {
     netCPPIncome: number;
     netOASIncome: number;
     netInvestmentIncome: number; // Interest + Dividends
+    // Per-person benefit nets (You/Spouse breakdown in the table)
+    personNetCPP: number;
+    spouseNetCPP: number;
+    personNetOAS: number;
+    spouseNetOAS: number;
 
     // Net Withdrawals (After Tax, Actual Cash in Hand)
     netRRSPWithdrawal: number;
