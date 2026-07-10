@@ -31,12 +31,15 @@ export const INITIAL_INPUTS: SimulationInputs = {
     postRetirementSpend: 55000,
     oneTimeExpenses: [],
     withdrawalStrategy: 'rrsp-first',
+    rebalanceNonRegAnnually: true,
     useIncomeSplitting: true,
     returnRates: {
         interest: 0.02,
         dividend: 0.03,
         foreignYield: 0.02,
         capitalGrowth: 0.05,
+        rrspGrowth: 0.05,
+        tfsaGrowth: 0.05,
         volatility: 0.10
     }
 };
@@ -144,12 +147,18 @@ export function sanitizeSimulationInputs(raw: unknown): SimulationInputs | null 
             ? raw.useIncomeSplitting
             : INITIAL_INPUTS.useIncomeSplitting,
         withdrawalStrategy: raw.withdrawalStrategy === 'tax-efficient' ? 'tax-efficient' : 'rrsp-first',
+        rebalanceNonRegAnnually: typeof raw.rebalanceNonRegAnnually === 'boolean'
+            ? raw.rebalanceNonRegAnnually
+            : true,
         returnRates: {
             interest: num(rates.interest, defRates.interest),
             dividend: num(rates.dividend, defRates.dividend),
             // Payloads predating this field keep their old behavior (foreign = dividend yield)
             foreignYield: num(rates.foreignYield, num(rates.dividend, defRates.foreignYield!)),
             capitalGrowth: num(rates.capitalGrowth, defRates.capitalGrowth),
+            // Payloads predating these fields keep their old behavior (RRSP/TFSA = capitalGrowth)
+            rrspGrowth: num(rates.rrspGrowth, num(rates.capitalGrowth, defRates.capitalGrowth)),
+            tfsaGrowth: num(rates.tfsaGrowth, num(rates.capitalGrowth, defRates.capitalGrowth)),
             volatility: optNum(rates.volatility, defRates.volatility)
         }
     };

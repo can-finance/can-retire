@@ -95,7 +95,7 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
             {currentPage !== 'how-it-works' && (
                 <footer className="border-t border-slate-200/70 mt-4">
                     <div className="container mx-auto px-4 py-6 text-center space-y-1.5">
-                        <p className="text-xs text-slate-400">
+                        <p className="text-sm text-slate-400">
                             For planning and educational purposes only — not financial, tax, or investment advice.
                             Projections are estimates based on simplified assumptions.{' '}
                             <button
@@ -111,7 +111,7 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
                                 Full disclaimer
                             </button>
                         </p>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-sm text-slate-400">
                             Calculations use 2025 federal and provincial tax rules.
                         </p>
                     </div>

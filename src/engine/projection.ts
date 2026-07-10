@@ -267,12 +267,15 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // --- Determine Returns for this Year ---
         let currentYearRates = returnRates;
         if (stochastic && returnRates.volatility) {
-            // Apply volatility to Capital Growth
+            // Apply volatility to all growth rates with a single draw — one
+            // correlated market shock across RRSP, TFSA, and non-reg equity.
             // Simple model: Return = Mean + (Vol * Z)
-            const z = boxMullerRandom();
+            const shock = returnRates.volatility * boxMullerRandom();
             currentYearRates = {
                 ...returnRates,
-                capitalGrowth: returnRates.capitalGrowth + (returnRates.volatility * z)
+                capitalGrowth: returnRates.capitalGrowth + shock,
+                rrspGrowth: returnRates.rrspGrowth != null ? returnRates.rrspGrowth + shock : undefined,
+                tfsaGrowth: returnRates.tfsaGrowth != null ? returnRates.tfsaGrowth + shock : undefined
             };
         }
 
@@ -643,16 +646,36 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         // Non-Reg: interest/dividends were already paid out as cash above, so only the
         // capital-gain share of the balance appreciates: mix.capitalGain * capitalGrowth.
-        // RRSP/TFSA grow at the full capitalGrowth rate (implicitly 100% growth assets).
+        // RRSP/TFSA grow at their own whole-account rates (default: capitalGrowth).
+        const rrspRate = currentYearRates.rrspGrowth ?? currentYearRates.capitalGrowth;
+        const tfsaRate = currentYearRates.tfsaGrowth ?? currentYearRates.capitalGrowth;
+
+        // Without annual rebalancing, the weights are state: the equity slice's growth
+        // shifts the composition each year (sales and reinvestment are pro-rata, so
+        // only growth moves the weights). With rebalancing (default), weights are
+        // reset to the inputs every year — the historical behavior.
+        const growNonReg = (acct: Person['nonRegistered']) => {
+            const w = acct.assetMix;
+            const g = currentYearRates.capitalGrowth;
+            const factor = 1 + (w.capitalGain * g);
+            acct.balance *= factor;
+            if (inputs.rebalanceNonRegAnnually === false && factor > 0) {
+                w.capitalGain = (w.capitalGain * (1 + g)) / factor;
+                w.interest /= factor;
+                w.dividend /= factor;
+                w.foreignDividend = (w.foreignDividend || 0) / factor;
+            }
+        };
+
         if (pAlive) {
-            p.rrsp.balance *= (1 + currentYearRates.capitalGrowth);
-            p.tfsa.balance *= (1 + currentYearRates.capitalGrowth);
-            p.nonRegistered.balance *= (1 + (p.nonRegistered.assetMix.capitalGain * currentYearRates.capitalGrowth));
+            p.rrsp.balance *= (1 + rrspRate);
+            p.tfsa.balance *= (1 + tfsaRate);
+            growNonReg(p.nonRegistered);
         }
         if (sAlive && s) {
-            s.rrsp.balance *= (1 + currentYearRates.capitalGrowth);
-            s.tfsa.balance *= (1 + currentYearRates.capitalGrowth);
-            s.nonRegistered.balance *= (1 + (s.nonRegistered.assetMix.capitalGain * currentYearRates.capitalGrowth));
+            s.rrsp.balance *= (1 + rrspRate);
+            s.tfsa.balance *= (1 + tfsaRate);
+            growNonReg(s.nonRegistered);
         }
 
 
@@ -841,6 +864,13 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 - (reinvestedTFSA + reinvestedRRSP + reinvestedNonReg),
             spending: targetSpend,
             taxPaid: totalTaxPaid,
+            // End-of-year non-reg composition (person's copy; spouse's is identical)
+            nonRegMix: {
+                interest: p.nonRegistered.assetMix.interest,
+                dividend: p.nonRegistered.assetMix.dividend,
+                foreignDividend: p.nonRegistered.assetMix.foreignDividend || 0,
+                capitalGain: p.nonRegistered.assetMix.capitalGain
+            },
             personTaxPaid: pTaxPaid,
             spouseTaxPaid: sTaxPaid,
             // Household OAS clawback (pre-split; splitting's effect is in taxSavingsFromSplit)

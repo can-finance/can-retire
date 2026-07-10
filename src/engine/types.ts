@@ -143,6 +143,16 @@ export interface SimulationResult {
     pensionSplitAmount?: number;     // Amount of pension income split to spouse
     taxSavingsFromSplit?: number;    // Tax savings achieved from income splitting
 
+    // Non-reg composition at end of year (drifts when annual rebalancing is off;
+    // spouse's mix is identical since both start from the household mix and drift
+    // by the same factor)
+    nonRegMix?: {
+        interest: number;
+        dividend: number;
+        foreignDividend: number;
+        capitalGain: number;
+    };
+
     // Estate / Death Year Calculations
     isDeathYear?: boolean;                    // True if this is the final year for person or spouse
     personDeathThisYear?: boolean;            // Primary person died this year
@@ -173,11 +183,17 @@ export interface SimulationInputs {
     oneTimeExpenses?: OneTimeEvent[];
     useIncomeSplitting?: boolean;
     withdrawalStrategy?: 'tax-efficient' | 'rrsp-first';
+    // Rebalance the non-reg mix back to its target weights each year (default true).
+    // When false, only the Equity slice compounds: income slices stay flat in dollars
+    // and the equity share drifts up over time.
+    rebalanceNonRegAnnually?: boolean;
     returnRates: {
         interest: number;
         dividend: number;
         foreignYield?: number; // Yield on the foreign-dividend slice; falls back to `dividend`
-        capitalGrowth: number;
+        capitalGrowth: number; // Non-registered Equity (Growth) slice appreciation
+        rrspGrowth?: number; // Whole-account RRSP return; falls back to capitalGrowth
+        tfsaGrowth?: number; // Whole-account TFSA return; falls back to capitalGrowth
         volatility?: number; // Standard Deviation (e.g., 0.1 for 10% std dev)
     };
 }

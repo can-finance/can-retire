@@ -1,5 +1,6 @@
 import { FinancialInput } from './FinancialInput';
 import { HelpTooltip } from '../ui/HelpTooltip';
+import { Toggle } from '../ui/Toggle';
 
 interface Mix {
     interest: number;
@@ -11,14 +12,17 @@ interface Mix {
 interface AssetMixInputProps {
     mix: Mix;
     turnoverRate?: number;
+    rebalanceAnnually: boolean;
+    driftSummary?: string | null;
     onChange: (newMix: Mix) => void;
     onTurnoverChange: (rate: number) => void;
+    onRebalanceChange: (rebalance: boolean) => void;
 }
 
 const MIX_FIELDS = ['interest', 'dividend', 'foreignDividend', 'capitalGain'] as const;
 type MixField = typeof MIX_FIELDS[number];
 
-export function AssetMixInput({ mix, turnoverRate = 0, onChange, onTurnoverChange }: AssetMixInputProps) {
+export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, driftSummary, onChange, onTurnoverChange, onRebalanceChange }: AssetMixInputProps) {
     const share = (f: MixField) => mix[f] || 0;
 
     // A field can only grow into the headroom the others leave, so the shares
@@ -101,6 +105,17 @@ export function AssetMixInput({ mix, turnoverRate = 0, onChange, onTurnoverChang
                         <span className="text-xs text-slate-400 cursor-help border-b border-dashed border-slate-300 pb-1 inline-block">What is this?</span>
                     </HelpTooltip>
                 </div>
+            </div>
+            <div>
+                <Toggle
+                    label="Rebalance annually"
+                    checked={rebalanceAnnually}
+                    onChange={onRebalanceChange}
+                    tooltip="On: the account is rebalanced back to these weights every year, so dividend/interest income grows with the account (Fund Turnover approximates the tax cost of realizing gains to do this). Off: only the Equity slice compounds — dividend and interest income stay flat in dollars and the equity share drifts up over time. Compare the table's investment income in both modes."
+                />
+                {!rebalanceAnnually && driftSummary && (
+                    <p className="text-xs text-indigo-600 font-medium">{driftSummary}</p>
+                )}
             </div>
         </div>
     );

@@ -5,6 +5,33 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-09
+
+### Added
+- **Per-account growth rates**: RRSP Return and TFSA Return inputs under Assumptions
+  (whole-account, tax-sheltered — no yield/gains split needed). The former "Capital
+  Growth" input is now **Non-Reg Growth** and applies only to the Equity (Growth)
+  slice of the non-registered mix. Unset rates fall back to the old single rate, so
+  existing scenarios and share links are unchanged. Monte Carlo applies one correlated
+  volatility shock across all three growth rates.
+- **"Rebalance annually" toggle** in the Non-Reg Asset Mix card (default on = previous
+  behavior). Off models no rebalancing: only the Equity slice compounds, dividend and
+  interest income stay flat in dollars, and the equity share drifts upward. Sales and
+  reinvested surpluses are pro-rata, so only growth moves the weights. Surfaced in
+  three places: a live drift summary in the mix card ("60% → 81% equity by age 90"),
+  per-year composition on hover over the table's Non-Reg columns, and a new
+  "Annual Rebalancing vs. Drift" section in How It Works.
+
+### Fixed
+- How It Works incorrectly stated that capital growth raises the ACB (it does not —
+  that is why unrealized gains accumulate).
+- Removed a broken icon from the Privacy & Data Security heading.
+
+### Changed
+- How It Works: rebalancing section rewritten as bullet points; the Taxation &
+  Government Benefits cards now use the standard body font size; disclaimer and
+  footer text bumped one size for readability.
+
 ## [0.2.2] - 2026-07-09
 
 ### Fixed

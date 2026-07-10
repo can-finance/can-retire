@@ -32,6 +32,14 @@ function taxBreakdown(row: SimulationResult, hasSpouse: boolean): string {
 interface YearlyBreakdownTableProps {
     data: SimulationResult[];
     hasSpouse?: boolean;
+    // When annual rebalancing is off, non-reg cells show the drifted composition on hover
+    showMixDrift?: boolean;
+}
+
+function mixTooltip(row: SimulationResult): string {
+    const m = row.nonRegMix!;
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    return `Mix this year: ${pct(m.capitalGain)} equity · ${pct(m.dividend)} Cdn div · ${pct(m.foreignDividend)} foreign div · ${pct(m.interest)} interest`;
 }
 
 // Column definitions with tooltips
@@ -83,7 +91,7 @@ function HeaderCell({ label, tooltip, align }: { label: string; tooltip: string;
     );
 }
 
-export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ data, hasSpouse = false }: YearlyBreakdownTableProps) {
+export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ data, hasSpouse = false, showMixDrift = false }: YearlyBreakdownTableProps) {
     const columns = getColumns(hasSpouse);
 
     return (
@@ -113,12 +121,24 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                 )}
                                 <td className="px-3 py-2 text-right text-sky-600">{formatCurrencyCAD(row.accounts.rrsp)}</td>
                                 <td className="px-3 py-2 text-right text-emerald-600">{formatCurrencyCAD(row.accounts.tfsa)}</td>
-                                <td className="px-3 py-2 text-right text-amber-600">{formatCurrencyCAD(row.accounts.nonRegistered)}</td>
+                                <td className="px-3 py-2 text-right text-amber-600">
+                                    {showMixDrift && row.nonRegMix && row.accounts.nonRegistered > 1 ? (
+                                        <HelpTooltip text={mixTooltip(row)}>
+                                            <span className="cursor-help border-b border-dashed border-amber-200">{formatCurrencyCAD(row.accounts.nonRegistered)}</span>
+                                        </HelpTooltip>
+                                    ) : formatCurrencyCAD(row.accounts.nonRegistered)}
+                                </td>
                                 {hasSpouse && (
                                     <>
                                         <td className="px-3 py-2 text-right text-sky-400">{row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.rrsp) : '-'}</td>
                                         <td className="px-3 py-2 text-right text-emerald-400">{row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.tfsa) : '-'}</td>
-                                        <td className="px-3 py-2 text-right text-amber-400">{row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.nonRegistered) : '-'}</td>
+                                        <td className="px-3 py-2 text-right text-amber-400">
+                                            {showMixDrift && row.nonRegMix && row.spouseAccounts && row.spouseAccounts.nonRegistered > 1 ? (
+                                                <HelpTooltip text={mixTooltip(row)}>
+                                                    <span className="cursor-help border-b border-dashed border-amber-200">{formatCurrencyCAD(row.spouseAccounts.nonRegistered)}</span>
+                                                </HelpTooltip>
+                                            ) : row.spouseAccounts ? formatCurrencyCAD(row.spouseAccounts.nonRegistered) : '-'}
+                                        </td>
                                     </>
                                 )}
                                 <td className="px-3 py-2 text-right font-medium text-slate-900">{formatCurrencyCAD(row.totalAssets)}</td>

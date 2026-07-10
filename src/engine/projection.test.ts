@@ -275,6 +275,67 @@ describe('non-registered tax modeling', () => {
     });
 });
 
+describe('per-account growth rates', () => {
+    it('RRSP and TFSA grow at their own rates; non-reg equity at capitalGrowth', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                rrsp: { type: 'RRSP', balance: 100_000 },
+                tfsa: { type: 'TFSA', balance: 100_000 },
+                nonRegistered: { type: 'NonRegistered', balance: 100_000, adjustedCostBase: 100_000, assetMix: { interest: 0, dividend: 0, capitalGain: 1 } }
+            }),
+            postRetirementSpend: 0, // no withdrawals — pure growth
+            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05, rrspGrowth: 0.07, tfsaGrowth: 0.03 }
+        }));
+        const y = res[0];
+        expect(y.accounts.rrsp).toBeCloseTo(107_000, 0);
+        expect(y.accounts.tfsa).toBeCloseTo(103_000, 0);
+        expect(y.accounts.nonRegistered).toBeCloseTo(105_000, 0);
+    });
+
+    it('unset per-account rates fall back to capitalGrowth', () => {
+        const res = runSimulation(inputs({
+            person: person({ rrsp: { type: 'RRSP', balance: 100_000 }, tfsa: { type: 'TFSA', balance: 1_000_000 } }),
+            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05 }
+        }));
+        expect(res[0].accounts.rrsp).toBeCloseTo(105_000, 0);
+    });
+});
+
+describe('non-reg rebalancing vs drift', () => {
+    const driftInputs = (rebalance: boolean) => inputs({
+        person: person({
+            lifeExpectancy: 80, oasStartAge: 99, // no OAS — its surplus would get reinvested and muddy the drift check
+            nonRegistered: { type: 'NonRegistered', balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: { interest: 0, dividend: 0.5, capitalGain: 0.5 } }
+        }),
+        // Spend exactly the dividend cash (tax-free at this income thanks to the DTC):
+        // no deficit → no sales; no surplus → no reinvestment. Isolates growth/drift.
+        postRetirementSpend: 20_000,
+        rebalanceNonRegAnnually: rebalance,
+        returnRates: { interest: 0, dividend: 0.04, capitalGrowth: 0.06 }
+    });
+
+    it('rebalanced (default): dividend income grows with the account', () => {
+        const res = runSimulation(driftInputs(true));
+        expect(res[0].investmentIncome).toBeCloseTo(20_000, 0);
+        expect(res[5].investmentIncome).toBeGreaterThan(21_000);
+        // Weights stay at the inputs
+        expect(res[10].nonRegMix!.capitalGain).toBeCloseTo(0.5, 5);
+    });
+
+    it('drift: dividend income stays flat in dollars; equity share climbs', () => {
+        const res = runSimulation(driftInputs(false));
+        expect(res[0].investmentIncome).toBeCloseTo(20_000, 0);
+        // Dividend sleeve never grows → flat income
+        expect(res[5].investmentIncome).toBeCloseTo(20_000, 0);
+        expect(res[14].investmentIncome).toBeCloseTo(20_000, 0);
+        // Equity weight drifts up: 0.5 → 0.5(1.06)^n / (0.5(1.06)^n + 0.5)
+        const y10 = res[10].nonRegMix!;
+        const expected = (0.5 * Math.pow(1.06, 11)) / (0.5 * Math.pow(1.06, 11) + 0.5);
+        expect(y10.capitalGain).toBeCloseTo(expected, 4);
+        expect(y10.capitalGain).toBeGreaterThan(0.6);
+    });
+});
+
 describe('foreign yield input', () => {
     it('foreign slice uses foreignYield; falls back to dividend yield when unset', () => {
         const scenario = (foreignYield?: number) => inputs({

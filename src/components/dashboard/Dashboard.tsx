@@ -59,6 +59,17 @@ export function Dashboard() {
         return runSimulation(inputs);
     }, [inputs]);
 
+    // One-line drift readout for the Asset Mix card (only when rebalancing is off)
+    const driftSummary = useMemo(() => {
+        if (inputs.rebalanceNonRegAnnually !== false) return null;
+        const last = simulationResults[simulationResults.length - 1];
+        if (!last?.nonRegMix) return null;
+        const startEq = Math.round(inputs.person.nonRegistered.assetMix.capitalGain * 100);
+        const endEq = Math.round(last.nonRegMix.capitalGain * 100);
+        if (startEq === endEq) return null;
+        return `Mix drifts from ${startEq}% → ${endEq}% equity by age ${last.age}`;
+    }, [inputs, simulationResults]);
+
     // Debounced Monte Carlo — waits 500ms after last input change before running
     const [monteCarloResults, setMonteCarloResults] = useState<MonteCarloResult | null>(null);
     const mcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -308,6 +319,9 @@ export function Dashboard() {
                         <AssetMixInput
                             mix={inputs.person.nonRegistered.assetMix}
                             turnoverRate={inputs.person.nonRegistered.equityTurnoverRate}
+                            rebalanceAnnually={inputs.rebalanceNonRegAnnually !== false}
+                            driftSummary={driftSummary}
+                            onRebalanceChange={(rebalance) => setInputs({ ...inputs, rebalanceNonRegAnnually: rebalance })}
                             onChange={(newMix) => setInputs({
                                 ...inputs,
                                 person: {
@@ -374,7 +388,31 @@ export function Dashboard() {
                                     onChange={(e) => setInputs({ ...inputs, inflationRate: Number(e.target.value) / 100 })}
                                 />
                                 <FinancialInput
-                                    label="Capital Growth"
+                                    label="RRSP Return"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number(((inputs.returnRates.rrspGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
+                                    })}
+                                    tooltip="Whole-account annual return on RRSP/RRIF balances (growth is tax-sheltered, so no yield/gains split is needed)."
+                                />
+                                <FinancialInput
+                                    label="TFSA Return"
+                                    prefix="%"
+                                    minFractionDigits={1}
+                                    maxFractionDigits={1}
+                                    value={Number(((inputs.returnRates.tfsaGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
+                                    onChange={(e) => setInputs({
+                                        ...inputs,
+                                        returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
+                                    })}
+                                    tooltip="Whole-account annual return on TFSA balances (growth is tax-free, so no yield/gains split is needed)."
+                                />
+                                <FinancialInput
+                                    label="Non-Reg Growth"
                                     prefix="%"
                                     minFractionDigits={1}
                                     maxFractionDigits={1}
@@ -383,7 +421,7 @@ export function Dashboard() {
                                         ...inputs,
                                         returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
                                     })}
-                                    tooltip="Price appreciation only. Applies to RRSP and TFSA balances in full, and to the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
+                                    tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
                                 />
                                 <FinancialInput
                                     label="Cdn Dividend Yield"
@@ -525,7 +563,7 @@ export function Dashboard() {
                         />
                     )}
 
-                    <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} />
+                    <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} showMixDrift={inputs.rebalanceNonRegAnnually === false} />
                 </div>
             </div>
         </div>
