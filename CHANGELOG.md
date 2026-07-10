@@ -178,7 +178,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frozen; federal credits use the statutory 15% rate vs. the 2025 transitional 14.5%
   bracket rate).
 
-## [0.1.0] - 2025
+## [0.1.0] - 2026-01-24
 
 Initial public version, deployed to [craptool.ca](https://craptool.ca).
 
