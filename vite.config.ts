@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -20,6 +21,11 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
+      // Multi-page build: the SPA plus a standalone, crawlable CPP calculator page
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        'cpp-calculator': fileURLToPath(new URL('./cpp-calculator/index.html', import.meta.url)),
+      },
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'recharts'],

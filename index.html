@@ -1,16 +1,55 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-CA">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>C.R.A.P. tool</title>
+    <title>Canadian Retirement Calculator — CPP, OAS &amp; RRSP Drawdown Planner | craptool.ca</title>
+    <meta name="description" content="Free Canadian retirement planning calculator. Model CPP/OAS timing, RRSP meltdown, RRIF minimums, TFSA and non-registered drawdown strategies with real federal and provincial tax rules. Runs entirely in your browser — no data leaves your device." />
+    <link rel="canonical" href="https://craptool.ca/" />
+
+    <!-- Open Graph / social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://craptool.ca/" />
+    <meta property="og:title" content="Canadian Retirement Calculator — CPP, OAS & RRSP Drawdown Planner" />
+    <meta property="og:description" content="Model CPP/OAS timing, RRSP meltdown, and tax-efficient drawdown strategies with real Canadian tax rules. Free, private, runs entirely in your browser." />
+    <meta property="og:site_name" content="C.R.A.P. tool — craptool.ca" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Canadian Retirement Calculator — CPP, OAS & RRSP Drawdown Planner" />
+    <meta name="twitter:description" content="Model CPP/OAS timing, RRSP meltdown, and tax-efficient drawdown strategies with real Canadian tax rules. Free, private, runs entirely in your browser." />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Canadian Retirement Asset Planning tool",
+      "alternateName": "C.R.A.P. tool",
+      "url": "https://craptool.ca/",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Any (web browser)",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CAD" },
+      "description": "Free Canadian retirement decumulation planner: year-by-year projections of CPP, OAS, RRSP/RRIF, TFSA and non-registered accounts with federal and provincial income tax, OAS clawback, pension splitting, and Monte Carlo simulation.",
+      "featureList": "CPP and OAS claiming-age comparison, RRSP meltdown modelling, RRIF minimum withdrawals, capital gains and dividend tax, pension income splitting, estate/terminal tax, Monte Carlo simulation"
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <h1>Canadian Retirement Asset Planning tool</h1>
+      <p>
+        A free retirement decumulation calculator for Canadians. Project your CPP, OAS,
+        RRSP/RRIF, TFSA, and non-registered accounts year by year with real federal and
+        provincial tax rules — including OAS clawback, pension income splitting, RRSP
+        meltdown strategies, and estate taxes. All calculations run locally in your
+        browser; your financial data never leaves your device. JavaScript is required
+        to use the calculator.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
     <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b608680cdb8f4f90b75a97d9f2d140a9"}'></script><!-- End Cloudflare Web Analytics -->
   </body>

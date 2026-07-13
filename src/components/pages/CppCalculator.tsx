@@ -190,7 +190,11 @@ export function CppCalculator() {
     const [linkCopied, setLinkCopied] = useState(false);
 
     const copyShareLink = async () => {
-        const url = `${window.location.origin}${window.location.pathname}#cpp-calculator`;
+        // On the standalone /cpp-calculator/ page the path IS the calculator;
+        // in the SPA it's a hash route on the main page
+        const url = window.location.pathname.includes('cpp-calculator')
+            ? `${window.location.origin}${window.location.pathname}`
+            : `${window.location.origin}${window.location.pathname}#cpp-calculator`;
         try {
             await navigator.clipboard.writeText(url);
         } catch {

@@ -39,6 +39,8 @@ export interface AssetAccount {
 
 export interface NonRegisteredAccount extends AssetAccount {
     type: 'NonRegistered';
+    id: string;
+    name: string;
     adjustedCostBase: number; // For accurate capital gains calculation
     assetMix: {
         interest: number; // 0-1
@@ -49,6 +51,21 @@ export interface NonRegisteredAccount extends AssetAccount {
     // Fraction of unrealized gains realized each year by fund turnover /
     // distributions (0-1). Taxed annually and added to ACB (reinvested).
     equityTurnoverRate?: number;
+    // Rebalance this account back to its target weights each year (default true).
+    // When false, only the Equity slice compounds: income slices stay flat in
+    // dollars and the equity share drifts up over time.
+    rebalanceAnnually?: boolean;
+    // Surplus cash is swept into this account. At most one per person; when none
+    // is flagged the first account receives surplus.
+    receivesSurplus?: boolean;
+}
+
+// Balance-weighted asset-class weights across a set of non-registered accounts
+export interface NonRegMix {
+    interest: number;
+    dividend: number;
+    foreignDividend: number;
+    capitalGain: number;
 }
 
 export interface Person {
@@ -64,7 +81,7 @@ export interface Person {
     rrspMeltAmount?: number; // Annual voluntary withdrawal amount
     rrsp: AssetAccount;
     tfsa: AssetAccount;
-    nonRegistered: NonRegisteredAccount;
+    nonRegisteredAccounts: NonRegisteredAccount[]; // At least one; sanitizer guarantees it
 }
 
 export interface SimulationResult {
@@ -143,15 +160,16 @@ export interface SimulationResult {
     pensionSplitAmount?: number;     // Amount of pension income split to spouse
     taxSavingsFromSplit?: number;    // Tax savings achieved from income splitting
 
-    // Non-reg composition at end of year (drifts when annual rebalancing is off;
-    // spouse's mix is identical since both start from the household mix and drift
-    // by the same factor)
-    nonRegMix?: {
-        interest: number;
-        dividend: number;
-        foreignDividend: number;
-        capitalGain: number;
-    };
+    // Non-reg composition at end of year, per person: balance-weighted blend of
+    // that person's accounts (drifts when an account's annual rebalancing is off).
+    // Undefined once the person has no accounts (dead / rolled over to survivor).
+    nonRegMix?: NonRegMix;
+    spouseNonRegMix?: NonRegMix;
+    // Same blends restricted to accounts with rebalancing OFF — the only ones
+    // that actually drift. Feeds the UI drift readout so rebalanced accounts
+    // (whose weights move only via selling/surplus) don't register as drift.
+    nonRegDriftMix?: NonRegMix;
+    spouseNonRegDriftMix?: NonRegMix;
 
     // Estate / Death Year Calculations
     isDeathYear?: boolean;                    // True if this is the final year for person or spouse
@@ -183,10 +201,6 @@ export interface SimulationInputs {
     oneTimeExpenses?: OneTimeEvent[];
     useIncomeSplitting?: boolean;
     withdrawalStrategy?: 'tax-efficient' | 'rrsp-first';
-    // Rebalance the non-reg mix back to its target weights each year (default true).
-    // When false, only the Equity slice compounds: income slices stay flat in dollars
-    // and the equity share drifts up over time.
-    rebalanceNonRegAnnually?: boolean;
     returnRates: {
         interest: number;
         dividend: number;

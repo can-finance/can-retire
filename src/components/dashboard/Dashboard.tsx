@@ -4,7 +4,6 @@ import { usePersistentState } from '../../hooks/usePersistentState';
 import { useScenarios } from '../../hooks/useScenarios';
 import type { SavedScenario } from '../../hooks/useScenarios';
 import { FinancialInput } from '../inputs/FinancialInput';
-import { AssetMixInput } from '../inputs/AssetMixInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { Toggle } from '../ui/Toggle';
@@ -14,8 +13,8 @@ import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
 import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
-import { runSimulation, runMonteCarlo } from '../../engine/projection';
-import type { SimulationInputs, MonteCarloResult } from '../../engine/types';
+import { runSimulation, runMonteCarlo, blendedNonRegMix, totalNonRegBalance } from '../../engine/projection';
+import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
 import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { SummaryHeader } from './SummaryHeader';
@@ -59,16 +58,32 @@ export function Dashboard() {
         return runSimulation(inputs);
     }, [inputs]);
 
-    // One-line drift readout for the Asset Mix card (only when rebalancing is off)
-    const driftSummary = useMemo(() => {
-        if (inputs.rebalanceNonRegAnnually !== false) return null;
-        const last = simulationResults[simulationResults.length - 1];
-        if (!last?.nonRegMix) return null;
-        const startEq = Math.round(inputs.person.nonRegistered.assetMix.capitalGain * 100);
-        const endEq = Math.round(last.nonRegMix.capitalGain * 100);
-        if (startEq === endEq) return null;
-        return `Mix drifts from ${startEq}% → ${endEq}% equity by age ${last.age}`;
-    }, [inputs, simulationResults]);
+    // One-line drift readout under each person's account list (only when at
+    // least one of their accounts has rebalancing off). Start and end blend
+    // only the drifting accounts, so selling or surplus shifting money between
+    // accounts doesn't read as drift.
+    const driftSummaries = useMemo(() => {
+        const line = (
+            accounts: NonRegisteredAccount[] | undefined,
+            endMix: (r: SimulationResult) => NonRegMix | undefined,
+            ageOf: (r: SimulationResult) => number | undefined
+        ) => {
+            if (!accounts) return null;
+            const start = blendedNonRegMix(accounts.filter(a => a.rebalanceAnnually === false));
+            if (!start) return null;
+            // Last year this person still held accounts — they empty at death/rollover
+            const last = [...simulationResults].reverse().find(r => endMix(r));
+            if (!last) return null;
+            const startEq = Math.round(start.capitalGain * 100);
+            const endEq = Math.round(endMix(last)!.capitalGain * 100);
+            if (startEq === endEq) return null;
+            return `Mix drifts from ${startEq}% → ${endEq}% equity by age ${ageOf(last)}`;
+        };
+        return {
+            person: line(inputs.person.nonRegisteredAccounts, r => r.nonRegDriftMix, r => r.age),
+            spouse: line(inputs.spouse?.nonRegisteredAccounts, r => r.spouseNonRegDriftMix, r => r.spouseAge),
+        };
+    }, [inputs.person.nonRegisteredAccounts, inputs.spouse, simulationResults]);
 
     // Debounced Monte Carlo — waits 500ms after last input change before running
     const [monteCarloResults, setMonteCarloResults] = useState<MonteCarloResult | null>(null);
@@ -98,7 +113,7 @@ export function Dashboard() {
         setInputs({ ...inputs, [who]: { ...target, [field]: value } });
     };
 
-    const updateNestedAccount = (who: 'person' | 'spouse', account: 'rrsp' | 'tfsa' | 'nonRegistered', field: string, value: number) => {
+    const updateNestedAccount = (who: 'person' | 'spouse', account: 'rrsp' | 'tfsa', field: string, value: number) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
         if (!target) return;
         setInputs({
@@ -111,6 +126,12 @@ export function Dashboard() {
                 }
             }
         });
+    };
+
+    const updateNonRegAccounts = (who: 'person' | 'spouse', accounts: NonRegisteredAccount[]) => {
+        const target = who === 'person' ? inputs.person : inputs.spouse;
+        if (!target) return;
+        setInputs({ ...inputs, [who]: { ...target, nonRegisteredAccounts: accounts } });
     };
 
     const toggleSpouse = () => {
@@ -204,11 +225,13 @@ export function Dashboard() {
             }
         } else {
             const firstRetYear = simulationResults[0];
+            const personNonReg = totalNonRegBalance(inputs.person);
+            const spouseNonReg = inputs.spouse ? totalNonRegBalance(inputs.spouse) : 0;
             const startAssets =
                 inputs.person.rrsp.balance +
                 inputs.person.tfsa.balance +
-                inputs.person.nonRegistered.balance +
-                (inputs.spouse ? (inputs.spouse.rrsp.balance + inputs.spouse.tfsa.balance + inputs.spouse.nonRegistered.balance) : 0);
+                personNonReg +
+                (inputs.spouse ? (inputs.spouse.rrsp.balance + inputs.spouse.tfsa.balance + spouseNonReg) : 0);
 
             if (firstRetYear && startAssets > 0) {
                 const totalWithdrawal = firstRetYear.totalRRSPWithdrawal + firstRetYear.totalTFSAWithdrawal + firstRetYear.totalNonRegWithdrawal;
@@ -236,7 +259,7 @@ export function Dashboard() {
             initialWithdrawalRate,
             totalShortfall
         };
-    }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegistered.balance, inputs.spouse]);
+    }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegisteredAccounts, inputs.spouse]);
 
     const globalMaxY = useMemo(() => {
         if (simulationResults.length === 0) return 0;
@@ -262,6 +285,8 @@ export function Dashboard() {
                         person={inputs.person}
                         onChange={(field, val) => updatePersonField('person', field, val)}
                         onAccountChange={(acct, field, val) => updateNestedAccount('person', acct, field, val)}
+                        onNonRegChange={(accounts) => updateNonRegAccounts('person', accounts)}
+                        nonRegDriftSummary={driftSummaries.person}
                         colorTheme="blue"
                     />
 
@@ -272,6 +297,8 @@ export function Dashboard() {
                             person={inputs.spouse}
                             onChange={(field, val) => updatePersonField('spouse', field, val)}
                             onAccountChange={(acct, field, val) => updateNestedAccount('spouse', acct, field, val)}
+                            onNonRegChange={(accounts) => updateNonRegAccounts('spouse', accounts)}
+                            nonRegDriftSummary={driftSummaries.spouse}
                             showRemove
                             onRemove={toggleSpouse}
                             colorTheme="purple"
@@ -312,37 +339,6 @@ export function Dashboard() {
                                 onChange={(expenses) => setInputs({ ...inputs, oneTimeExpenses: expenses })}
                             />
                         </div>
-                    </CollapsibleSection>
-
-                    {/* Asset Mix */}
-                    <CollapsibleSection title="Non-Reg Asset Mix" accent="orange" defaultOpen={false}>
-                        <AssetMixInput
-                            mix={inputs.person.nonRegistered.assetMix}
-                            turnoverRate={inputs.person.nonRegistered.equityTurnoverRate}
-                            rebalanceAnnually={inputs.rebalanceNonRegAnnually !== false}
-                            driftSummary={driftSummary}
-                            onRebalanceChange={(rebalance) => setInputs({ ...inputs, rebalanceNonRegAnnually: rebalance })}
-                            onChange={(newMix) => setInputs({
-                                ...inputs,
-                                person: {
-                                    ...inputs.person,
-                                    nonRegistered: {
-                                        ...inputs.person.nonRegistered,
-                                        assetMix: newMix
-                                    }
-                                }
-                            })}
-                            onTurnoverChange={(rate) => setInputs({
-                                ...inputs,
-                                person: {
-                                    ...inputs.person,
-                                    nonRegistered: {
-                                        ...inputs.person.nonRegistered,
-                                        equityTurnoverRate: rate
-                                    }
-                                }
-                            })}
-                        />
                     </CollapsibleSection>
 
                     {/* Assumptions */}
@@ -563,7 +559,14 @@ export function Dashboard() {
                         />
                     )}
 
-                    <YearlyBreakdownTable data={simulationResults} hasSpouse={hasSpouse} showMixDrift={inputs.rebalanceNonRegAnnually === false} />
+                    <YearlyBreakdownTable
+                        data={simulationResults}
+                        hasSpouse={hasSpouse}
+                        showMixDrift={
+                            inputs.person.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false) ||
+                            !!inputs.spouse?.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false)
+                        }
+                    />
                 </div>
             </div>
         </div>

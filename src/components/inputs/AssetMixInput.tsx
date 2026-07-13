@@ -13,7 +13,6 @@ interface AssetMixInputProps {
     mix: Mix;
     turnoverRate?: number;
     rebalanceAnnually: boolean;
-    driftSummary?: string | null;
     onChange: (newMix: Mix) => void;
     onTurnoverChange: (rate: number) => void;
     onRebalanceChange: (rebalance: boolean) => void;
@@ -22,7 +21,7 @@ interface AssetMixInputProps {
 const MIX_FIELDS = ['interest', 'dividend', 'foreignDividend', 'capitalGain'] as const;
 type MixField = typeof MIX_FIELDS[number];
 
-export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, driftSummary, onChange, onTurnoverChange, onRebalanceChange }: AssetMixInputProps) {
+export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChange, onTurnoverChange, onRebalanceChange }: AssetMixInputProps) {
     const share = (f: MixField) => mix[f] || 0;
 
     // A field can only grow into the headroom the others leave, so the shares
@@ -44,11 +43,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, driftS
     const total = sum * 100;
 
     return (
-        <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 space-y-3">
-            <div>
-                <h3 className="text-sm font-semibold text-slate-900">Non-Registered Asset Mix</h3>
-                <p className="text-[10px] text-slate-400">Applies to both your and your spouse's non-registered accounts</p>
-            </div>
+        <div className="rounded-lg bg-slate-50 p-3 border border-slate-200 space-y-3">
             <div className="grid grid-cols-2 gap-2">
                 <FinancialInput
                     label="Interest"
@@ -106,17 +101,12 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, driftS
                     </HelpTooltip>
                 </div>
             </div>
-            <div>
-                <Toggle
-                    label="Rebalance annually"
-                    checked={rebalanceAnnually}
-                    onChange={onRebalanceChange}
-                    tooltip="On: the account is rebalanced back to these weights every year, so dividend/interest income grows with the account (Fund Turnover approximates the tax cost of realizing gains to do this). Off: only the Equity slice compounds — dividend and interest income stay flat in dollars and the equity share drifts up over time. Compare the table's investment income in both modes."
-                />
-                {!rebalanceAnnually && driftSummary && (
-                    <p className="text-xs text-indigo-600 font-medium">{driftSummary}</p>
-                )}
-            </div>
+            <Toggle
+                label="Rebalance annually"
+                checked={rebalanceAnnually}
+                onChange={onRebalanceChange}
+                tooltip="On: this account is rebalanced back to these weights every year, so dividend/interest income grows with the account (Fund Turnover approximates the tax cost of realizing gains to do this). Off: only the Equity slice compounds — dividend and interest income stay flat in dollars and the equity share drifts up over time. Compare the table's investment income in both modes."
+            />
         </div>
     );
 }

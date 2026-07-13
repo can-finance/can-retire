@@ -12,7 +12,13 @@ describe('sanitizeSimulationInputs', () => {
 
     it('fills a minimal payload entirely with defaults', () => {
         const result = sanitizeSimulationInputs({ person: {} })!;
-        expect(result.person).toEqual(createDefaultPerson());
+        // Account ids are freshly generated UUIDs — normalize them before comparing
+        const stripIds = (p: ReturnType<typeof createDefaultPerson>) => ({
+            ...p,
+            nonRegisteredAccounts: p.nonRegisteredAccounts.map(a => ({ ...a, id: '' }))
+        });
+        expect(stripIds(result.person)).toEqual(stripIds(createDefaultPerson()));
+        expect(result.person.nonRegisteredAccounts[0].id).toBeTruthy();
         expect(result.spouse).toBeUndefined();
         expect(result.province).toBe(INITIAL_INPUTS.province);
         expect(result.returnRates).toEqual(INITIAL_INPUTS.returnRates);
@@ -52,7 +58,7 @@ describe('sanitizeSimulationInputs', () => {
         const result = sanitizeSimulationInputs({
             person: { nonRegistered: { assetMix: { interest: 2, dividend: 2, capitalGain: 2 } } }
         })!;
-        const mix = result.person.nonRegistered.assetMix;
+        const mix = result.person.nonRegisteredAccounts[0].assetMix;
         // Each clamped to 1, then normalized: 1/3 each
         expect(mix.interest + mix.dividend + mix.capitalGain).toBeCloseTo(1, 10);
         expect(mix.interest).toBeCloseTo(1 / 3, 10);
@@ -62,8 +68,150 @@ describe('sanitizeSimulationInputs', () => {
         const result = sanitizeSimulationInputs({
             person: { nonRegistered: { assetMix: { interest: 0.1, dividend: 0.1, capitalGain: 0.3 } } }
         })!;
-        const mix = result.person.nonRegistered.assetMix;
+        const mix = result.person.nonRegisteredAccounts[0].assetMix;
         expect(mix.interest + mix.dividend + mix.capitalGain).toBeCloseTo(0.5, 10);
+    });
+
+    describe('legacy single-account migration', () => {
+        it('wraps a legacy nonRegistered object into a one-element account list', () => {
+            const result = sanitizeSimulationInputs({
+                person: {
+                    nonRegistered: {
+                        balance: 350_000, adjustedCostBase: 120_000,
+                        assetMix: { interest: 0.2, dividend: 0.2, capitalGain: 0.6 },
+                        equityTurnoverRate: 0.05
+                    }
+                }
+            })!;
+            const accounts = result.person.nonRegisteredAccounts;
+            expect(accounts).toHaveLength(1);
+            expect(accounts[0]).toMatchObject({
+                name: 'Non-Registered',
+                balance: 350_000,
+                adjustedCostBase: 120_000,
+                equityTurnoverRate: 0.05,
+                rebalanceAnnually: true,
+                receivesSurplus: true
+            });
+            expect(accounts[0].id).toBeTruthy();
+        });
+
+        it('folds the legacy global rebalance flag into the migrated account', () => {
+            const result = sanitizeSimulationInputs({
+                person: { nonRegistered: { balance: 100_000 } },
+                rebalanceNonRegAnnually: false
+            })!;
+            expect(result.person.nonRegisteredAccounts[0].rebalanceAnnually).toBe(false);
+        });
+
+        it("copies the person's mix onto the spouse (legacy household-mix behavior)", () => {
+            const result = sanitizeSimulationInputs({
+                person: {
+                    nonRegistered: { assetMix: { interest: 0.5, dividend: 0.5, capitalGain: 0 }, equityTurnoverRate: 0.1 }
+                },
+                spouse: {
+                    nonRegistered: { balance: 75_000, assetMix: { interest: 0, dividend: 0, capitalGain: 1 } }
+                }
+            })!;
+            const spouseAcct = result.spouse!.nonRegisteredAccounts[0];
+            expect(spouseAcct.assetMix).toEqual({ interest: 0.5, dividend: 0.5, foreignDividend: 0, capitalGain: 0 });
+            expect(spouseAcct.equityTurnoverRate).toBe(0.1);
+            expect(spouseAcct.balance).toBe(75_000); // balance is the spouse's own
+        });
+    });
+
+    describe('multi-account payloads', () => {
+        it('keeps all accounts and their per-account settings', () => {
+            const result = sanitizeSimulationInputs({
+                person: {
+                    nonRegisteredAccounts: [
+                        { id: 'a', name: 'GIC Ladder', balance: 50_000, adjustedCostBase: 50_000, assetMix: { interest: 1, dividend: 0, capitalGain: 0 }, rebalanceAnnually: true },
+                        { id: 'b', name: 'Growth ETF', balance: 250_000, adjustedCostBase: 90_000, assetMix: { interest: 0, dividend: 0, capitalGain: 1 }, rebalanceAnnually: false, receivesSurplus: true }
+                    ]
+                }
+            })!;
+            const accounts = result.person.nonRegisteredAccounts;
+            expect(accounts).toHaveLength(2);
+            expect(accounts[0]).toMatchObject({ id: 'a', name: 'GIC Ladder', balance: 50_000, receivesSurplus: false });
+            expect(accounts[1]).toMatchObject({ id: 'b', name: 'Growth ETF', rebalanceAnnually: false, receivesSurplus: true });
+        });
+
+        it('a malformed extra account degrades to a zero-balance account, not the defaults', () => {
+            const result = sanitizeSimulationInputs({
+                person: {
+                    nonRegisteredAccounts: [
+                        { balance: 10_000, adjustedCostBase: 10_000 },
+                        'garbage'
+                    ]
+                }
+            })!;
+            const accounts = result.person.nonRegisteredAccounts;
+            expect(accounts).toHaveLength(2);
+            expect(accounts[1].balance).toBe(0);
+            expect(accounts[1].adjustedCostBase).toBe(0);
+            expect(accounts[1].name).toBe('Non-Registered 2');
+        });
+
+        it('an explicit empty account list yields one zero-balance account, not the defaults', () => {
+            const result = sanitizeSimulationInputs({
+                person: { nonRegisteredAccounts: [] }
+            })!;
+            const accounts = result.person.nonRegisteredAccounts;
+            expect(accounts).toHaveLength(1);
+            expect(accounts[0].balance).toBe(0);
+            expect(accounts[0].adjustedCostBase).toBe(0);
+            expect(accounts[0].receivesSurplus).toBe(true);
+        });
+
+        it('re-keys duplicate account ids (UI edits/removals target by id)', () => {
+            const result = sanitizeSimulationInputs({
+                person: {
+                    nonRegisteredAccounts: [
+                        { id: 'dup', balance: 1 },
+                        { id: 'dup', balance: 2 },
+                        { id: 'dup', balance: 3 }
+                    ]
+                }
+            })!;
+            const ids = result.person.nonRegisteredAccounts.map(a => a.id);
+            expect(new Set(ids).size).toBe(3);
+            expect(ids[0]).toBe('dup'); // first occurrence keeps its id
+        });
+
+        it("a legacy spouse alongside a new-format person keeps the spouse's own mix", () => {
+            const result = sanitizeSimulationInputs({
+                person: {
+                    nonRegisteredAccounts: [
+                        { balance: 100_000, assetMix: { interest: 1, dividend: 0, capitalGain: 0 } }
+                    ]
+                },
+                spouse: {
+                    nonRegistered: { balance: 75_000, assetMix: { interest: 0, dividend: 0, capitalGain: 1 } }
+                }
+            })!;
+            // The household-mix bake-in only applies to fully legacy payloads —
+            // the person's first account must not clobber the spouse's mix
+            const spouseAcct = result.spouse!.nonRegisteredAccounts[0];
+            expect(spouseAcct.assetMix.capitalGain).toBe(1);
+            expect(spouseAcct.assetMix.interest).toBe(0);
+        });
+
+        it('enforces exactly one surplus target (first flagged wins, defaults to first)', () => {
+            const twoFlagged = sanitizeSimulationInputs({
+                person: {
+                    nonRegisteredAccounts: [
+                        { balance: 1, receivesSurplus: true },
+                        { balance: 2, receivesSurplus: true }
+                    ]
+                }
+            })!;
+            expect(twoFlagged.person.nonRegisteredAccounts.map(a => a.receivesSurplus)).toEqual([true, false]);
+
+            const noneFlagged = sanitizeSimulationInputs({
+                person: { nonRegisteredAccounts: [{ balance: 1 }, { balance: 2 }] }
+            })!;
+            expect(noneFlagged.person.nonRegisteredAccounts.map(a => a.receivesSurplus)).toEqual([true, false]);
+        });
     });
 
     it('filters malformed one-time events and normalizes types', () => {

@@ -1,14 +1,18 @@
 import { FinancialInput } from '../inputs/FinancialInput';
+import { NonRegAccountsInput } from '../inputs/NonRegAccountsInput';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
-import type { Person } from '../../engine/types';
+import type { Person, NonRegisteredAccount } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
 
 interface PersonSectionProps {
     title: string;
     person: Person;
     onChange: (field: string, value: number | undefined) => void;
-    onAccountChange: (account: 'rrsp' | 'tfsa' | 'nonRegistered', field: 'balance' | 'adjustedCostBase', value: number) => void;
+    onAccountChange: (account: 'rrsp' | 'tfsa', field: 'balance', value: number) => void;
+    onNonRegChange: (accounts: NonRegisteredAccount[]) => void;
+    /** One-line drift readout for this person's non-registered accounts */
+    nonRegDriftSummary?: string | null;
     showRemove?: boolean;
     onRemove?: () => void;
     colorTheme?: 'blue' | 'indigo' | 'slate' | 'purple';
@@ -52,6 +56,8 @@ export function PersonSection({
     person,
     onChange,
     onAccountChange,
+    onNonRegChange,
+    nonRegDriftSummary,
     showRemove,
     onRemove,
     colorTheme = 'slate',
@@ -165,13 +171,12 @@ export function PersonSection({
                         onChange={(e) => onAccountChange('tfsa', 'balance', Number(e.target.value))} />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                    <FinancialInput label="Non-Reg Balance" value={person.nonRegistered.balance} accentColor={nonRegColor}
-                        onChange={(e) => onAccountChange('nonRegistered', 'balance', Number(e.target.value))} />
-                    <FinancialInput label="Non-Reg ACB" value={person.nonRegistered.adjustedCostBase} accentColor={nonRegColor}
-                        onChange={(e) => onAccountChange('nonRegistered', 'adjustedCostBase', Number(e.target.value))}
-                        tooltip={title === 'You' ? "Original investment cost" : "Original amount invested"} />
-                </div>
+                <NonRegAccountsInput
+                    accounts={person.nonRegisteredAccounts}
+                    onChange={onNonRegChange}
+                    accentColor={nonRegColor}
+                    driftSummary={nonRegDriftSummary}
+                />
 
                 <div className="grid grid-cols-2 gap-4">
                     <FinancialInput label="RRSP Melt Start Age" prefix=""

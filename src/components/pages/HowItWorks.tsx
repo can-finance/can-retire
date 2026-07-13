@@ -170,14 +170,25 @@ export function HowItWorks() {
                         <li><strong>In RRSP/TFSA:</strong> Each account grows at its own whole-account return (RRSP Return / TFSA Return), reinvested and tax-sheltered — no yield/gains split needed.</li>
                         <li><strong>In Non-Registered:</strong> Yield is paid out as cash (and taxed) each year. Only the Equity (Growth) slice of the mix appreciates, at the "Non-Reg Growth" rate. Growth does <em>not</em> raise the ACB, so unrealized gains build up until they're realized by sales, Fund Turnover, or death.</li>
                     </ul>
+                    <h3 className="text-lg font-bold text-slate-900 mt-6">Multiple Non-Registered Accounts</h3>
+                    <p>
+                        Each person can hold several non-registered accounts (e.g. a GIC ladder, a dividend portfolio,
+                        and a growth ETF account), each with its own balance, ACB, asset mix, fund turnover, and
+                        rebalance setting:
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li><strong>Withdrawals are tax-efficient:</strong> when spending needs a non-reg sale, the engine sells from the account with the highest cost-base ratio first — the least realized gain (and tax) per dollar raised.</li>
+                        <li><strong>Surplus goes to one account:</strong> leftover cash each year (after TFSA/RRSP contributions) is invested into the account marked <strong>Surplus</strong>.</li>
+                        <li><strong>At death,</strong> a surviving spouse inherits the accounts as-is — each keeps its own ACB and mix.</li>
+                    </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Annual Rebalancing vs. Drift</h3>
                     <p>
-                        The <strong>Rebalance annually</strong> toggle in the Non-Reg Asset Mix card controls what happens
-                        to the mix over time:
+                        The <strong>Rebalance annually</strong> toggle in each account's "Asset mix &amp; settings"
+                        controls what happens to that account's mix over time:
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>On (default):</strong> the account is pulled back to your chosen weights every year, so dividend and interest income grow with the account.</li>
-                        <li><strong>Off:</strong> only the Equity slice compounds. Dividend and interest income stay flat in dollars, and the equity share drifts up over time — the Asset Mix card shows the drift (e.g. "60% → 81% equity by age 90"), and hovering the Non-Reg column in the table shows each year's mix.</li>
+                        <li><strong>Off:</strong> only the Equity slice compounds. Dividend and interest income stay flat in dollars, and the equity share drifts up over time — the account list shows the blended drift across that person's non-rebalanced accounts (e.g. "60% → 81% equity by age 90"), and hovering the Non-Reg column in the table shows each year's mix.</li>
                         <li><strong>Withdrawals and reinvested surpluses are pro-rata</strong> — they don't change the weights. Only growth does.</li>
                         <li><strong>Rebalancing isn't free in a taxable account</strong> — it realizes gains. The Fund Turnover input represents that cost, so "Rebalance on + Turnover 0%" is the optimistic combination.</li>
                     </ul>
@@ -203,8 +214,8 @@ export function HowItWorks() {
                 </div>
             </section>
 
-            {/* Disclaimer Footer */}
-            <footer id="full-disclaimer" className="pt-12 border-t border-slate-200 space-y-6">
+            {/* Full Legal Disclaimer (site footer is shared via AppLayout) */}
+            <section id="full-disclaimer" className="pt-12 border-t border-slate-200">
                 <div className="bg-slate-50 rounded-2xl p-8 border border-slate-200">
                     <p className="text-sm text-slate-500 uppercase tracking-widest font-bold mb-4">Important Legal Disclaimer</p>
                     <div className="text-xs text-slate-500 leading-relaxed space-y-4">
@@ -222,30 +233,7 @@ export function HowItWorks() {
                         </p>
                     </div>
                 </div>
-                <p className="text-[11px] text-slate-400 text-center">
-                    &copy; {new Date().getFullYear()} Canadian Retirement Asset Planning tool. All rights reserved.
-                </p>
-                <p className="text-[11px] text-slate-400 text-center">
-                    Version {__APP_VERSION__} · Calculations use 2025 federal and provincial tax rules ·{' '}
-                    <a
-                        href="https://github.com/can-finance/can-retire"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
-                    >
-                        Source on GitHub
-                    </a>
-                    {' '}·{' '}
-                    <a
-                        href="https://github.com/can-finance/can-retire/blob/main/CHANGELOG.md"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
-                    >
-                        Changelog
-                    </a>
-                </p>
-            </footer>
+            </section>
         </div>
     );
 }

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-CA">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CPP Calculator — Estimate Your Canada Pension Plan Benefit | craptool.ca</title>
+    <meta name="description" content="Free detailed CPP calculator using the real Service Canada method: year-by-year earnings as YMPE ratios, the general drop-out, and the child-rearing provision. Compare starting CPP at 60 vs 65 vs 70. Runs entirely in your browser." />
+    <link rel="canonical" href="https://craptool.ca/cpp-calculator/" />
+
+    <!-- Open Graph / social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://craptool.ca/cpp-calculator/" />
+    <meta property="og:title" content="CPP Calculator — Estimate Your Canada Pension Plan Benefit" />
+    <meta property="og:description" content="Detailed CPP estimate from your actual earnings history — drop-out and child-rearing provisions included. Compare claiming at 60 vs 65 vs 70. Free and private." />
+    <meta property="og:site_name" content="C.R.A.P. tool — craptool.ca" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="CPP Calculator — Estimate Your Canada Pension Plan Benefit" />
+    <meta name="twitter:description" content="Detailed CPP estimate from your actual earnings history — drop-out and child-rearing provisions included. Compare claiming at 60 vs 65 vs 70. Free and private." />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "CPP Calculator",
+      "url": "https://craptool.ca/cpp-calculator/",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Any (web browser)",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CAD" },
+      "description": "Detailed Canada Pension Plan retirement benefit calculator using the Service Canada method: per-year earnings as YMPE ratios, the general drop-out, and the child-rearing provision, with claiming-age comparison from 60 to 70.",
+      "isPartOf": { "@type": "WebSite", "name": "Canadian Retirement Asset Planning tool", "url": "https://craptool.ca/" }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <h1>CPP Calculator</h1>
+      <p>
+        A free, detailed Canada Pension Plan calculator. Estimate your retirement benefit
+        from your actual earnings history using the Service Canada method — year-by-year
+        earnings as YMPE ratios, the general drop-out, and the child-rearing provision —
+        and compare starting CPP at any age from 60 to 70. All calculations run locally in
+        your browser. JavaScript is required to use the calculator.
+      </p>
+    </noscript>
+    <script type="module" src="/src/cpp-standalone.tsx"></script>
+    <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b608680cdb8f4f90b75a97d9f2d140a9"}'></script><!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

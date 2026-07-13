@@ -5,6 +5,43 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-07-13
+
+### Added
+- **Multiple non-registered accounts per person.** Each account has its own name,
+  balance, ACB, asset mix, fund turnover, and rebalance-annually toggle — so a GIC
+  ladder, a dividend portfolio, and a buy-and-hold growth ETF can coexist with
+  accurate per-account tax treatment.
+  - **Tax-efficient sale ordering**: when spending needs a non-registered sale, the
+    engine drains the account with the highest cost-base ratio first — the least
+    realized gain (and tax) per dollar raised.
+  - **Surplus account**: leftover cash each year is swept into the one account you
+    mark "Surplus" (radio button, one per person).
+  - **At death**, a surviving spouse inherits the accounts as-is: each keeps its own
+    ACB and mix, rolled over without triggering tax.
+  - The drift readout and the table's mix-on-hover tooltips are now **per person**
+    (previously the spouse's cells showed the primary person's blend), and the drift
+    line blends only the accounts with rebalancing off — money moving between
+    accounts via tax-efficient selling or surplus sweeps no longer reads as "drift".
+  - Existing scenarios and share links migrate automatically; malformed or
+    hand-edited payloads (duplicate ids, empty account lists, mixed old/new formats)
+    are sanitized rather than conjuring default balances.
+- **Standalone CPP Calculator page** at `/cpp-calculator/` — the same calculator as
+  the in-app page, built as its own crawlable URL with proper meta tags. "Apply to
+  plan" still feeds the main planner (same origin), and the share button copies the
+  right link from either page.
+
+### Changed
+- **The asset mix is per-account, no longer a household setting** (reverses the
+  v0.2.2 rule that the spouse always used your mix). The mix, turnover, and
+  rebalance controls moved inside each account's "Asset mix & settings" panel, and
+  each spouse's accounts are fully independent.
+- Renaming an account commits on blur/Enter like the numeric inputs, instead of
+  re-running the full simulation on every keystroke.
+- Zero-gain non-registered sales (ACB ≥ balance — the common case under
+  tax-efficient ordering) now skip the tax gross-up search entirely: net equals
+  gross exactly, trimming wasted work in Monte Carlo runs.
+
 ## [0.3.0] - 2026-07-09
 
 ### Added

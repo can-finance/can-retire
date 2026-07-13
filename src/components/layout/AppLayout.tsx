@@ -8,7 +8,7 @@ interface AppLayoutProps {
     onNavigate: (page: PageId) => void;
 }
 
-function CrapLogo() {
+export function CrapLogo() {
     return (
         <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             {/* Background rounded square */}
@@ -92,31 +92,65 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
             <main className="container mx-auto px-4 py-8">
                 {children}
             </main>
-            {currentPage !== 'how-it-works' && (
-                <footer className="border-t border-slate-200/70 mt-4">
-                    <div className="container mx-auto px-4 py-6 text-center space-y-1.5">
-                        <p className="text-sm text-slate-400">
-                            For planning and educational purposes only — not financial, tax, or investment advice.
-                            Projections are estimates based on simplified assumptions.{' '}
-                            <button
-                                onClick={() => {
-                                    onNavigate('how-it-works');
-                                    // Scroll after the page has rendered
-                                    setTimeout(() => {
-                                        document.getElementById('full-disclaimer')?.scrollIntoView({ behavior: 'smooth' });
-                                    }, 100);
-                                }}
-                                className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
-                            >
-                                Full disclaimer
-                            </button>
-                        </p>
-                        <p className="text-sm text-slate-400">
-                            Calculations use 2025 federal and provincial tax rules.
-                        </p>
-                    </div>
-                </footer>
-            )}
+            <footer className="border-t border-slate-200/70 mt-4">
+                <div className="container mx-auto px-4 py-6 text-center space-y-1.5">
+                    <p className="text-sm text-slate-400">
+                        For planning and educational purposes only — not financial, tax, or investment advice.
+                        Projections are estimates based on simplified assumptions.{' '}
+                        <button
+                            onClick={() => {
+                                onNavigate('how-it-works');
+                                // Scroll after the page has rendered
+                                setTimeout(() => {
+                                    document.getElementById('full-disclaimer')?.scrollIntoView({ behavior: 'smooth' });
+                                }, 100);
+                            }}
+                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                        >
+                            Full disclaimer
+                        </button>
+                    </p>
+                    <p className="text-sm text-slate-400">
+                        Calculations use 2025 federal and provincial tax rules.
+                    </p>
+                    <p className="text-sm text-slate-400">
+                        Questions or feedback?{' '}
+                        <a
+                            href="mailto:info@craptool.ca"
+                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                        >
+                            info@craptool.ca
+                        </a>
+                    </p>
+                    <p className="text-sm text-slate-400">
+                        &copy; {new Date().getFullYear()} Canadian Retirement Asset Planning tool · Version {__APP_VERSION__} ·{' '}
+                        <a
+                            href="https://github.com/can-finance/can-retire"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                        >
+                            Source on GitHub
+                        </a>
+                        {' '}·{' '}
+                        <a
+                            href="https://github.com/can-finance/can-retire/blob/main/CHANGELOG.md"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                        >
+                            Changelog
+                        </a>
+                        {' '}·{' '}
+                        <a
+                            href="/cpp-calculator/"
+                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                        >
+                            CPP Calculator
+                        </a>
+                    </p>
+                </div>
+            </footer>
         </div>
     );
 }

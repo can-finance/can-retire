@@ -1,5 +1,5 @@
 
-import type { Person, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
+import type { Person, NonRegisteredAccount, NonRegMix, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
 import { calculateIncomeTax, calculateOASClawback, calculateOptimalSplit } from './tax';
 import type { SplitPerson } from './tax';
 import { calculateEstimatedCPP, calculateOAS } from './cpp';
@@ -18,6 +18,63 @@ function calculateTaxableCapitalGains(totalGains: number): number {
     // Flat 50% inclusion rate. The June 2024 proposal to raise the rate to 2/3
     // above $250,000 was deferred and then cancelled (March 2025) — never enacted.
     return totalGains * 0.5;
+}
+
+export const totalNonRegBalance = (person: Person): number =>
+    person.nonRegisteredAccounts.reduce((sum, a) => sum + a.balance, 0);
+
+const totalNonRegACB = (person: Person): number =>
+    person.nonRegisteredAccounts.reduce((sum, a) => sum + a.adjustedCostBase, 0);
+
+const surplusAccount = (person: Person): NonRegisteredAccount | undefined =>
+    person.nonRegisteredAccounts.find(a => a.receivesSurplus) ?? person.nonRegisteredAccounts[0];
+
+// Balance-weighted mix across a set of accounts. Undefined for an empty list
+// (person dead or accounts rolled over); falls back to the first account's mix
+// when everything is drained, so the drift readout stays sane.
+export function blendedNonRegMix(accounts: NonRegisteredAccount[]): NonRegMix | undefined {
+    const first = accounts[0];
+    if (!first) return undefined;
+    const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+    if (total <= 0) {
+        return {
+            interest: first.assetMix.interest,
+            dividend: first.assetMix.dividend,
+            foreignDividend: first.assetMix.foreignDividend ?? 0,
+            capitalGain: first.assetMix.capitalGain
+        };
+    }
+    const mix = { interest: 0, dividend: 0, foreignDividend: 0, capitalGain: 0 };
+    for (const a of accounts) {
+        const w = a.balance / total;
+        mix.interest += w * a.assetMix.interest;
+        mix.dividend += w * a.assetMix.dividend;
+        mix.foreignDividend += w * (a.assetMix.foreignDividend || 0);
+        mix.capitalGain += w * a.assetMix.capitalGain;
+    }
+    return mix;
+}
+
+// Weights of the accounts that can actually drift (annual rebalancing off)
+const driftingNonRegMix = (person: Person): NonRegMix | undefined =>
+    blendedNonRegMix(person.nonRegisteredAccounts.filter(a => a.rebalanceAnnually === false));
+
+// Death with a surviving spouse: non-reg accounts roll over at ACB (no tax
+// triggered) — the survivor inherits them as-is, keeping each account's ACB and
+// mix. The survivor's own surplus target stays in effect.
+function rolloverNonRegTo(survivor: Person, deceased: Person): void {
+    survivor.nonRegisteredAccounts.push(...deceased.nonRegisteredAccounts
+        .map(a => ({ ...a, assetMix: { ...a.assetMix }, receivesSurplus: false })));
+    // Zero out the deceased's list to avoid double counting
+    deceased.nonRegisteredAccounts = [];
+}
+
+// Deduct terminal tax from a deceased person's non-reg balances, pro-rata
+// across accounts, so the row's estate values reflect the after-tax amounts
+function scaleNonRegBalances(person: Person, afterTax: number, before: number): void {
+    if (before <= 0) return;
+    const factor = afterTax / before;
+    for (const a of person.nonRegisteredAccounts) a.balance *= factor;
 }
 
 interface PersonAnnualBase {
@@ -141,24 +198,31 @@ function simulatePersonBaseYear(
         person.rrsp.balance -= voluntaryRRSPWithdrawal;
     }
 
-    // Investment Income (Interest & Divs)
-    const nonRegBalance = person.nonRegistered.balance;
-    const mix = person.nonRegistered.assetMix;
-    const interestIncome = nonRegBalance * mix.interest * returnRates.interest;
-    const divIncome = nonRegBalance * mix.dividend * returnRates.dividend;
-    // Foreign dividends: fully taxable at marginal rates, no gross-up or dividend
-    // tax credit. (The ~15% foreign withholding is creditable against Canadian tax,
-    // so marginal-rate treatment approximates the all-in result.)
-    const foreignDivIncome = nonRegBalance * (mix.foreignDividend || 0) * (returnRates.foreignYield ?? returnRates.dividend);
-    const divGrossUp = divIncome * 1.38;
+    // Investment Income (Interest & Divs) — summed across all non-reg accounts,
+    // each using its own asset mix
+    let interestIncome = 0;
+    let divIncome = 0;
+    let foreignDivIncome = 0;
+    let turnoverRealizedGains = 0;
+    for (const acct of person.nonRegisteredAccounts) {
+        const mix = acct.assetMix;
+        interestIncome += acct.balance * mix.interest * returnRates.interest;
+        divIncome += acct.balance * mix.dividend * returnRates.dividend;
+        // Foreign dividends: fully taxable at marginal rates, no gross-up or dividend
+        // tax credit. (The ~15% foreign withholding is creditable against Canadian tax,
+        // so marginal-rate treatment approximates the all-in result.)
+        foreignDivIncome += acct.balance * (mix.foreignDividend || 0) * (returnRates.foreignYield ?? returnRates.dividend);
 
-    // Fund turnover: a slice of unrealized gains is realized (and its distribution
-    // reinvested) each year even without withdrawals — the annual tax drag of
-    // non-index funds. No cash changes hands; ACB rises by the realized amount.
-    const turnoverRate = Math.min(1, Math.max(0, person.nonRegistered.equityTurnoverRate ?? 0));
-    const unrealizedGains = Math.max(0, nonRegBalance - person.nonRegistered.adjustedCostBase);
-    const turnoverRealizedGains = turnoverRate * unrealizedGains;
-    person.nonRegistered.adjustedCostBase += turnoverRealizedGains;
+        // Fund turnover: a slice of unrealized gains is realized (and its distribution
+        // reinvested) each year even without withdrawals — the annual tax drag of
+        // non-index funds. No cash changes hands; ACB rises by the realized amount.
+        const turnoverRate = Math.min(1, Math.max(0, acct.equityTurnoverRate ?? 0));
+        const unrealizedGains = Math.max(0, acct.balance - acct.adjustedCostBase);
+        const realized = turnoverRate * unrealizedGains;
+        acct.adjustedCostBase += realized;
+        turnoverRealizedGains += realized;
+    }
+    const divGrossUp = divIncome * 1.38;
 
     // Employment
     const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
@@ -218,13 +282,6 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
     // Deep copy to avoid mutating inputs
     const p = JSON.parse(JSON.stringify(person)) as Person;
     const s = spouse ? JSON.parse(JSON.stringify(spouse)) as Person : undefined;
-
-    // The single Asset Mix input is a household setting: the spouse's non-registered
-    // account uses the same mix and turnover rate as the primary person's.
-    if (s) {
-        s.nonRegistered.assetMix = { ...p.nonRegistered.assetMix };
-        s.nonRegistered.equityTurnoverRate = p.nonRegistered.equityTurnoverRate;
-    }
 
     const startAge = p.age;
     const endAge = Math.max(
@@ -321,57 +378,84 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
             // Sell enough Non-Reg to net `netTarget` AFTER the incremental tax the sale
             // itself triggers (capital gains + any extra OAS clawback), so the tax bill
-            // is funded by the withdrawal instead of silently vanishing.
+            // is funded by the withdrawal instead of silently vanishing. Accounts are
+            // drained in tax-efficient order: least embedded gain per dollar first.
             const sellNonReg = (personObj: Person, base: PersonAnnualBase, netTarget: number, age: number): { gross: number, net: number, gains: number } => {
-                const bal = personObj.nonRegistered.balance;
-                if (netTarget <= 0 || bal <= 0) return { gross: 0, net: 0, gains: 0 };
+                if (netTarget <= 0) return { gross: 0, net: 0, gains: 0 };
 
-                // Pro-rata sale realizes a constant share of gains per dollar sold
-                const gainRatio = Math.max(0, 1 - (personObj.nonRegistered.adjustedCostBase / bal));
                 const isPrimary = personObj === p;
-                const priorGains = isPrimary ? pRealizedGains : sRealizedGains;
                 // Taxable income so far this year: base sources + any extra RRSP already drawn
                 const taxableBase = base.taxableIncome + (isPrimary ? pExtraRRSPGross : sExtraRRSPGross);
 
-                const totalTaxAt = (realizedGains: number) => {
-                    const taxable = taxableBase + calculateTaxableCapitalGains(realizedGains);
-                    return calculateIncomeTax(taxable, province, inflationFactor, undefined, age)
-                        + calculateOASClawback(taxable, base.oasIncome, inflationFactor);
-                };
-                const baselineTax = totalTaxAt(priorGains);
-                const netFor = (gross: number) => gross - (totalTaxAt(priorGains + gross * gainRatio) - baselineTax);
+                let totalGross = 0, totalNet = 0, totalGains = 0;
 
-                // If even a full liquidation can't net the target, sell everything
-                let gross: number;
-                if (netFor(bal) <= netTarget) {
-                    gross = bal;
-                } else {
-                    // Binary search; netFor is monotonic and tax drag is well under 50%,
-                    // so gross is bracketed by [netTarget, 2 * netTarget]
-                    let low = netTarget;
-                    let high = Math.min(bal, netTarget * 2);
-                    gross = high;
-                    for (let i = 0; i < 20; i++) {
-                        const mid = (low + high) / 2;
-                        const net = netFor(mid);
-                        gross = mid;
-                        if (Math.abs(net - netTarget) < 1) break;
-                        if (net < netTarget) low = mid; else high = mid;
+                const accounts = personObj.nonRegisteredAccounts
+                    .filter(a => a.balance > 0)
+                    .sort((a, b) => (b.adjustedCostBase / b.balance) - (a.adjustedCostBase / a.balance));
+
+                for (const acct of accounts) {
+                    const remainingTarget = netTarget - totalNet;
+                    if (remainingTarget <= 0) break;
+
+                    const bal = acct.balance;
+                    // Pro-rata sale realizes a constant share of gains per dollar sold
+                    const gainRatio = Math.max(0, 1 - (acct.adjustedCostBase / bal));
+
+                    let gross: number, net: number;
+                    if (gainRatio === 0) {
+                        // ACB ≥ balance: the sale realizes no gain and triggers no
+                        // tax, so net equals gross exactly — no search needed. The
+                        // tax-efficient order sells these accounts first, so this
+                        // is the common case.
+                        gross = Math.min(bal, remainingTarget);
+                        net = gross;
+                    } else {
+                        // Gains realized earlier this year, including earlier accounts in this sale
+                        const priorGains = (isPrimary ? pRealizedGains : sRealizedGains) + totalGains;
+
+                        const totalTaxAt = (realizedGains: number) => {
+                            const taxable = taxableBase + calculateTaxableCapitalGains(realizedGains);
+                            return calculateIncomeTax(taxable, province, inflationFactor, undefined, age)
+                                + calculateOASClawback(taxable, base.oasIncome, inflationFactor);
+                        };
+                        const baselineTax = totalTaxAt(priorGains);
+                        const netFor = (gross: number) => gross - (totalTaxAt(priorGains + gross * gainRatio) - baselineTax);
+
+                        // If even a full liquidation can't net the target, sell everything
+                        if (netFor(bal) <= remainingTarget) {
+                            gross = bal;
+                        } else {
+                            // Binary search; netFor is monotonic and tax drag is well under 50%,
+                            // so gross is bracketed by [remainingTarget, 2 * remainingTarget]
+                            let low = remainingTarget;
+                            let high = Math.min(bal, remainingTarget * 2);
+                            gross = high;
+                            for (let i = 0; i < 20; i++) {
+                                const mid = (low + high) / 2;
+                                const net = netFor(mid);
+                                gross = mid;
+                                if (Math.abs(net - remainingTarget) < 1) break;
+                                if (net < remainingTarget) low = mid; else high = mid;
+                            }
+                        }
+                        net = netFor(gross);
                     }
+
+                    acct.adjustedCostBase *= (1 - gross / bal);
+                    acct.balance -= gross;
+                    totalGross += gross;
+                    totalNet += net;
+                    totalGains += gross * gainRatio;
                 }
 
-                const net = netFor(gross);
-                const gains = gross * gainRatio;
-                personObj.nonRegistered.adjustedCostBase *= (1 - gross / bal);
-                personObj.nonRegistered.balance -= gross;
-                return { gross, net, gains };
+                return { gross: totalGross, net: totalNet, gains: totalGains };
             };
 
             const withdrawNonReg = () => {
                 // Two passes: if one spouse's account caps out, the other covers the remainder
                 for (let pass = 0; pass < 2 && remainingDeficit > 1; pass++) {
-                    const pBal = pAlive ? p.nonRegistered.balance : 0;
-                    const sBal = sAlive && s ? s.nonRegistered.balance : 0;
+                    const pBal = pAlive ? totalNonRegBalance(p) : 0;
+                    const sBal = sAlive && s ? totalNonRegBalance(s) : 0;
                     const total = pBal + sBal;
                     if (total <= 0) return;
 
@@ -542,21 +626,25 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 reinvestedRRSP += add;
             }
 
-            // 3. Non-Reg
+            // 3. Non-Reg: swept into each person's designated surplus account
+            // (new contributions land at cost, so ACB rises by the same amount)
             if (remaining > 0) {
-                reinvestedNonReg += remaining;
-                // Split remaining 50/50 or to owner?
-                if (pAlive && sAlive && s) {
-                    p.nonRegistered.balance += remaining / 2;
-                    p.nonRegistered.adjustedCostBase += remaining / 2;
-                    s.nonRegistered.balance += remaining / 2;
-                    s.nonRegistered.adjustedCostBase += remaining / 2;
-                } else if (pAlive) {
-                    p.nonRegistered.balance += remaining;
-                    p.nonRegistered.adjustedCostBase += remaining;
-                } else if (sAlive && s) {
-                    s.nonRegistered.balance += remaining;
-                    s.nonRegistered.adjustedCostBase += remaining;
+                const targets: NonRegisteredAccount[] = [];
+                if (pAlive) {
+                    const t = surplusAccount(p);
+                    if (t) targets.push(t);
+                }
+                if (sAlive && s) {
+                    const t = surplusAccount(s);
+                    if (t) targets.push(t);
+                }
+                if (targets.length > 0) {
+                    reinvestedNonReg += remaining;
+                    const share = remaining / targets.length;
+                    for (const t of targets) {
+                        t.balance += share;
+                        t.adjustedCostBase += share;
+                    }
                 }
             }
         }
@@ -652,14 +740,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         // Without annual rebalancing, the weights are state: the equity slice's growth
         // shifts the composition each year (sales and reinvestment are pro-rata, so
-        // only growth moves the weights). With rebalancing (default), weights are
-        // reset to the inputs every year — the historical behavior.
-        const growNonReg = (acct: Person['nonRegistered']) => {
+        // only growth moves the weights). With rebalancing (the per-account default),
+        // weights are reset to the inputs every year — the historical behavior.
+        const growNonReg = (acct: NonRegisteredAccount) => {
             const w = acct.assetMix;
             const g = currentYearRates.capitalGrowth;
             const factor = 1 + (w.capitalGain * g);
             acct.balance *= factor;
-            if (inputs.rebalanceNonRegAnnually === false && factor > 0) {
+            if (acct.rebalanceAnnually === false && factor > 0) {
                 w.capitalGain = (w.capitalGain * (1 + g)) / factor;
                 w.interest /= factor;
                 w.dividend /= factor;
@@ -670,12 +758,12 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         if (pAlive) {
             p.rrsp.balance *= (1 + rrspRate);
             p.tfsa.balance *= (1 + tfsaRate);
-            growNonReg(p.nonRegistered);
+            p.nonRegisteredAccounts.forEach(growNonReg);
         }
         if (sAlive && s) {
             s.rrsp.balance *= (1 + rrspRate);
             s.tfsa.balance *= (1 + tfsaRate);
-            growNonReg(s.nonRegistered);
+            s.nonRegisteredAccounts.forEach(growNonReg);
         }
 
 
@@ -731,9 +819,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // Calculate terminal taxes when someone dies
         if (pDiedThisYear) {
             const pRRSPBalance = p.rrsp.balance;
-            const pNonRegBalance = p.nonRegistered.balance;
+            const pNonRegBalance = totalNonRegBalance(p);
             const pTFSABalance = p.tfsa.balance;
-            const pACB = p.nonRegistered.adjustedCostBase;
+            const pACB = totalNonRegACB(p);
             const pUnrealizedGains = Math.max(0, pNonRegBalance - pACB);
 
             // Only rollover if spouse survives (not dying this year too)
@@ -741,16 +829,12 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 // Rollover: Transfer RRSP to spouse's RRSP
                 s.rrsp.balance += pRRSPBalance;
                 rrspRolledToSpouse += pRRSPBalance;
-                // Non-Reg also rolls over at ACB (no tax triggered)
-                s.nonRegistered.balance += pNonRegBalance;
-                s.nonRegistered.adjustedCostBase += pACB;
+                rolloverNonRegTo(s, p);
                 // TFSA rolls over to spouse tax-free
                 s.tfsa.balance += pTFSABalance;
 
                 // CRITICAL: Zero out deceased balances to avoid double counting and accurately reflect estate
                 p.rrsp.balance = 0;
-                p.nonRegistered.balance = 0;
-                p.nonRegistered.adjustedCostBase = 0;
                 p.tfsa.balance = 0;
             } else {
                 // No surviving spouse: Full deemed disposition
@@ -775,16 +859,16 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                     const afterTaxNonReg = pNonRegBalance - (incrementalTerminalTax * (taxableGains / totalDeemedIncome));
 
                     p.rrsp.balance = afterTaxRRSP;
-                    p.nonRegistered.balance = afterTaxNonReg;
+                    scaleNonRegBalances(p, afterTaxNonReg, pNonRegBalance);
                 }
             }
         }
 
         if (sDiedThisYear && s) {
             const sRRSPBalance = s.rrsp.balance;
-            const sNonRegBalance = s.nonRegistered.balance;
+            const sNonRegBalance = totalNonRegBalance(s);
             const sTFSABalance = s.tfsa.balance;
-            const sACB = s.nonRegistered.adjustedCostBase;
+            const sACB = totalNonRegACB(s);
             const sUnrealizedGains = Math.max(0, sNonRegBalance - sACB);
 
             // Only rollover if person survives (not dying this year too)
@@ -792,16 +876,12 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 // Rollover: Transfer RRSP to person's RRSP
                 p.rrsp.balance += sRRSPBalance;
                 rrspRolledToSpouse += sRRSPBalance;
-                // Non-Reg also rolls over at ACB
-                p.nonRegistered.balance += sNonRegBalance;
-                p.nonRegistered.adjustedCostBase += sACB;
+                rolloverNonRegTo(p, s);
                 // TFSA rolls over to person
                 p.tfsa.balance += sTFSABalance;
 
                 // CRITICAL: Zero out deceased balances
                 s.rrsp.balance = 0;
-                s.nonRegistered.balance = 0;
-                s.nonRegistered.adjustedCostBase = 0;
                 s.tfsa.balance = 0;
             } else {
                 // No surviving spouse: Full deemed disposition
@@ -824,7 +904,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                     const afterTaxNonReg = sNonRegBalance - (incrementalTerminalTax * (taxableGains / totalDeemedIncome));
 
                     s.rrsp.balance = afterTaxRRSP;
-                    s.nonRegistered.balance = afterTaxNonReg;
+                    scaleNonRegBalances(s, afterTaxNonReg, sNonRegBalance);
                 }
             }
         }
@@ -832,8 +912,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const totalTerminalTax = terminalTaxOnRRSP + terminalTaxOnCapGains;
 
         // Calculate estate values (only meaningful in death year or final year)
-        const grossEstateValue = (pAlive ? p.rrsp.balance + p.tfsa.balance + p.nonRegistered.balance : 0) +
-            (sAlive && s ? s.rrsp.balance + s.tfsa.balance + s.nonRegistered.balance : 0);
+        const grossEstateValue = (pAlive ? p.rrsp.balance + p.tfsa.balance + totalNonRegBalance(p) : 0) +
+            (sAlive && s ? s.rrsp.balance + s.tfsa.balance + totalNonRegBalance(s) : 0);
 
         // Net estate = gross - terminal tax (what heirs actually receive)
         const netEstateValue = grossEstateValue - totalTerminalTax;
@@ -851,8 +931,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             year: new Date().getFullYear() + yearOffset,
             age: pAge,
             spouseAge: sAge,
-            totalAssets: (pAlive ? p.rrsp.balance + p.tfsa.balance + p.nonRegistered.balance : 0) +
-                (sAlive && s ? s.rrsp.balance + s.tfsa.balance + s.nonRegistered.balance : 0),
+            totalAssets: (pAlive ? p.rrsp.balance + p.tfsa.balance + totalNonRegBalance(p) : 0) +
+                (sAlive && s ? s.rrsp.balance + s.tfsa.balance + totalNonRegBalance(s) : 0),
             grossIncome: pGrossTotal + sGrossTotal,
             cppIncome: (pBase?.cppIncome || 0) + (sBase?.cppIncome || 0),
             oasIncome: (pBase?.oasIncome || 0) + (sBase?.oasIncome || 0),
@@ -864,13 +944,12 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 - (reinvestedTFSA + reinvestedRRSP + reinvestedNonReg),
             spending: targetSpend,
             taxPaid: totalTaxPaid,
-            // End-of-year non-reg composition (person's copy; spouse's is identical)
-            nonRegMix: {
-                interest: p.nonRegistered.assetMix.interest,
-                dividend: p.nonRegistered.assetMix.dividend,
-                foreignDividend: p.nonRegistered.assetMix.foreignDividend || 0,
-                capitalGain: p.nonRegistered.assetMix.capitalGain
-            },
+            // End-of-year non-reg composition, per person (undefined once a
+            // person has no accounts — dead, or rolled over to the survivor)
+            nonRegMix: pAlive ? blendedNonRegMix(p.nonRegisteredAccounts) : undefined,
+            spouseNonRegMix: sAlive && s ? blendedNonRegMix(s.nonRegisteredAccounts) : undefined,
+            nonRegDriftMix: pAlive ? driftingNonRegMix(p) : undefined,
+            spouseNonRegDriftMix: sAlive && s ? driftingNonRegMix(s) : undefined,
             personTaxPaid: pTaxPaid,
             spouseTaxPaid: sTaxPaid,
             // Household OAS clawback (pre-split; splitting's effect is in taxSavingsFromSplit)
@@ -882,14 +961,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             accounts: {
                 rrsp: pAlive ? p.rrsp.balance : 0,
                 tfsa: pAlive ? p.tfsa.balance : 0,
-                nonRegistered: pAlive ? p.nonRegistered.balance : 0,
-                nonRegisteredACB: pAlive ? p.nonRegistered.adjustedCostBase : 0
+                nonRegistered: pAlive ? totalNonRegBalance(p) : 0,
+                nonRegisteredACB: pAlive ? totalNonRegACB(p) : 0
             },
             spouseAccounts: sAlive && s ? {
                 rrsp: s.rrsp.balance,
                 tfsa: s.tfsa.balance,
-                nonRegistered: s.nonRegistered.balance,
-                spouseNonRegisteredACB: s.nonRegistered.adjustedCostBase
+                nonRegistered: totalNonRegBalance(s),
+                spouseNonRegisteredACB: totalNonRegACB(s)
             } : undefined,
 
             // New Visualization Fields
