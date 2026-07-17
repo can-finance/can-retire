@@ -22,7 +22,7 @@ import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
 import { ScenarioManager } from './ScenarioManager';
 
-export function Dashboard({ onLaunchOnboarding }: { onLaunchOnboarding?: () => void } = {}) {
+export function Dashboard() {
     const [inputs, setInputs] = usePersistentState<SimulationInputs>(SIM_KEY, INITIAL_INPUTS, sanitizeSimulationInputs);
     const { scenarios, saveScenario, updateScenario, deleteScenario } = useScenarios();
     const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
@@ -395,7 +395,6 @@ export function Dashboard({ onLaunchOnboarding }: { onLaunchOnboarding?: () => v
                         onLoad={loadScenario}
                         onDelete={deleteScenario}
                         onCreateNew={handleCreateNew}
-                        onLaunchOnboarding={onLaunchOnboarding}
                     />
                 </div>
 

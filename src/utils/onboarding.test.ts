@@ -145,13 +145,23 @@ describe('loadDraftSeed', () => {
 describe('hasSavedPlan', () => {
     afterEach(() => vi.unstubAllGlobals());
 
-    it('is true when a saved plan exists', () => {
-        installStorage({ [SIM_KEY]: '{"person":{}}' });
+    it('is true when a saved, sanitizable plan exists', () => {
+        installStorage({ [SIM_KEY]: JSON.stringify(INITIAL_INPUTS) });
         expect(hasSavedPlan()).toBe(true);
     });
 
     it('is false when no saved plan exists', () => {
         installStorage({});
+        expect(hasSavedPlan()).toBe(false);
+    });
+
+    it('is false when the stored value is corrupt JSON', () => {
+        installStorage({ [SIM_KEY]: '{not valid json' });
+        expect(hasSavedPlan()).toBe(false);
+    });
+
+    it('is false when the stored value is valid JSON but not a sanitizable plan', () => {
+        installStorage({ [SIM_KEY]: JSON.stringify({ foo: 1 }) });
         expect(hasSavedPlan()).toBe(false);
     });
 

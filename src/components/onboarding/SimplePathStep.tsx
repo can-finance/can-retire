@@ -4,22 +4,7 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 import { SectionCard } from '../ui/SectionCard';
 import { ValidationBanner } from '../ui/ValidationBanner';
 import { simpleAnswersErrors, type SimpleAnswers } from './simplePathMapping';
-
-const PROVINCES: { code: string; name: string }[] = [
-    { code: 'AB', name: 'Alberta' },
-    { code: 'BC', name: 'British Columbia' },
-    { code: 'MB', name: 'Manitoba' },
-    { code: 'NB', name: 'New Brunswick' },
-    { code: 'NL', name: 'Newfoundland and Labrador' },
-    { code: 'NS', name: 'Nova Scotia' },
-    { code: 'NT', name: 'Northwest Territories' },
-    { code: 'NU', name: 'Nunavut' },
-    { code: 'ON', name: 'Ontario' },
-    { code: 'PE', name: 'Prince Edward Island' },
-    { code: 'QC', name: 'Quebec' },
-    { code: 'SK', name: 'Saskatchewan' },
-    { code: 'YT', name: 'Yukon' },
-];
+import { PROVINCES } from '../../constants/provinces';
 
 interface SimplePathStepProps {
     /** 0 = "About your household", 1 = "Savings and spending" */

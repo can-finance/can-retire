@@ -1,4 +1,5 @@
 import { SectionCard } from '../ui/SectionCard';
+import { EDIT_PLAN_LABEL } from '../layout/AppLayout';
 
 interface OnboardingClosingProps {
     /** Commit the draft and go to the dashboard. */
@@ -54,7 +55,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                     Go to my dashboard
                 </button>
                 <p className="text-xs text-slate-400 text-center">
-                    You can re-run this setup anytime from Scenarios → Guided setup.
+                    You can re-run this setup anytime from the {EDIT_PLAN_LABEL} button in the top menu.
                 </p>
             </div>
         </div>

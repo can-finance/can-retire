@@ -16,14 +16,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   share links work. The wizard edits a draft and commits exactly once on Finish —
   Skip/Cancel changes nothing, untouched fields keep their saved values, and
   Quick start merges into the existing plan rather than resetting it. Re-runnable
-  anytime from **Scenarios → Guided setup** (pre-filled with current numbers).
-  Share-link (`#start=`) visitors never see it; a share link opened mid-wizard
-  closes the wizard without committing and imports the shared scenario.
+  anytime from the **Edit My Plan** button in the header (pre-filled with current
+  numbers). Share-link (`#start=`) visitors never see it; a share link opened
+  mid-wizard closes the wizard without committing and imports the shared scenario.
+- **Peek-first intro.** The onboarding intro now renders as a welcome card over
+  the live, dimmed sample dashboard, so new visitors see what the tool produces
+  before entering any numbers; the wizard steps themselves stay full-screen.
+  The overlay is a proper dialog (scroll-locked, focus-managed, Escape to skip),
+  and clicking **Save** on the last step commits the plan immediately — the
+  closing screen is pure confirmation.
+- **Edit My Plan** header button replaces the Scenarios-panel "Guided setup"
+  entry point; the header now grows on small screens so nav and the button stay
+  reachable on mobile.
+- Test suite for the onboarding feature: 33 new tests covering the wizard's
+  commit contract, the activation state machine, storage write-gating, and two
+  regression fences (copy/label drift, missing Tailwind shades).
 
 ### Changed
 - The Assumptions inputs were extracted into a reusable `AssumptionsFields`
   component (shared by the dashboard and the wizard); the Monte Carlo toggle now
   sits below the two strategy toggles.
+- Saved data is only written to the browser after you change something — a
+  first-time visitor who only looks at the intro leaves no data behind at all.
+- The province list is defined once and shared by the wizard and the
+  Assumptions panel.
 - The amber validation banner is now one shared component used by the dashboard
   and both wizard paths, and the `retirement_sim_v2` storage key is defined in a
   single module instead of four copies.

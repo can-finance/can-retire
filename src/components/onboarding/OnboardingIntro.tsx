@@ -1,4 +1,5 @@
 import { SectionCard } from '../ui/SectionCard';
+import { EDIT_PLAN_LABEL } from '../layout/AppLayout';
 
 interface OnboardingIntroProps {
     isRelaunch: boolean;
@@ -68,7 +69,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                     {isRelaunch ? 'Cancel — keep my current numbers' : 'Skip — explore with sample numbers instead'}
                 </button>
                 <p className="text-xs text-slate-400 mt-2">
-                    You can run this setup again anytime from Scenarios → Guided setup.
+                    You can run this setup again anytime from the {EDIT_PLAN_LABEL} button in the top menu.
                 </p>
             </div>
         </div>

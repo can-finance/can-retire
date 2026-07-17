@@ -1,11 +1,18 @@
 import React from 'react';
+import { HelpTooltip } from '../ui/HelpTooltip';
 
 export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works';
+
+// Single source for the "re-run setup" button's label, shared with the copy
+// in OnboardingIntro/OnboardingClosing so the two never drift out of sync.
+export const EDIT_PLAN_LABEL = 'Edit My Plan';
 
 interface AppLayoutProps {
     children: React.ReactNode;
     currentPage: PageId;
     onNavigate: (page: PageId) => void;
+    /** Re-launch the guided setup overlay. */
+    onLaunchOnboarding: () => void;
 }
 
 export function CrapLogo() {
@@ -41,14 +48,14 @@ export function CrapLogo() {
     );
 }
 
-export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps) {
+export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboarding }: AppLayoutProps) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900">
             <header className="lg:sticky lg:top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
-                <div className="container mx-auto flex h-16 items-center justify-between px-4">
-                    <div className="flex items-center gap-2.5">
+                <div className="container mx-auto flex min-h-16 items-center justify-between px-4 py-2">
+                    <div className="flex min-w-0 items-center gap-2.5">
                         <CrapLogo />
-                        <h1 className="text-xl font-bold tracking-tight text-slate-900">
+                        <h1 className="min-w-0 truncate text-xl font-bold tracking-tight text-slate-900">
                             Canadian Retirement Asset Planning <span className="text-brand-500">tool</span>
                         </h1>
                     </div>
@@ -58,35 +65,50 @@ export function AppLayout({ children, currentPage, onNavigate }: AppLayoutProps)
                         Runs Entirely in Your Browser • Your Data Never Leaves Your Device
                     </div>
 
-                    <nav className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl">
-                        <button
-                            onClick={() => onNavigate('dashboard')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'dashboard'
-                                ? 'bg-white text-slate-900 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-900'
-                                }`}
-                        >
-                            Dashboard
-                        </button>
-                        <button
-                            onClick={() => onNavigate('cpp-calculator')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'cpp-calculator'
-                                ? 'bg-white text-slate-900 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-900'
-                                }`}
-                        >
-                            CPP Calculator
-                        </button>
-                        <button
-                            onClick={() => onNavigate('how-it-works')}
-                            className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'how-it-works'
-                                ? 'bg-white text-slate-900 shadow-sm'
-                                : 'text-slate-500 hover:text-slate-900'
-                                }`}
-                        >
-                            How does this work?
-                        </button>
-                    </nav>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <nav className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl">
+                            <button
+                                onClick={() => onNavigate('dashboard')}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'dashboard'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-900'
+                                    }`}
+                            >
+                                Dashboard
+                            </button>
+                            <button
+                                onClick={() => onNavigate('cpp-calculator')}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'cpp-calculator'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-900'
+                                    }`}
+                            >
+                                CPP Calculator
+                            </button>
+                            <button
+                                onClick={() => onNavigate('how-it-works')}
+                                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'how-it-works'
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-900'
+                                    }`}
+                            >
+                                How does this work?
+                            </button>
+                        </nav>
+                        {/* Setup is an action (opens the guided-setup overlay), not a page —
+                            styled distinctly from the segmented nav pill and never "active". */}
+                        <HelpTooltip text="Re-run the guided setup. Your current numbers are pre-filled — nothing changes until you save the plan.">
+                            <button
+                                onClick={onLaunchOnboarding}
+                                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 hover:border-brand-300 transition-colors"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                {EDIT_PLAN_LABEL}
+                            </button>
+                        </HelpTooltip>
+                    </div>
                 </div>
             </header>
             <main className="container mx-auto px-4 py-8">

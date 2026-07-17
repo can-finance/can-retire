@@ -24,16 +24,31 @@ export function isOnboardingEligible(): boolean {
 }
 
 /**
+ * Parse + sanitize whatever is currently stored under SIM_KEY, or null if
+ * absent/corrupt/unsanitizable. Shared by hasSavedPlan (existence check) and
+ * loadDraftSeed (actual seed value) so the "is this a real plan" logic lives
+ * in exactly one place.
+ */
+function readSavedPlan(): SimulationInputs | null {
+    try {
+        const raw = localStorage.getItem(SIM_KEY);
+        if (!raw) return null;
+        return sanitizeSimulationInputs(JSON.parse(raw));
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Whether a saved plan currently exists. Read live (not captured at mount) so a
  * first-run user who finishes/skips and then reopens Guided setup is correctly
- * treated as a re-launch. Fails closed to false on any storage error.
+ * treated as a re-launch. Existence alone isn't enough — the stored value must
+ * parse and sanitize into a real plan, otherwise a corrupt/unrelated SIM_KEY
+ * value would incorrectly present as a re-launch ("keep my current numbers").
+ * Fails closed to false on any storage error.
  */
 export function hasSavedPlan(): boolean {
-    try {
-        return localStorage.getItem(SIM_KEY) !== null;
-    } catch {
-        return false;
-    }
+    return readSavedPlan() !== null;
 }
 
 export function markOnboardingDone(): void {
@@ -51,16 +66,7 @@ export function markOnboardingDone(): void {
  * wizard edits can never alias INITIAL_INPUTS.
  */
 export function loadDraftSeed(): SimulationInputs {
-    try {
-        const raw = localStorage.getItem(SIM_KEY);
-        if (raw) {
-            const clean = sanitizeSimulationInputs(JSON.parse(raw));
-            if (clean) return clean;
-        }
-    } catch {
-        // Fall through to defaults
-    }
-    return JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs;
+    return readSavedPlan() ?? (JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs);
 }
 
 /** Sanitize and persist the finished draft, then mark onboarding done. */

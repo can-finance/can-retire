@@ -1,6 +1,7 @@
 import { FinancialInput } from './FinancialInput';
 import { Toggle } from '../ui/Toggle';
 import { HelpTooltip } from '../ui/HelpTooltip';
+import { PROVINCES } from '../../constants/provinces';
 import type { SimulationInputs } from '../../engine/types';
 
 /**
@@ -28,19 +29,9 @@ export function AssumptionsFields({ inputs, onChange }: {
                     value={inputs.province}
                     onChange={(e) => onChange({ province: e.target.value })}
                 >
-                    <option value="AB">Alberta</option>
-                    <option value="BC">British Columbia</option>
-                    <option value="MB">Manitoba</option>
-                    <option value="NB">New Brunswick</option>
-                    <option value="NL">Newfoundland and Labrador</option>
-                    <option value="NS">Nova Scotia</option>
-                    <option value="NT">Northwest Territories</option>
-                    <option value="NU">Nunavut</option>
-                    <option value="ON">Ontario</option>
-                    <option value="PE">Prince Edward Island</option>
-                    <option value="QC">Quebec</option>
-                    <option value="SK">Saskatchewan</option>
-                    <option value="YT">Yukon</option>
+                    {PROVINCES.map((p) => (
+                        <option key={p.code} value={p.code}>{p.name}</option>
+                    ))}
                 </select>
             </div>
 

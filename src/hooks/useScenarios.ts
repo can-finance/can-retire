@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { SimulationInputs } from '../engine/types';
 
 export interface SavedScenario {
@@ -27,7 +27,17 @@ export function useScenarios() {
         }
     });
 
+    // Persist only after a real mutation (save/update/delete) — never on mount.
+    // Mirrors the `hasChanged` gate in usePersistentState (see that file for the
+    // full rationale): a fresh visitor's Dashboard mounts behind the onboarding
+    // intro scrim, and an ungated effect here would stamp '[]' into localStorage
+    // before the user ever chooses a path, clobbering the "no existing data"
+    // signal first-run eligibility relies on. StrictMode-safe: the ref is only
+    // flipped by the mutators below, never by the effect itself.
+    const hasChanged = useRef(false);
+
     useEffect(() => {
+        if (!hasChanged.current) return;
         localStorage.setItem('retirement_saved_scenarios', JSON.stringify(scenarios));
     }, [scenarios]);
 
@@ -38,10 +48,12 @@ export function useScenarios() {
             inputs: JSON.parse(JSON.stringify(inputs)),
             lastSaved: new Date().toISOString()
         };
+        hasChanged.current = true;
         setScenarios(prev => [...prev, newScenario]);
     };
 
     const updateScenario = (id: string, inputs: SimulationInputs, newName?: string) => {
+        hasChanged.current = true;
         setScenarios(prev => prev.map(s =>
             s.id === id
                 ? {
@@ -55,6 +67,7 @@ export function useScenarios() {
     };
 
     const deleteScenario = (id: string) => {
+        hasChanged.current = true;
         setScenarios(prev => prev.filter(s => s.id !== id));
     };
 

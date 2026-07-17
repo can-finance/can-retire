@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Person, SimulationInputs } from '../../engine/types';
 import { CrapLogo } from '../layout/AppLayout';
 import { commitOnboardingInputs, hasSavedPlan, markOnboardingDone } from '../../utils/onboarding';
@@ -11,9 +11,10 @@ import { buildDetailedSteps } from './detailedSteps';
 
 interface OnboardingFlowProps {
     seed: SimulationInputs;
-    onDone: () => void;
+    /** `committed` is true iff Save has written the draft to storage this session. */
+    onDone: (committed: boolean) => void;
     /** Open How It Works scrolled to #privacy. When absent, falls back to onDone. */
-    onOpenPrivacy?: () => void;
+    onOpenPrivacy?: (committed: boolean) => void;
 }
 
 type Screen = 'intro' | 'simple' | 'detailed' | 'closing';
@@ -37,6 +38,38 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
     // Quick path works off a compact answer set, derived from the draft on entry
     // and merged back into the draft on exit/commit.
     const [answers, setAnswers] = useState<SimpleAnswers>(() => seedToSimpleAnswers(seed));
+
+    // True once Save has committed the draft at least once this session. The
+    // closing screen is pure confirmation after that — its buttons never commit.
+    // Sticky once set: a Back-then-Skip after a Save must still report "data was
+    // written" for close purposes (App only remounts Dashboard — bumping its
+    // epoch — when the close is committed).
+    const [hasCommitted, setHasCommitted] = useState(false);
+
+    // Lock document scroll while the overlay is mounted — `inert` on the
+    // background tree blocks its pointer/focus but not wheel/touch scroll-chaining,
+    // so without this the scrim (and, worse, opaque steps) would scroll the
+    // dashboard behind them. Restored to whatever it was on unmount so the
+    // dashboard reappears at its original scroll position.
+    useEffect(() => {
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, []);
+
+    // Move focus into the dialog on open. `preventScroll` avoids a redundant
+    // jump-to-top (the overlay is already `fixed inset-0`); guarded since older
+    // engines can throw on the options-object form of `.focus()`.
+    const rootRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        try {
+            rootRef.current?.focus({ preventScroll: true });
+        } catch {
+            rootRef.current?.focus();
+        }
+    }, []);
 
     // Stash the spouse across a toggle-off in the detailed path so toggling back
     // on restores the previously present (seeded or edited) spouse rather than a
@@ -65,24 +98,43 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
     const finalInputs = (): SimulationInputs =>
         path === 'simple' ? mergeSimpleAnswers(draft, answers) : draft;
 
+    // Closing-screen buttons are pure confirmation — Save (below, in goNext) already
+    // committed the draft before this screen ever shows.
     const finish = () => {
-        commitOnboardingInputs(finalInputs());
-        onDone();
+        onDone(hasCommitted);
     };
 
     const openPrivacy = () => {
-        // The user completed setup — persist their work, then hand off to the
-        // privacy page (App turns onboarding off + navigates + scrolls).
-        commitOnboardingInputs(finalInputs());
-        if (onOpenPrivacy) onOpenPrivacy();
-        else onDone();
+        // The draft is already committed (Save, before the closing screen showed) —
+        // just hand off to the privacy page (App turns onboarding off + navigates + scrolls).
+        if (onOpenPrivacy) onOpenPrivacy(hasCommitted);
+        else onDone(hasCommitted);
     };
 
     const skip = () => {
-        // Write nothing — just mark done and close.
+        // Write nothing new — but if a Save already fired earlier this session
+        // (Back from the closing screen, then Skip), data WAS written, so report
+        // that via `hasCommitted` rather than unconditionally false.
         markOnboardingDone();
-        onDone();
+        onDone(hasCommitted);
     };
+
+    // Escape mirrors the header's skip/cancel button. The closing screen hides
+    // that button (Save already committed, or there's nothing left to skip), so
+    // Escape does nothing there rather than guessing which action was meant.
+    // Note: this always fires, even mid-edit in a text field — a FinancialInput
+    // commits on blur/Enter, so an in-flight keystroke can be lost when Escape
+    // closes the wizard. Acceptable: standard modal behavior, and the draft
+    // itself is never the persisted plan until Save runs.
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            if (screen === 'closing') return;
+            skip();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [screen, skip]);
 
     // --- navigation ----------------------------------------------------------
 
@@ -101,8 +153,16 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
 
     const goNext = () => {
         const last = lastContentIndex();
-        if (safeStepIndex < last) setStepIndex(safeStepIndex + 1);
-        else setScreen('closing');
+        if (safeStepIndex < last) {
+            setStepIndex(safeStepIndex + 1);
+            return;
+        }
+        // Last content step's button is "Save" — commit now (both paths), so the
+        // closing screen that follows is purely a confirmation. Re-entering this
+        // step (Back, then Save again) simply re-commits; that's fine.
+        commitOnboardingInputs(finalInputs());
+        setHasCommitted(true);
+        setScreen('closing');
     };
 
     const goBack = () => {
@@ -163,8 +223,26 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
 
     const showFooter = screen === 'simple' || screen === 'detailed';
 
+    // The intro is a scrim: a semi-transparent dim over the live sample dashboard
+    // (App keeps the app tree mounted behind this overlay) so the user sees the
+    // tool before committing to setup. Every other screen is a full, opaque
+    // takeover — partial drafts must not render misleading projections behind it.
+    // z-[200] sits above the sticky header (z-50) and tooltips (z-[100]). Clicking
+    // the scrim does nothing (no dismiss handler) — the user must choose or Skip.
+    const isIntro = screen === 'intro';
+    const rootBg = isIntro
+        ? 'bg-slate-900/40'
+        : 'bg-gradient-to-br from-slate-50 to-slate-100';
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900 flex flex-col">
+        <div
+            ref={rootRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Retirement plan setup"
+            tabIndex={-1}
+            className={`fixed inset-0 z-[200] overflow-y-auto overscroll-contain outline-none ${rootBg} font-sans text-slate-900 flex flex-col`}
+        >
             <header className="w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
                     <div className="flex items-center gap-2.5">
@@ -185,7 +263,13 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
             </header>
 
             <main className="flex-1 w-full px-4 py-8 sm:py-12">
-                <div className="mx-auto max-w-2xl w-full">
+                <div
+                    className={`mx-auto max-w-2xl w-full ${
+                        isIntro
+                            ? 'bg-white/95 rounded-3xl shadow-2xl ring-1 ring-black/5 p-6 sm:p-8'
+                            : ''
+                    }`}
+                >
                     {showProgress && (
                         <div className="flex items-center justify-center gap-1.5 mb-6" aria-hidden="true">
                             {Array.from({ length: totalSteps }).map((_, i) => (
@@ -217,7 +301,7 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
                                 onClick={goNext}
                                 className="px-6 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors"
                             >
-                                {safeStepIndex >= lastContentIndex() ? 'Review' : 'Next'}
+                                {safeStepIndex >= lastContentIndex() ? 'Save' : 'Next'}
                             </button>
                         </div>
                     )}

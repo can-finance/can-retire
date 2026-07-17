@@ -123,7 +123,7 @@ function SpouseToggleField({ draft, onToggleSpouse }: { draft: SimulationInputs;
             />
             <p className="text-sm text-slate-500">
                 {draft.spouse
-                    ? "We've added a few extra steps for your spouse's details. Turn this off to remove them."
+                    ? "We've added a few extra steps later on for your spouse's details. Turn this off to remove them."
                     : 'Leave this off to plan for just yourself.'}
             </p>
         </div>
