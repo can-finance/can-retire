@@ -14,7 +14,8 @@ interface ScenarioManagerProps {
     onLoad: (scenario: SavedScenario) => void;
     onDelete: (id: string) => void;
     onCreateNew: () => void;
-
+    /** Re-launch the guided setup wizard. Rendered only when provided. */
+    onLaunchOnboarding?: () => void;
 }
 
 export function ScenarioManager({
@@ -26,7 +27,7 @@ export function ScenarioManager({
     onLoad,
     onDelete,
     onCreateNew,
-
+    onLaunchOnboarding,
 }: ScenarioManagerProps) {
     const [name, setName] = useState('');
     const activeName = activeScenarioId
@@ -109,6 +110,16 @@ export function ScenarioManager({
                         Share
                     </button>
                     </HelpTooltip>
+                    {onLaunchOnboarding && (
+                        <HelpTooltip text="Re-run the step-by-step setup. Your current numbers are pre-filled — nothing changes unless you finish.">
+                            <button
+                                onClick={onLaunchOnboarding}
+                                className="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                            >
+                                Guided setup
+                            </button>
+                        </HelpTooltip>
+                    )}
                     <button
                         onClick={onCreateNew}
                         className="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"

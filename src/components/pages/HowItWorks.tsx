@@ -196,7 +196,7 @@ export function HowItWorks() {
             </section>
 
             {/* Privacy Section */}
-            <section className="bg-emerald-50/50 rounded-3xl p-8 border border-emerald-100 space-y-4">
+            <section id="privacy" className="bg-emerald-50/50 rounded-3xl p-8 border border-emerald-100 space-y-4">
                 <h2 className="text-2xl font-bold text-emerald-900">
                     Privacy & Data Security
                 </h2>

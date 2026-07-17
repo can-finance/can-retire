@@ -2,8 +2,10 @@ import { FinancialInput } from '../inputs/FinancialInput';
 import { NonRegAccountsInput } from '../inputs/NonRegAccountsInput';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
+import { ValidationBanner } from '../ui/ValidationBanner';
 import type { Person, NonRegisteredAccount } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
+import { getValidationErrors } from '../../utils/personValidation';
 
 interface PersonSectionProps {
     title: string;
@@ -27,29 +29,6 @@ const PERSON_AVATAR: Record<string, { dot: string; accent: 'indigo' | 'cyan' | '
     indigo: { dot: '#6366f1', accent: 'indigo' },
     slate:  { dot: '#94a3b8', accent: 'slate' },
 };
-
-function getValidationErrors(person: Person): string[] {
-    const errors: string[] = [];
-
-    if (person.age < 18 || person.age > 99)
-        errors.push('Current age must be between 18 and 99');
-    if (person.retirementAge < person.age)
-        errors.push('Retirement age must be \u2265 current age');
-    if (person.lifeExpectancy <= person.age)
-        errors.push('Life expectancy must be > current age');
-    if (person.lifeExpectancy <= person.retirementAge)
-        errors.push('Life expectancy must be > retirement age');
-    if (person.cppStartAge < 60 || person.cppStartAge > 70)
-        errors.push('CPP start age must be between 60 and 70');
-    if (person.oasStartAge < 65 || person.oasStartAge > 70)
-        errors.push('OAS start age must be between 65 and 70');
-    if (person.cppContributedYears < 0 || person.cppContributedYears > 47)
-        errors.push('CPP years must be between 0 and 47');
-    if (person.rrspMeltStartAge && person.rrspMeltStartAge < person.age)
-        errors.push('RRSP melt start must be \u2265 current age');
-
-    return errors;
-}
 
 export function PersonSection({
     title,
@@ -101,18 +80,7 @@ export function PersonSection({
             headerExtra={removeButton}
         >
             <div className="space-y-4">
-                {validationErrors.length > 0 && (
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
-                        {validationErrors.map((error, i) => (
-                            <p key={i} className="text-xs text-amber-700 flex items-center gap-1">
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                </svg>
-                                {error}
-                            </p>
-                        ))}
-                    </div>
-                )}
+                <ValidationBanner errors={validationErrors} />
 
                 <div className="grid grid-cols-3 gap-2">
                     <FinancialInput label="Current Age" prefix="" value={person.age}

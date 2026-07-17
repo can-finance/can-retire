@@ -5,6 +5,32 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **First-time-user onboarding.** New visitors get an intro screen explaining the
+  tool, then choose between **Quick start** (~2 min — a handful of questions,
+  sensible defaults for the rest) and **Full setup** (~10 min — every option step
+  by step, defaults pre-filled, spouse toggle up front). Both paths end with a
+  closing screen explaining that data lives in the browser's local storage and how
+  share links work. The wizard edits a draft and commits exactly once on Finish —
+  Skip/Cancel changes nothing, untouched fields keep their saved values, and
+  Quick start merges into the existing plan rather than resetting it. Re-runnable
+  anytime from **Scenarios → Guided setup** (pre-filled with current numbers).
+  Share-link (`#start=`) visitors never see it; a share link opened mid-wizard
+  closes the wizard without committing and imports the shared scenario.
+
+### Changed
+- The Assumptions inputs were extracted into a reusable `AssumptionsFields`
+  component (shared by the dashboard and the wizard); the Monte Carlo toggle now
+  sits below the two strategy toggles.
+- The amber validation banner is now one shared component used by the dashboard
+  and both wizard paths, and the `retirement_sim_v2` storage key is defined in a
+  single module instead of four copies.
+- Filled in the missing `brand-200/300/400/800` Tailwind shades — completed
+  progress dots, wizard card accents, and two pre-existing hover styles
+  (dashboard "Add Spouse", CPP calculator) now render their intended colors.
+
 ## [0.4.0] - 2026-07-13
 
 ### Added

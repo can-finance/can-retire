@@ -15,6 +15,7 @@ import {
     LATEST_DATA_YEAR,
 } from '../../engine/cppDetailed';
 import { sanitizeSimulationInputs, INITIAL_INPUTS } from '../../utils/inputSanitizer';
+import { SIM_KEY } from '../../utils/onboarding';
 import type { SimulationInputs } from '../../engine/types';
 
 // ---------------------------------------------------------------------------
@@ -286,7 +287,7 @@ export function CppCalculator() {
     // --- apply to plan ---
     const savedPlan = useMemo((): SimulationInputs | null => {
         try {
-            const raw = window.localStorage.getItem('retirement_sim_v2');
+            const raw = window.localStorage.getItem(SIM_KEY);
             if (!raw) return null;
             return sanitizeSimulationInputs(JSON.parse(raw));
         } catch {
@@ -305,7 +306,7 @@ export function CppCalculator() {
             if (!plan.spouse) return;
             updated.spouse = { ...plan.spouse, cppAnnualOverride: annual, cppStartAge: startAge };
         }
-        window.localStorage.setItem('retirement_sim_v2', JSON.stringify(updated));
+        window.localStorage.setItem(SIM_KEY, JSON.stringify(updated));
         setAppliedTo(target === 'person' ? 'You' : 'Spouse');
     };
 

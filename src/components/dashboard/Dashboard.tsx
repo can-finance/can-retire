@@ -5,9 +5,9 @@ import { useScenarios } from '../../hooks/useScenarios';
 import type { SavedScenario } from '../../hooks/useScenarios';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
+import { AssumptionsFields } from '../inputs/AssumptionsFields';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { Toggle } from '../ui/Toggle';
-import { HelpTooltip } from '../ui/HelpTooltip';
 import { WealthChart } from '../charts/WealthChart';
 import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
@@ -16,13 +16,14 @@ import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { runSimulation, runMonteCarlo, blendedNonRegMix, totalNonRegBalance } from '../../engine/projection';
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
 import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
+import { SIM_KEY } from '../../utils/onboarding';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
 import { ScenarioManager } from './ScenarioManager';
 
-export function Dashboard() {
-    const [inputs, setInputs] = usePersistentState<SimulationInputs>('retirement_sim_v2', INITIAL_INPUTS, sanitizeSimulationInputs);
+export function Dashboard({ onLaunchOnboarding }: { onLaunchOnboarding?: () => void } = {}) {
+    const [inputs, setInputs] = usePersistentState<SimulationInputs>(SIM_KEY, INITIAL_INPUTS, sanitizeSimulationInputs);
     const { scenarios, saveScenario, updateScenario, deleteScenario } = useScenarios();
     const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
@@ -344,119 +345,12 @@ export function Dashboard() {
                     {/* Assumptions */}
                     <CollapsibleSection title="Assumptions" accent="slate" defaultOpen={false}>
                         <div className="space-y-4">
-                            <div className="flex flex-col gap-1.5">
-                                <HelpTooltip
-                                    text="Determines provincial income tax rates, brackets, surtaxes (e.g. Ontario Health Premium), and tax credits used in the simulation."
-                                    className="w-fit"
-                                >
-                                    <label className="text-sm font-medium text-slate-700 cursor-help border-b border-dashed border-slate-300 w-fit">
-                                        Province
-                                    </label>
-                                </HelpTooltip>
-                                <select
-                                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2"
-                                    value={inputs.province}
-                                    onChange={(e) => setInputs({ ...inputs, province: e.target.value })}
-                                >
-                                    <option value="AB">Alberta</option>
-                                    <option value="BC">British Columbia</option>
-                                    <option value="MB">Manitoba</option>
-                                    <option value="NB">New Brunswick</option>
-                                    <option value="NL">Newfoundland and Labrador</option>
-                                    <option value="NS">Nova Scotia</option>
-                                    <option value="NT">Northwest Territories</option>
-                                    <option value="NU">Nunavut</option>
-                                    <option value="ON">Ontario</option>
-                                    <option value="PE">Prince Edward Island</option>
-                                    <option value="QC">Quebec</option>
-                                    <option value="SK">Saskatchewan</option>
-                                    <option value="YT">Yukon</option>
-                                </select>
-                            </div>
+                            <AssumptionsFields
+                                inputs={inputs}
+                                onChange={(p) => setInputs({ ...inputs, ...p })}
+                            />
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <FinancialInput
-                                    label="Inflation Rate"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number((inputs.inflationRate * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({ ...inputs, inflationRate: Number(e.target.value) / 100 })}
-                                />
-                                <FinancialInput
-                                    label="RRSP Return"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number(((inputs.returnRates.rrspGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
-                                    })}
-                                    tooltip="Whole-account annual return on RRSP/RRIF balances (growth is tax-sheltered, so no yield/gains split is needed)."
-                                />
-                                <FinancialInput
-                                    label="TFSA Return"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number(((inputs.returnRates.tfsaGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
-                                    })}
-                                    tooltip="Whole-account annual return on TFSA balances (growth is tax-free, so no yield/gains split is needed)."
-                                />
-                                <FinancialInput
-                                    label="Non-Reg Growth"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number((inputs.returnRates.capitalGrowth * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
-                                    })}
-                                    tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
-                                />
-                                <FinancialInput
-                                    label="Cdn Dividend Yield"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number((inputs.returnRates.dividend * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        returnRates: { ...inputs.returnRates, dividend: Number(e.target.value) / 100 }
-                                    })}
-                                    tooltip="Yield on the Cdn Dividends slice of the non-registered mix. Eligible dividends: 38% gross-up plus dividend tax credit."
-                                />
-                                <FinancialInput
-                                    label="Foreign Yield"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number(((inputs.returnRates.foreignYield ?? inputs.returnRates.dividend) * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        returnRates: { ...inputs.returnRates, foreignYield: Number(e.target.value) / 100 }
-                                    })}
-                                    tooltip="Yield on the Foreign Dividends slice of the non-registered mix (e.g. US ETFs). Taxed as ordinary income."
-                                />
-                                <FinancialInput
-                                    label="Interest Rate"
-                                    prefix="%"
-                                    minFractionDigits={1}
-                                    maxFractionDigits={1}
-                                    value={Number((inputs.returnRates.interest * 100).toFixed(1))}
-                                    onChange={(e) => setInputs({
-                                        ...inputs,
-                                        returnRates: { ...inputs.returnRates, interest: Number(e.target.value) / 100 }
-                                    })}
-                                />
-                            </div>
-
-                            {/* Monte Carlo Toggle & Volatility */}
+                            {/* Monte Carlo Toggle & Volatility (view-only toggle — stays local) */}
                             <div className="space-y-3">
                                 <Toggle
                                     checked={isMonteCarlo}
@@ -484,19 +378,6 @@ export function Dashboard() {
                             </div>
 
                             <Toggle
-                                checked={inputs.useIncomeSplitting ?? true}
-                                onChange={(val) => setInputs({ ...inputs, useIncomeSplitting: val })}
-                                label="Pension Income Splitting"
-                            />
-
-                            <Toggle
-                                checked={inputs.withdrawalStrategy === 'rrsp-first'}
-                                onChange={(val) => setInputs({ ...inputs, withdrawalStrategy: val ? 'rrsp-first' : 'tax-efficient' })}
-                                label="Withdraw from RRSP First"
-                                tooltip="If off, withdrawals come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
-                            />
-
-                            <Toggle
                                 checked={isInflationAdjusted}
                                 onChange={setIsInflationAdjusted}
                                 label="Show Real Dollars (Inflation Adjusted)"
@@ -514,6 +395,7 @@ export function Dashboard() {
                         onLoad={loadScenario}
                         onDelete={deleteScenario}
                         onCreateNew={handleCreateNew}
+                        onLaunchOnboarding={onLaunchOnboarding}
                     />
                 </div>
 
