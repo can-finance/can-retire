@@ -4,6 +4,7 @@ import type { SimulationResult } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
 import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
+import type { LegendEntry } from './ChartLegend';
 import { ChartTooltip } from './ChartTooltip';
 import type { TooltipRow } from './ChartTooltip';
 
@@ -71,7 +72,7 @@ export const SurplusChart = React.memo(function SurplusChart({ data, inflationAd
                     <Legend
                         iconType="circle"
                         wrapperStyle={{ paddingTop: '20px' }}
-                        content={(props: any) => <ChartLegend payload={props.payload} dotSize="sm" />}
+                        content={(props) => <ChartLegend payload={props.payload as unknown as LegendEntry[]} dotSize="sm" />}
                     />
 
                     <Bar dataKey="TFSA"   name="To TFSA"    stackId="a" fill={CHART_COLORS.tfsa} />

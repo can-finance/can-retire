@@ -53,7 +53,7 @@ export function Dashboard() {
             // Clear the hash either way so a reload doesn't keep overwriting user edits
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }
-    }, []); // Run once on mount
+    }, [setInputs]); // Run once on mount — setInputs is a stable setter (see usePersistentState)
 
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
@@ -91,10 +91,7 @@ export function Dashboard() {
     const mcTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
-        if (!isMonteCarlo) {
-            setMonteCarloResults(null);
-            return;
-        }
+        if (!isMonteCarlo) return;
 
         // Clear any pending timer
         if (mcTimerRef.current) clearTimeout(mcTimerRef.current);
@@ -107,6 +104,11 @@ export function Dashboard() {
             if (mcTimerRef.current) clearTimeout(mcTimerRef.current);
         };
     }, [inputs, isMonteCarlo]);
+
+    // Results are cleared the moment MC is switched off (see the Toggle's
+    // onChange below) rather than in the effect above, so this is a plain
+    // mirror of that state — never stale while isMonteCarlo is false.
+    const displayedMonteCarloResults = isMonteCarlo ? monteCarloResults : null;
 
     const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object | undefined) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
@@ -260,6 +262,12 @@ export function Dashboard() {
             initialWithdrawalRate,
             totalShortfall
         };
+        // Deps intentionally list only the specific inputs.person fields this memo reads
+        // (retirementAge, rrsp.balance, tfsa.balance, nonRegisteredAccounts — the latter is
+        // all totalNonRegBalance() touches). Depending on the whole inputs.person object would
+        // recompute on unrelated field changes (e.g. birth year, CPP start age) that don't
+        // affect this result.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegisteredAccounts, inputs.spouse]);
 
     const globalMaxY = useMemo(() => {
@@ -274,7 +282,7 @@ export function Dashboard() {
 
     return (
         <div className="flex flex-col gap-6">
-            <SummaryHeader metrics={metrics} monteCarlo={monteCarloResults} />
+            <SummaryHeader metrics={metrics} monteCarlo={displayedMonteCarloResults} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Sidebar / Inputs */}
@@ -371,7 +379,10 @@ export function Dashboard() {
                         <div className="space-y-3">
                             <Toggle
                                 checked={isMonteCarlo}
-                                onChange={setIsMonteCarlo}
+                                onChange={(checked) => {
+                                    setIsMonteCarlo(checked);
+                                    if (!checked) setMonteCarloResults(null);
+                                }}
                                 label="Monte Carlo Simulation"
                                 badge={<span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>}
                             />
@@ -442,10 +453,10 @@ export function Dashboard() {
                         domainMax={globalMaxY}
                     />
 
-                    {isMonteCarlo && monteCarloResults && (
+                    {displayedMonteCarloResults && (
                         <MonteCarloChart
                             data={simulationResults}
-                            monteCarlo={monteCarloResults}
+                            monteCarlo={displayedMonteCarloResults}
                             inflationAdjusted={isInflationAdjusted}
                         />
                     )}

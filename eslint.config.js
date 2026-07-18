@@ -20,4 +20,12 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // MPA entry points (main.tsx and the *-standalone.tsx pages) are not
+    // hot-reloadable modules, so react-refresh's export-shape rule doesn't apply.
+    files: ['src/*-standalone.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

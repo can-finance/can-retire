@@ -4,6 +4,7 @@ import type { SimulationResult } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
 import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
+import type { LegendEntry } from './ChartLegend';
 import { ChartTooltip } from './ChartTooltip';
 import type { TooltipRow } from './ChartTooltip';
 
@@ -97,7 +98,7 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                     <Legend
                         iconType="circle"
                         wrapperStyle={{ paddingTop: '20px' }}
-                        content={(props: any) => <ChartLegend payload={props.payload} desiredOrder={LEGEND_ORDER} dotSize="sm" />}
+                        content={(props) => <ChartLegend payload={props.payload as unknown as LegendEntry[]} desiredOrder={LEGEND_ORDER} dotSize="sm" />}
                     />
 
                     <Line type="monotone" dataKey="TargetSpend" stroke="#0f172a" strokeWidth={2} dot={false} name="Target Spend" />

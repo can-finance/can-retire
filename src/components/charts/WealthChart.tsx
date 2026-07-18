@@ -4,6 +4,7 @@ import type { SimulationResult } from '../../engine/types';
 import { CHART_COLORS } from '../../constants/chartColors';
 import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
+import type { LegendEntry } from './ChartLegend';
 import { ChartTooltip } from './ChartTooltip';
 import type { TooltipRow } from './ChartTooltip';
 
@@ -110,7 +111,7 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
                     />
                     <Legend
                         iconType="circle"
-                        content={(props: any) => <ChartLegend payload={props.payload} desiredOrder={LEGEND_ORDER} />}
+                        content={(props) => <ChartLegend payload={props.payload as unknown as LegendEntry[]} desiredOrder={LEGEND_ORDER} />}
                     />
 
                     <Area type="monotone" dataKey="pRRSP"   name="RRSP/RRIF"         stackId="1" stroke={CHART_COLORS.rrsp}     fill="url(#colorRrsp)"     strokeWidth={2} />

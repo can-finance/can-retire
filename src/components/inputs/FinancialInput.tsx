@@ -48,9 +48,11 @@ export function FinancialInput({
         // This prevents cursor jumping when typing if we were to format on every keystroke
         const numericDisplay = parseFloat(displayValue.replace(/,/g, ''));
         if (numericDisplay !== value) {
+            // Intentionally re-syncs the formatted display when the value prop changes externally.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             setDisplayValue(formatNumber(value, minFractionDigits, maxFractionDigits));
         }
-    }, [value, minFractionDigits, maxFractionDigits]); // minimal dependency to avoid loop
+    }, [value, minFractionDigits, maxFractionDigits]); // eslint-disable-line react-hooks/exhaustive-deps -- displayValue deliberately omitted to avoid loop
 
     const handleFocus = (e: ReactFocusEvent<HTMLInputElement>) => {
         // On focus, strip commas for easy editing and select all text
