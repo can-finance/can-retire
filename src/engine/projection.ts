@@ -230,8 +230,9 @@ function simulatePersonBaseYear(
     const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
 
     // Calculate Base Tax
-    // Eligible pension income for pension credit: RRIF + voluntary RRSP melt
-    const eligiblePensionIncome = rrifWithdrawal + voluntaryRRSPWithdrawal;
+    // Eligible pension income for pension credit: RRIF only.
+    // The voluntary RRSP melt is an ordinary RRSP withdrawal and does NOT qualify.
+    const eligiblePensionIncome = rrifWithdrawal;
     const baseTaxable = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp + foreignDivIncome;
     // Turnover gains are taxed in the base year (so the deficit funds their tax) but
     // kept OUT of the returned taxableIncome — downstream withdrawal solvers add
@@ -656,13 +657,16 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number) => {
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
+            // Only RRIF withdrawals are qualifying pension income; the voluntary melt and
+            // extra RRSP draws are ordinary RRSP withdrawals — no pension credit, no splitting.
+            const eligiblePension = base.rrifWithdrawal;
             const taxableGains = calculateTaxableCapitalGains(realizedGains);
             const grossedUpDivs = base.divIncome * 1.38;
             const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + grossedUpDivs + base.foreignDivIncome + taxableGains;
 
             const oasRecovery = calculateOASClawback(finalTaxable, base.oasIncome, inflationFactor);
-            // Pass totalRRSP as eligible pension income, grossedUpDivs for dividend tax credit
-            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, totalRRSP, grossedUpDivs) + oasRecovery;
+            // Pass eligiblePension (RRIF only) as eligible pension income, grossedUpDivs for dividend tax credit
+            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, eligiblePension, grossedUpDivs) + oasRecovery;
 
             // Marginal attribution of investment tax by source: the extra tax each
             // source adds on top of all other income (tax with it minus tax without
@@ -671,7 +675,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             const taxWithout = (excludedTaxable: number, excludeDivCredit = false) => {
                 const taxable = finalTaxable - excludedTaxable;
                 const oas = calculateOASClawback(taxable, base.oasIncome, inflationFactor);
-                return calculateIncomeTax(taxable, province, inflationFactor, undefined, age, totalRRSP, excludeDivCredit ? 0 : grossedUpDivs) + oas;
+                return calculateIncomeTax(taxable, province, inflationFactor, undefined, age, eligiblePension, excludeDivCredit ? 0 : grossedUpDivs) + oas;
             };
             const capGainsTax = taxableGains > 0 ? Math.max(0, finalTax - taxWithout(taxableGains)) : 0;
             const dividendTax = grossedUpDivs > 0 ? finalTax - taxWithout(grossedUpDivs, true) : 0;
@@ -684,6 +688,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 finalTaxable,
                 finalTax,
                 totalRRSP,
+                eligiblePension,
                 taxableGains,
                 oasRecovery,
                 capGainsTax,
@@ -707,14 +712,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         if (inputs.useIncomeSplitting && pAlive && sAlive && pFinal && sFinal && pBase && sBase) {
             const pSplitInfo: SplitPerson = {
                 taxableIncome: pFinal.finalTaxable,
-                eligiblePensionIncome: pFinal.totalRRSP,
+                eligiblePensionIncome: pFinal.eligiblePension,
                 oasIncome: pBase.oasIncome,
                 grossedUpDividends: pBase.divIncome * 1.38,
                 age: pAge
             };
             const sSplitInfo: SplitPerson = {
                 taxableIncome: sFinal.finalTaxable,
-                eligiblePensionIncome: sFinal.totalRRSP,
+                eligiblePensionIncome: sFinal.eligiblePension,
                 oasIncome: sBase.oasIncome,
                 grossedUpDividends: sBase.divIncome * 1.38,
                 age: sAge!

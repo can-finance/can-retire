@@ -74,6 +74,13 @@ describe('calculateIncomeTax — golden values (2025, no age/pension/dividend cr
         expect(noPension - smallPension).toBeCloseTo(1_000 * 0.20, 1);
         expect(noPension - bigPension).toBeCloseTo(2_000 * 0.20, 1);
     });
+
+    it('gives no pension income credit under age 65', () => {
+        // RRIF/annuity income qualifies for the credit only from 65+.
+        const withPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 64, 50_000);
+        const noPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 64, 0);
+        expect(withPension).toBeCloseTo(noPension, 6);
+    });
 });
 
 describe('calculateOASClawback', () => {
@@ -114,6 +121,14 @@ describe('calculateOptimalSplit', () => {
         const result = calculateOptimalSplit(person(120_000, 100_000, 64), person(10_000, 0), 'ON', 1.0);
         expect(result.splitAmount).toBe(0);
         expect(result.taxSavings).toBe(0);
+    });
+
+    it('splits to an under-65 recipient without giving them the pension credit', () => {
+        // 66yo transferor benefits from splitting; the 60yo recipient gets the income
+        // but not the pension credit (age-gated at 65+). Code path must stay intact.
+        const result = calculateOptimalSplit(person(120_000, 100_000, 66), person(10_000, 0, 60), 'ON', 1.0);
+        expect(result.splitAmount).toBeGreaterThan(0);
+        expect(result.taxSavings).toBeGreaterThan(0);
     });
 
     it('never reports savings when incomes are already equal', () => {

@@ -134,7 +134,7 @@ export function calculateIncomeTax(
     inflationFactor: number = 1.0,
     taxRates: TaxRates = TAX_CONSTANTS,
     age: number = 0,
-    eligiblePensionIncome: number = 0, // RRIF, company pension, annuity income
+    eligiblePensionIncome: number = 0, // qualifying pension income (RRIF withdrawals; credit applies at 65+)
     grossedUpDividends: number = 0 // Dividend income after 38% gross-up
 ): number {
     const fedTax = calculateTieredTax(taxableIncome, taxRates.federalBrackets, inflationFactor);
@@ -150,9 +150,12 @@ export function calculateIncomeTax(
     let totalTax = (fedTax - fedCredits) + (provTax - provCredits);
 
     // --- Pension Income Credit (Federal non-refundable) ---
-    // Only applies to eligible pension income: RRIF, company pension, annuity
-    // NOT employment income, CPP, OAS, or investment income
-    if (eligiblePensionIncome > 0) {
+    // Only applies to qualifying pension income the caller passes in (in this engine: RRIF withdrawals).
+    // NOT ordinary RRSP withdrawals, employment income, CPP, OAS, or investment income.
+    // Gated on age >= 65: RRIF/annuity income qualifies only at 65+. This also correctly denies
+    // the credit to an under-65 spouse receiving split RRIF income via calculateOptimalSplit
+    // (which passes the recipient's own age).
+    if (eligiblePensionIncome > 0 && age >= 65) {
         const maxPensionCredit = 2000 * inflationFactor;
         const eligibleAmount = Math.min(eligiblePensionIncome, maxPensionCredit);
         // Federal: 15% of eligible amount
@@ -268,7 +271,8 @@ export function calculateOASClawback(
 /**
  * Calculate optimal pension income split between two spouses.
  * Under Canadian tax law, up to 50% of eligible pension income can be split to a spouse.
- * Eligible income: RRIF withdrawals, company pension, annuities (NOT CPP/OAS/employment)
+ * Eligible income: RRIF withdrawals, company pension, annuities (NOT CPP/OAS/employment,
+ * and NOT ordinary RRSP withdrawals).
  * Requirement: Transferor must be 65+ years old.
  */
 export interface SplitPerson {
