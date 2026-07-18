@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Bonds/Cash split.** The single "Interest" concept is now two: the
+  non-registered asset mix has separate **Bonds** and **Cash** slices, and the
+  return assumptions have **Bonds Total Return** (default 3.5%) and **Cash
+  Interest** (default 2%). Both are taxed as ordinary income; Monte Carlo leaves
+  them deterministic. Existing saved plans, share links, and scenarios migrate
+  automatically (legacy interest → Cash, Bonds at 0%) with identical results.
+
+### Changed
+- **Assumptions box split into three.** The sidebar's Assumptions section is now
+  **Settings** (province, inflation, pension splitting, RRSP-first, real
+  dollars), **Returns** (per-account return rates, each field accented with its
+  account's chart colour), and **Monte Carlo** (toggle + volatility).
+
 ### Security
 - Updated build/dev tooling (Vite, Rollup, Babel, PostCSS, ESLint dependencies)
   to resolve all 11 npm audit advisories (5 high, 5 moderate, 1 low). No runtime

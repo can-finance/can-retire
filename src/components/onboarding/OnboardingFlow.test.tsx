@@ -124,7 +124,7 @@ describe('OnboardingFlow', () => {
                 ],
             },
             oneTimeExpenses: [{ id: 'e1', name: 'Reno', amount: 30000, age: 60, type: 'expense' }],
-            returnRates: { ...INITIAL_INPUTS.returnRates, interest: 0.033 },
+            returnRates: { ...INITIAL_INPUTS.returnRates, cashInterest: 0.033 },
         };
         const seed = sanitizeSimulationInputs(richSeedRaw)!;
 

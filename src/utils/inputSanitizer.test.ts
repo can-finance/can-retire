@@ -56,20 +56,41 @@ describe('sanitizeSimulationInputs', () => {
 
     it('scales down an asset mix that sums above 100%', () => {
         const result = sanitizeSimulationInputs({
-            person: { nonRegistered: { assetMix: { interest: 2, dividend: 2, capitalGain: 2 } } }
+            person: { nonRegistered: { assetMix: { cash: 2, bonds: 2, dividend: 2, capitalGain: 2 } } }
         })!;
         const mix = result.person.nonRegisteredAccounts[0].assetMix;
-        // Each clamped to 1, then normalized: 1/3 each
-        expect(mix.interest + mix.dividend + mix.capitalGain).toBeCloseTo(1, 10);
-        expect(mix.interest).toBeCloseTo(1 / 3, 10);
+        // Each clamped to 1, then normalized: 1/4 each
+        expect(mix.cash + mix.bonds + mix.dividend + mix.capitalGain).toBeCloseTo(1, 10);
+        expect(mix.cash).toBeCloseTo(1 / 4, 10);
+    });
+
+    it('normalizes across all 5 mix fields when they sum above 100%', () => {
+        const result = sanitizeSimulationInputs({
+            person: { nonRegistered: { assetMix: { cash: 1, bonds: 1, dividend: 1, foreignDividend: 1, capitalGain: 1 } } }
+        })!;
+        const mix = result.person.nonRegisteredAccounts[0].assetMix;
+        expect(mix.cash).toBeCloseTo(0.2, 10);
+        expect(mix.bonds).toBeCloseTo(0.2, 10);
+        expect(mix.dividend).toBeCloseTo(0.2, 10);
+        expect(mix.foreignDividend).toBeCloseTo(0.2, 10);
+        expect(mix.capitalGain).toBeCloseTo(0.2, 10);
     });
 
     it('allows an asset mix that sums below 100% (uninvested remainder)', () => {
         const result = sanitizeSimulationInputs({
-            person: { nonRegistered: { assetMix: { interest: 0.1, dividend: 0.1, capitalGain: 0.3 } } }
+            person: { nonRegistered: { assetMix: { cash: 0.1, bonds: 0, dividend: 0.1, capitalGain: 0.3 } } }
         })!;
         const mix = result.person.nonRegisteredAccounts[0].assetMix;
-        expect(mix.interest + mix.dividend + mix.capitalGain).toBeCloseTo(0.5, 10);
+        expect(mix.cash + mix.bonds + mix.dividend + mix.capitalGain).toBeCloseTo(0.5, 10);
+    });
+
+    it('passes a new-format bonds/cash mix through unchanged', () => {
+        const result = sanitizeSimulationInputs({
+            person: { nonRegistered: { assetMix: { bonds: 0.2, cash: 0.1, dividend: 0.3, foreignDividend: 0, capitalGain: 0.4 } } }
+        })!;
+        expect(result.person.nonRegisteredAccounts[0].assetMix).toEqual({
+            bonds: 0.2, cash: 0.1, dividend: 0.3, foreignDividend: 0, capitalGain: 0.4
+        });
     });
 
     describe('legacy single-account migration', () => {
@@ -94,6 +115,19 @@ describe('sanitizeSimulationInputs', () => {
                 receivesSurplus: true
             });
             expect(accounts[0].id).toBeTruthy();
+            // Legacy `interest` slice migrates to Cash; Bonds start at 0
+            expect(accounts[0].assetMix).toEqual({
+                bonds: 0, cash: 0.2, dividend: 0.2, foreignDividend: 0, capitalGain: 0.6
+            });
+        });
+
+        it('migrates a legacy returnRates.interest to cashInterest with the default bondReturn', () => {
+            const result = sanitizeSimulationInputs({
+                person: {},
+                returnRates: { interest: 0.04, dividend: 0.03, capitalGrowth: 0.05 }
+            })!;
+            expect(result.returnRates.cashInterest).toBe(0.04);
+            expect(result.returnRates.bondReturn).toBe(INITIAL_INPUTS.returnRates.bondReturn);
         });
 
         it('folds the legacy global rebalance flag into the migrated account', () => {
@@ -114,7 +148,7 @@ describe('sanitizeSimulationInputs', () => {
                 }
             })!;
             const spouseAcct = result.spouse!.nonRegisteredAccounts[0];
-            expect(spouseAcct.assetMix).toEqual({ interest: 0.5, dividend: 0.5, foreignDividend: 0, capitalGain: 0 });
+            expect(spouseAcct.assetMix).toEqual({ bonds: 0, cash: 0.5, dividend: 0.5, foreignDividend: 0, capitalGain: 0 });
             expect(spouseAcct.equityTurnoverRate).toBe(0.1);
             expect(spouseAcct.balance).toBe(75_000); // balance is the spouse's own
         });
@@ -125,8 +159,8 @@ describe('sanitizeSimulationInputs', () => {
             const result = sanitizeSimulationInputs({
                 person: {
                     nonRegisteredAccounts: [
-                        { id: 'a', name: 'GIC Ladder', balance: 50_000, adjustedCostBase: 50_000, assetMix: { interest: 1, dividend: 0, capitalGain: 0 }, rebalanceAnnually: true },
-                        { id: 'b', name: 'Growth ETF', balance: 250_000, adjustedCostBase: 90_000, assetMix: { interest: 0, dividend: 0, capitalGain: 1 }, rebalanceAnnually: false, receivesSurplus: true }
+                        { id: 'a', name: 'GIC Ladder', balance: 50_000, adjustedCostBase: 50_000, assetMix: { bonds: 0, cash: 1, dividend: 0, capitalGain: 0 }, rebalanceAnnually: true },
+                        { id: 'b', name: 'Growth ETF', balance: 250_000, adjustedCostBase: 90_000, assetMix: { bonds: 0, cash: 0, dividend: 0, capitalGain: 1 }, rebalanceAnnually: false, receivesSurplus: true }
                     ]
                 }
             })!;
@@ -182,7 +216,7 @@ describe('sanitizeSimulationInputs', () => {
             const result = sanitizeSimulationInputs({
                 person: {
                     nonRegisteredAccounts: [
-                        { balance: 100_000, assetMix: { interest: 1, dividend: 0, capitalGain: 0 } }
+                        { balance: 100_000, assetMix: { bonds: 0, cash: 1, dividend: 0, capitalGain: 0 } }
                     ]
                 },
                 spouse: {
@@ -193,7 +227,7 @@ describe('sanitizeSimulationInputs', () => {
             // the person's first account must not clobber the spouse's mix
             const spouseAcct = result.spouse!.nonRegisteredAccounts[0];
             expect(spouseAcct.assetMix.capitalGain).toBe(1);
-            expect(spouseAcct.assetMix.interest).toBe(0);
+            expect(spouseAcct.assetMix.cash).toBe(0);
         });
 
         it('enforces exactly one surplus target (first flagged wins, defaults to first)', () => {

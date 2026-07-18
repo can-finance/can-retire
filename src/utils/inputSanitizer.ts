@@ -9,7 +9,7 @@ export const createNonRegAccount = (overrides: Partial<NonRegisteredAccount> = {
     name: 'Non-Registered',
     balance: 0,
     adjustedCostBase: 0,
-    assetMix: { interest: 0.1, dividend: 0.3, foreignDividend: 0, capitalGain: 0.6 },
+    assetMix: { cash: 0.1, bonds: 0, dividend: 0.3, foreignDividend: 0, capitalGain: 0.6 },
     equityTurnoverRate: 0.02,
     rebalanceAnnually: true,
     receivesSurplus: false,
@@ -52,7 +52,8 @@ export const INITIAL_INPUTS: SimulationInputs = {
     withdrawalStrategy: 'rrsp-first',
     useIncomeSplitting: true,
     returnRates: {
-        interest: 0.02,
+        bondReturn: 0.035,
+        cashInterest: 0.02,
         dividend: 0.03,
         foreignYield: 0.02,
         capitalGrowth: 0.05,
@@ -80,14 +81,22 @@ function sanitizeNonRegAccount(raw: unknown, defaults: NonRegisteredAccount, ind
     const mix = isObject(a.assetMix) ? a.assetMix : {};
     const defMix = defaults.assetMix;
 
+    // Legacy payloads had a single `interest` slice — migrate it to Cash (bonds
+    // start at 0) so pre-split results are unchanged
+    const isLegacyMix = !('bonds' in mix) && !('cash' in mix);
+
     // Clamp each share to [0,1]; scale down proportionally if they sum above 100%
-    let mixInterest = clamp01(num(mix.interest, defMix.interest));
+    let mixBonds = isLegacyMix ? 0 : clamp01(num(mix.bonds, defMix.bonds));
+    let mixCash = isLegacyMix
+        ? clamp01(num(mix.interest, defMix.cash))
+        : clamp01(num(mix.cash, defMix.cash));
     let mixDividend = clamp01(num(mix.dividend, defMix.dividend));
     let mixForeignDividend = clamp01(num(mix.foreignDividend, defMix.foreignDividend ?? 0));
     let mixCapitalGain = clamp01(num(mix.capitalGain, defMix.capitalGain));
-    const mixSum = mixInterest + mixDividend + mixForeignDividend + mixCapitalGain;
+    const mixSum = mixBonds + mixCash + mixDividend + mixForeignDividend + mixCapitalGain;
     if (mixSum > 1) {
-        mixInterest /= mixSum;
+        mixBonds /= mixSum;
+        mixCash /= mixSum;
         mixDividend /= mixSum;
         mixForeignDividend /= mixSum;
         mixCapitalGain /= mixSum;
@@ -102,7 +111,8 @@ function sanitizeNonRegAccount(raw: unknown, defaults: NonRegisteredAccount, ind
         balance: num(a.balance, defaults.balance),
         adjustedCostBase: num(a.adjustedCostBase, defaults.adjustedCostBase),
         assetMix: {
-            interest: mixInterest,
+            bonds: mixBonds,
+            cash: mixCash,
             dividend: mixDividend,
             foreignDividend: mixForeignDividend,
             capitalGain: mixCapitalGain
@@ -238,7 +248,9 @@ export function sanitizeSimulationInputs(raw: unknown): SimulationInputs | null 
             : INITIAL_INPUTS.useIncomeSplitting,
         withdrawalStrategy: raw.withdrawalStrategy === 'tax-efficient' ? 'tax-efficient' : 'rrsp-first',
         returnRates: {
-            interest: num(rates.interest, defRates.interest),
+            bondReturn: num(rates.bondReturn, defRates.bondReturn),
+            // Legacy payloads had a single `interest` rate — it becomes the cash rate
+            cashInterest: num(rates.cashInterest, num(rates.interest, defRates.cashInterest)),
             dividend: num(rates.dividend, defRates.dividend),
             // Payloads predating this field keep their old behavior (foreign = dividend yield)
             foreignYield: num(rates.foreignYield, num(rates.dividend, defRates.foreignYield!)),

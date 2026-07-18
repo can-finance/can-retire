@@ -3,7 +3,8 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 import { Toggle } from '../ui/Toggle';
 
 interface Mix {
-    interest: number;
+    bonds: number;
+    cash: number;
     dividend: number;
     foreignDividend?: number;
     capitalGain: number;
@@ -18,7 +19,7 @@ interface AssetMixInputProps {
     onRebalanceChange: (rebalance: boolean) => void;
 }
 
-const MIX_FIELDS = ['interest', 'dividend', 'foreignDividend', 'capitalGain'] as const;
+const MIX_FIELDS = ['cash', 'bonds', 'dividend', 'foreignDividend', 'capitalGain'] as const;
 type MixField = typeof MIX_FIELDS[number];
 
 export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChange, onTurnoverChange, onRebalanceChange }: AssetMixInputProps) {
@@ -46,12 +47,12 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
         <div className="rounded-lg bg-slate-50 p-3 border border-slate-200 space-y-3">
             <div className="grid grid-cols-2 gap-2">
                 <FinancialInput
-                    label="Interest"
-                    value={Math.round(share('interest') * 100)}
-                    onChange={(e) => handleChange('interest', Number(e.target.value))}
+                    label="Equity (Growth)"
+                    value={Math.round(share('capitalGain') * 100)}
+                    onChange={(e) => handleChange('capitalGain', Number(e.target.value))}
                     prefix="%"
                     min={0}
-                    max={headroom('interest')}
+                    max={headroom('capitalGain')}
                 />
                 <FinancialInput
                     label="Cdn Dividends"
@@ -70,12 +71,20 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                     max={headroom('foreignDividend')}
                 />
                 <FinancialInput
-                    label="Equity (Growth)"
-                    value={Math.round(share('capitalGain') * 100)}
-                    onChange={(e) => handleChange('capitalGain', Number(e.target.value))}
+                    label="Bonds"
+                    value={Math.round(share('bonds') * 100)}
+                    onChange={(e) => handleChange('bonds', Number(e.target.value))}
                     prefix="%"
                     min={0}
-                    max={headroom('capitalGain')}
+                    max={headroom('bonds')}
+                />
+                <FinancialInput
+                    label="Cash"
+                    value={Math.round(share('cash') * 100)}
+                    onChange={(e) => handleChange('cash', Number(e.target.value))}
+                    prefix="%"
+                    min={0}
+                    max={headroom('cash')}
                 />
             </div>
             <div className="flex justify-between items-center text-xs">

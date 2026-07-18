@@ -2,14 +2,20 @@ import { FinancialInput } from './FinancialInput';
 import { Toggle } from '../ui/Toggle';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { PROVINCES } from '../../constants/provinces';
+import { CHART_COLORS } from '../../constants/chartColors';
 import type { SimulationInputs } from '../../engine/types';
 
 /**
  * The persisted assumptions inputs (province, inflation, return rates, and the
  * two strategy toggles), extracted from Dashboard so the onboarding wizard can
  * reuse them. View-only toggles (Monte Carlo, Real Dollars) stay in Dashboard.
+ *
+ * Split into SettingsFields (province/inflation/strategy toggles) and
+ * ReturnsFields (the per-account return-rate grid) so Dashboard can render them
+ * in separate boxes; AssumptionsFields is a thin wrapper of both for the
+ * onboarding wizard, which still wants them together as one step.
  */
-export function AssumptionsFields({ inputs, onChange }: {
+export function SettingsFields({ inputs, onChange }: {
     inputs: SimulationInputs;
     onChange: (partial: Partial<SimulationInputs>) => void;
 }) {
@@ -35,81 +41,14 @@ export function AssumptionsFields({ inputs, onChange }: {
                 </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-                <FinancialInput
-                    label="Inflation Rate"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number((inputs.inflationRate * 100).toFixed(1))}
-                    onChange={(e) => onChange({ inflationRate: Number(e.target.value) / 100 })}
-                />
-                <FinancialInput
-                    label="RRSP Return"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number(((inputs.returnRates.rrspGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
-                    onChange={(e) => onChange({
-                        returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
-                    })}
-                    tooltip="Whole-account annual return on RRSP/RRIF balances (growth is tax-sheltered, so no yield/gains split is needed)."
-                />
-                <FinancialInput
-                    label="TFSA Return"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number(((inputs.returnRates.tfsaGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
-                    onChange={(e) => onChange({
-                        returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
-                    })}
-                    tooltip="Whole-account annual return on TFSA balances (growth is tax-free, so no yield/gains split is needed)."
-                />
-                <FinancialInput
-                    label="Non-Reg Growth"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number((inputs.returnRates.capitalGrowth * 100).toFixed(1))}
-                    onChange={(e) => onChange({
-                        returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
-                    })}
-                    tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
-                />
-                <FinancialInput
-                    label="Cdn Dividend Yield"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number((inputs.returnRates.dividend * 100).toFixed(1))}
-                    onChange={(e) => onChange({
-                        returnRates: { ...inputs.returnRates, dividend: Number(e.target.value) / 100 }
-                    })}
-                    tooltip="Yield on the Cdn Dividends slice of the non-registered mix. Eligible dividends: 38% gross-up plus dividend tax credit."
-                />
-                <FinancialInput
-                    label="Foreign Yield"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number(((inputs.returnRates.foreignYield ?? inputs.returnRates.dividend) * 100).toFixed(1))}
-                    onChange={(e) => onChange({
-                        returnRates: { ...inputs.returnRates, foreignYield: Number(e.target.value) / 100 }
-                    })}
-                    tooltip="Yield on the Foreign Dividends slice of the non-registered mix (e.g. US ETFs). Taxed as ordinary income."
-                />
-                <FinancialInput
-                    label="Interest Rate"
-                    prefix="%"
-                    minFractionDigits={1}
-                    maxFractionDigits={1}
-                    value={Number((inputs.returnRates.interest * 100).toFixed(1))}
-                    onChange={(e) => onChange({
-                        returnRates: { ...inputs.returnRates, interest: Number(e.target.value) / 100 }
-                    })}
-                />
-            </div>
+            <FinancialInput
+                label="Inflation Rate"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                value={Number((inputs.inflationRate * 100).toFixed(1))}
+                onChange={(e) => onChange({ inflationRate: Number(e.target.value) / 100 })}
+            />
 
             <Toggle
                 checked={inputs.useIncomeSplitting ?? true}
@@ -123,6 +62,112 @@ export function AssumptionsFields({ inputs, onChange }: {
                 label="Withdraw from RRSP First"
                 tooltip="If off, withdrawals come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
             />
+        </>
+    );
+}
+
+export function ReturnsFields({ inputs, onChange }: {
+    inputs: SimulationInputs;
+    onChange: (partial: Partial<SimulationInputs>) => void;
+}) {
+    return (
+        <div className="grid grid-cols-2 gap-4">
+            <FinancialInput
+                label="RRSP Return"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.rrsp}
+                value={Number(((inputs.returnRates.rrspGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
+                })}
+                tooltip="Whole-account annual return on RRSP/RRIF balances (growth is tax-sheltered, so no yield/gains split is needed)."
+            />
+            <FinancialInput
+                label="TFSA Return"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.tfsa}
+                value={Number(((inputs.returnRates.tfsaGrowth ?? inputs.returnRates.capitalGrowth) * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
+                })}
+                tooltip="Whole-account annual return on TFSA balances (growth is tax-free, so no yield/gains split is needed)."
+            />
+            <FinancialInput
+                label="Non-Reg Growth"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.nonReg}
+                value={Number((inputs.returnRates.capitalGrowth * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
+                })}
+                tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
+            />
+            <FinancialInput
+                label="Cdn Dividend Yield"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.nonReg}
+                value={Number((inputs.returnRates.dividend * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, dividend: Number(e.target.value) / 100 }
+                })}
+                tooltip="Yield on the Cdn Dividends slice of the non-registered mix. Eligible dividends: 38% gross-up plus dividend tax credit."
+            />
+            <FinancialInput
+                label="Foreign Yield"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.nonReg}
+                value={Number(((inputs.returnRates.foreignYield ?? inputs.returnRates.dividend) * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, foreignYield: Number(e.target.value) / 100 }
+                })}
+                tooltip="Yield on the Foreign Dividends slice of the non-registered mix (e.g. US ETFs). Taxed as ordinary income."
+            />
+            <FinancialInput
+                label="Bonds Total Return"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.nonReg}
+                value={Number((inputs.returnRates.bondReturn * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, bondReturn: Number(e.target.value) / 100 }
+                })}
+                tooltip="Total annual return on the Bonds slice of the non-registered mix; taxed as ordinary income."
+            />
+            <FinancialInput
+                label="Cash Interest"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.nonReg}
+                value={Number((inputs.returnRates.cashInterest * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, cashInterest: Number(e.target.value) / 100 }
+                })}
+                tooltip="Interest on the Cash slice (HISA/GICs); taxed as ordinary income."
+            />
+        </div>
+    );
+}
+
+export function AssumptionsFields({ inputs, onChange }: {
+    inputs: SimulationInputs;
+    onChange: (partial: Partial<SimulationInputs>) => void;
+}) {
+    return (
+        <>
+            <SettingsFields inputs={inputs} onChange={onChange} />
+            <ReturnsFields inputs={inputs} onChange={onChange} />
         </>
     );
 }

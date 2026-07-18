@@ -5,7 +5,7 @@ import { useScenarios } from '../../hooks/useScenarios';
 import type { SavedScenario } from '../../hooks/useScenarios';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
-import { AssumptionsFields } from '../inputs/AssumptionsFields';
+import { SettingsFields, ReturnsFields } from '../inputs/AssumptionsFields';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { Toggle } from '../ui/Toggle';
 import { WealthChart } from '../charts/WealthChart';
@@ -342,46 +342,56 @@ export function Dashboard() {
                         </div>
                     </CollapsibleSection>
 
-                    {/* Assumptions */}
-                    <CollapsibleSection title="Assumptions" accent="slate" defaultOpen={false}>
+                    {/* Settings */}
+                    <CollapsibleSection title="Settings" accent="slate" defaultOpen={false}>
                         <div className="space-y-4">
-                            <AssumptionsFields
+                            <SettingsFields
                                 inputs={inputs}
                                 onChange={(p) => setInputs({ ...inputs, ...p })}
                             />
-
-                            {/* Monte Carlo Toggle & Volatility (view-only toggle — stays local) */}
-                            <div className="space-y-3">
-                                <Toggle
-                                    checked={isMonteCarlo}
-                                    onChange={setIsMonteCarlo}
-                                    label="Monte Carlo Simulation"
-                                    badge={<span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>}
-                                />
-
-                                {isMonteCarlo && (
-                                    <div className="bg-indigo-50/50 p-3 rounded-lg space-y-2 border border-indigo-100">
-                                        <FinancialInput
-                                            label="Volatility (Risk)"
-                                            prefix="%"
-                                            minFractionDigits={1}
-                                            maxFractionDigits={1}
-                                            value={Number(((inputs.returnRates.volatility || 0.10) * 100).toFixed(1))}
-                                            onChange={(e) => setInputs({
-                                                ...inputs,
-                                                returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
-                                            })}
-                                            tooltip="Standard deviation of annual returns (e.g. 10% for equities)."
-                                        />
-                                    </div>
-                                )}
-                            </div>
 
                             <Toggle
                                 checked={isInflationAdjusted}
                                 onChange={setIsInflationAdjusted}
                                 label="Show Real Dollars (Inflation Adjusted)"
                             />
+                        </div>
+                    </CollapsibleSection>
+
+                    {/* Returns */}
+                    <CollapsibleSection title="Returns" accent="violet" defaultOpen={false}>
+                        <ReturnsFields
+                            inputs={inputs}
+                            onChange={(p) => setInputs({ ...inputs, ...p })}
+                        />
+                    </CollapsibleSection>
+
+                    {/* Monte Carlo */}
+                    <CollapsibleSection title="Monte Carlo" accent="indigo" defaultOpen={false}>
+                        <div className="space-y-3">
+                            <Toggle
+                                checked={isMonteCarlo}
+                                onChange={setIsMonteCarlo}
+                                label="Monte Carlo Simulation"
+                                badge={<span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>}
+                            />
+
+                            {isMonteCarlo && (
+                                <div className="bg-indigo-50/50 p-3 rounded-lg space-y-2 border border-indigo-100">
+                                    <FinancialInput
+                                        label="Volatility (Risk)"
+                                        prefix="%"
+                                        minFractionDigits={1}
+                                        maxFractionDigits={1}
+                                        value={Number(((inputs.returnRates.volatility || 0.10) * 100).toFixed(1))}
+                                        onChange={(e) => setInputs({
+                                            ...inputs,
+                                            returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
+                                        })}
+                                        tooltip="Standard deviation of annual returns (e.g. 10% for equities)."
+                                    />
+                                </div>
+                            )}
                         </div>
                     </CollapsibleSection>
 

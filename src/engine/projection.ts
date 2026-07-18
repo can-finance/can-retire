@@ -38,16 +38,18 @@ export function blendedNonRegMix(accounts: NonRegisteredAccount[]): NonRegMix | 
     const total = accounts.reduce((sum, a) => sum + a.balance, 0);
     if (total <= 0) {
         return {
-            interest: first.assetMix.interest,
+            bonds: first.assetMix.bonds,
+            cash: first.assetMix.cash,
             dividend: first.assetMix.dividend,
             foreignDividend: first.assetMix.foreignDividend ?? 0,
             capitalGain: first.assetMix.capitalGain
         };
     }
-    const mix = { interest: 0, dividend: 0, foreignDividend: 0, capitalGain: 0 };
+    const mix = { bonds: 0, cash: 0, dividend: 0, foreignDividend: 0, capitalGain: 0 };
     for (const a of accounts) {
         const w = a.balance / total;
-        mix.interest += w * a.assetMix.interest;
+        mix.bonds += w * a.assetMix.bonds;
+        mix.cash += w * a.assetMix.cash;
         mix.dividend += w * a.assetMix.dividend;
         mix.foreignDividend += w * (a.assetMix.foreignDividend || 0);
         mix.capitalGain += w * a.assetMix.capitalGain;
@@ -164,7 +166,7 @@ function simulatePersonBaseYear(
     person: Person,
     age: number,
     province: string,
-    returnRates: { interest: number; dividend: number; foreignYield?: number; capitalGrowth: number },
+    returnRates: { bondReturn: number; cashInterest: number; dividend: number; foreignYield?: number; capitalGrowth: number },
     inflationFactor: number
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
@@ -206,7 +208,7 @@ function simulatePersonBaseYear(
     let turnoverRealizedGains = 0;
     for (const acct of person.nonRegisteredAccounts) {
         const mix = acct.assetMix;
-        interestIncome += acct.balance * mix.interest * returnRates.interest;
+        interestIncome += acct.balance * (mix.bonds * returnRates.bondReturn + mix.cash * returnRates.cashInterest);
         divIncome += acct.balance * mix.dividend * returnRates.dividend;
         // Foreign dividends: fully taxable at marginal rates, no gross-up or dividend
         // tax credit. (The ~15% foreign withholding is creditable against Canadian tax,
@@ -749,7 +751,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             acct.balance *= factor;
             if (acct.rebalanceAnnually === false && factor > 0) {
                 w.capitalGain = (w.capitalGain * (1 + g)) / factor;
-                w.interest /= factor;
+                w.bonds /= factor;
+                w.cash /= factor;
                 w.dividend /= factor;
                 w.foreignDividend = (w.foreignDividend || 0) / factor;
             }

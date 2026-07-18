@@ -43,7 +43,8 @@ export interface NonRegisteredAccount extends AssetAccount {
     name: string;
     adjustedCostBase: number; // For accurate capital gains calculation
     assetMix: {
-        interest: number; // 0-1
+        bonds: number; // 0-1
+        cash: number; // 0-1
         dividend: number; // 0-1: Canadian eligible dividends (gross-up + dividend tax credit)
         foreignDividend?: number; // 0-1: foreign dividends, fully taxable as ordinary income
         capitalGain: number; // 0-1
@@ -62,7 +63,8 @@ export interface NonRegisteredAccount extends AssetAccount {
 
 // Balance-weighted asset-class weights across a set of non-registered accounts
 export interface NonRegMix {
-    interest: number;
+    bonds: number;
+    cash: number;
     dividend: number;
     foreignDividend: number;
     capitalGain: number;
@@ -103,7 +105,7 @@ export interface SimulationResult {
     // tax credit can shelter other income at low incomes.
     capGainsTaxPaid: number;
     dividendTaxPaid: number;
-    interestTaxPaid: number; // Interest + foreign dividends (both ordinary income)
+    interestTaxPaid: number; // Bonds + cash interest + foreign dividends (all ordinary income)
     accounts: {
         rrsp: number;
         tfsa: number;
@@ -202,7 +204,8 @@ export interface SimulationInputs {
     useIncomeSplitting?: boolean;
     withdrawalStrategy?: 'tax-efficient' | 'rrsp-first';
     returnRates: {
-        interest: number;
+        bondReturn: number;
+        cashInterest: number;
         dividend: number;
         foreignYield?: number; // Yield on the foreign-dividend slice; falls back to `dividend`
         capitalGrowth: number; // Non-registered Equity (Growth) slice appreciation

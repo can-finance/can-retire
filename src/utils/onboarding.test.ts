@@ -306,7 +306,7 @@ describe('mergeSimpleAnswers', () => {
                 ],
             },
             oneTimeExpenses: [{ id: 'e1', name: 'Reno', amount: 30000, age: 60, type: 'expense' }],
-            returnRates: { ...INITIAL_INPUTS.returnRates, capitalGrowth: 0.06, interest: 0.03 },
+            returnRates: { ...INITIAL_INPUTS.returnRates, capitalGrowth: 0.06, cashInterest: 0.03 },
         };
         // Derive the answers from the seed, change nothing, merge back.
         const out = mergeSimpleAnswers(seed, seedToSimpleAnswers(seed));

@@ -48,7 +48,8 @@ function mixSummary(a: NonRegisteredAccount): string {
     if (a.assetMix.capitalGain > 0) parts.push(`${pct(a.assetMix.capitalGain)}% eq`);
     if (a.assetMix.dividend > 0) parts.push(`${pct(a.assetMix.dividend)}% div`);
     if ((a.assetMix.foreignDividend || 0) > 0) parts.push(`${pct(a.assetMix.foreignDividend!)}% fgn`);
-    if (a.assetMix.interest > 0) parts.push(`${pct(a.assetMix.interest)}% int`);
+    if (a.assetMix.bonds > 0) parts.push(`${pct(a.assetMix.bonds)}% bond`);
+    if (a.assetMix.cash > 0) parts.push(`${pct(a.assetMix.cash)}% cash`);
     if (parts.length === 0) parts.push('uninvested');
     if (a.rebalanceAnnually === false) parts.push('drifts');
     return parts.join(' · ');

@@ -38,7 +38,7 @@ interface YearlyBreakdownTableProps {
 
 function mixTooltip(m: NonRegMix): string {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
-    return `Mix this year: ${pct(m.capitalGain)} equity · ${pct(m.dividend)} Cdn div · ${pct(m.foreignDividend)} foreign div · ${pct(m.interest)} interest`;
+    return `Mix this year: ${pct(m.capitalGain)} equity · ${pct(m.dividend)} Cdn div · ${pct(m.foreignDividend)} foreign div · ${pct(m.bonds)} bonds · ${pct(m.cash)} cash`;
 }
 
 // Column definitions with tooltips

@@ -8,7 +8,7 @@ import { INITIAL_INPUTS } from '../utils/inputSanitizer';
 const nonReg = (over: Partial<NonRegisteredAccount> = {}): NonRegisteredAccount => ({
     type: 'NonRegistered', id: 'nr', name: 'Non-Registered',
     balance: 0, adjustedCostBase: 0,
-    assetMix: { interest: 0, dividend: 0, capitalGain: 1 },
+    assetMix: { bonds: 0, cash: 0, dividend: 0, capitalGain: 1 },
     ...over
 });
 
@@ -26,7 +26,7 @@ const inputs = (over: Partial<SimulationInputs> = {}): SimulationInputs => ({
     person: person(), province: 'ON', inflationRate: 0,
     preRetirementSpend: 0, postRetirementSpend: 80_000,
     oneTimeExpenses: [], useIncomeSplitting: false, withdrawalStrategy: 'tax-efficient',
-    returnRates: { interest: 0, dividend: 0, capitalGrowth: 0 },
+    returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0 },
     ...over
 });
 
@@ -51,7 +51,7 @@ describe('wealth reconciliation invariants', () => {
         const res = runSimulation(inputs({
             person: person({ rrsp: { type: 'RRSP', balance: 1_000_000 } }),
             postRetirementSpend: 40_000,
-            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0.05 }
         }));
         for (let i = 1; i < res.length - 1; i++) {
             const gross = res[i].totalRRSPWithdrawal + res[i].totalTFSAWithdrawal + res[i].totalNonRegWithdrawal;
@@ -140,9 +140,9 @@ describe('netIncome is cash-basis (Total Spend column)', () => {
     it('dividend gross-up is not counted as cash', () => {
         const res = runSimulation(inputs({
             person: person({
-                nonRegisteredAccounts: [nonReg({ balance: 1_500_000, adjustedCostBase: 1_500_000, assetMix: { interest: 0, dividend: 0.5, capitalGain: 0.5 } })]
+                nonRegisteredAccounts: [nonReg({ balance: 1_500_000, adjustedCostBase: 1_500_000, assetMix: { bonds: 0, cash: 0, dividend: 0.5, capitalGain: 0.5 } })]
             }),
-            returnRates: { interest: 0, dividend: 0.04, capitalGrowth: 0 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: 0 }
         }));
         // $30k actual dividend cash + $50k all-ACB sale = $80k target; the 38%
         // gross-up must not inflate this
@@ -269,15 +269,15 @@ describe('non-registered tax modeling', () => {
     it('foreign dividends are taxed as ordinary income: more tax than eligible Canadian', () => {
         // Employment income pushes the dividends to a real marginal rate — at low
         // income the personal/age credits absorb the tax in both cases
-        const scenario = (mix: { interest: number; dividend: number; foreignDividend?: number; capitalGain: number }) => inputs({
+        const scenario = (mix: { bonds: number; cash: number; dividend: number; foreignDividend?: number; capitalGain: number }) => inputs({
             person: person({
                 age: 55, retirementAge: 60, lifeExpectancy: 70, currentIncome: 100_000,
                 nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: mix })]
             }),
-            returnRates: { interest: 0, dividend: 0.04, capitalGrowth: 0 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: 0 }
         });
-        const cdn = runSimulation(scenario({ interest: 0, dividend: 0.5, capitalGain: 0.5 }));
-        const foreign = runSimulation(scenario({ interest: 0, dividend: 0, foreignDividend: 0.5, capitalGain: 0.5 }));
+        const cdn = runSimulation(scenario({ bonds: 0, cash: 0, dividend: 0.5, capitalGain: 0.5 }));
+        const foreign = runSimulation(scenario({ bonds: 0, cash: 0, dividend: 0, foreignDividend: 0.5, capitalGain: 0.5 }));
 
         // Same $20k dividend cash; no gross-up/credit for the foreign case
         expect(foreign[0].taxPaid).toBeGreaterThan(cdn[0].taxPaid + 1_000);
@@ -295,7 +295,7 @@ describe('per-account growth rates', () => {
                 nonRegisteredAccounts: [nonReg({ balance: 100_000, adjustedCostBase: 100_000 })]
             }),
             postRetirementSpend: 0, // no withdrawals — pure growth
-            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05, rrspGrowth: 0.07, tfsaGrowth: 0.03 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0.05, rrspGrowth: 0.07, tfsaGrowth: 0.03 }
         }));
         const y = res[0];
         expect(y.accounts.rrsp).toBeCloseTo(107_000, 0);
@@ -306,7 +306,7 @@ describe('per-account growth rates', () => {
     it('unset per-account rates fall back to capitalGrowth', () => {
         const res = runSimulation(inputs({
             person: person({ rrsp: { type: 'RRSP', balance: 100_000 }, tfsa: { type: 'TFSA', balance: 1_000_000 } }),
-            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0.05 }
         }));
         expect(res[0].accounts.rrsp).toBeCloseTo(105_000, 0);
     });
@@ -318,14 +318,14 @@ describe('non-reg rebalancing vs drift', () => {
             lifeExpectancy: 80, oasStartAge: 99, // no OAS — its surplus would get reinvested and muddy the drift check
             nonRegisteredAccounts: [nonReg({
                 balance: 1_000_000, adjustedCostBase: 1_000_000,
-                assetMix: { interest: 0, dividend: 0.5, capitalGain: 0.5 },
+                assetMix: { bonds: 0, cash: 0, dividend: 0.5, capitalGain: 0.5 },
                 rebalanceAnnually: rebalance
             })]
         }),
         // Spend exactly the dividend cash (tax-free at this income thanks to the DTC):
         // no deficit → no sales; no surplus → no reinvestment. Isolates growth/drift.
         postRetirementSpend: 20_000,
-        returnRates: { interest: 0, dividend: 0.04, capitalGrowth: 0.06 }
+        returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: 0.06 }
     });
 
     it('rebalanced (default): dividend income grows with the account', () => {
@@ -351,31 +351,31 @@ describe('non-reg rebalancing vs drift', () => {
 });
 
 describe('per-person non-reg mixes', () => {
-    const allInterest = { interest: 1, dividend: 0, capitalGain: 0 };
+    const allCash = { bonds: 0, cash: 1, dividend: 0, capitalGain: 0 };
 
     it('nonRegMix and spouseNonRegMix reflect each person\'s own accounts', () => {
         const res = runSimulation(inputs({
-            person: person({ nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 500_000, assetMix: allInterest })] }),
+            person: person({ nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 500_000, assetMix: allCash })] }),
             spouse: person({ nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 500_000 })] }), // all equity
             postRetirementSpend: 0
         }));
-        expect(res[0].nonRegMix!.interest).toBeCloseTo(1, 5);
+        expect(res[0].nonRegMix!.cash).toBeCloseTo(1, 5);
         expect(res[0].nonRegMix!.capitalGain).toBeCloseTo(0, 5);
         expect(res[0].spouseNonRegMix!.capitalGain).toBeCloseTo(1, 5);
     });
 
     it('rollover: deceased\'s mix goes undefined; survivor\'s blend includes inherited accounts', () => {
         const res = runSimulation(inputs({
-            person: person({ lifeExpectancy: 66, nonRegisteredAccounts: [nonReg({ balance: 300_000, adjustedCostBase: 300_000, assetMix: allInterest })] }),
+            person: person({ lifeExpectancy: 66, nonRegisteredAccounts: [nonReg({ balance: 300_000, adjustedCostBase: 300_000, assetMix: allCash })] }),
             spouse: person({ lifeExpectancy: 80, nonRegisteredAccounts: [nonReg({ balance: 100_000, adjustedCostBase: 100_000 })] }),
             postRetirementSpend: 0
         }));
         const deathYear = res.find(r => r.personDeathThisYear)!;
         // Accounts rolled to the spouse — no zeros-mix for the deceased
         expect(deathYear.nonRegMix).toBeUndefined();
-        // Survivor now blends $100k equity + $300k inherited interest
+        // Survivor now blends $100k equity + $300k inherited cash
         expect(deathYear.spouseNonRegMix!.capitalGain).toBeCloseTo(0.25, 5);
-        expect(deathYear.spouseNonRegMix!.interest).toBeCloseTo(0.75, 5);
+        expect(deathYear.spouseNonRegMix!.cash).toBeCloseTo(0.75, 5);
     });
 
     it('nonRegDriftMix blends only accounts with rebalancing off', () => {
@@ -383,12 +383,12 @@ describe('per-person non-reg mixes', () => {
             person: person({
                 lifeExpectancy: 80, oasStartAge: 99,
                 nonRegisteredAccounts: [
-                    nonReg({ id: 'gic', balance: 500_000, adjustedCostBase: 500_000, assetMix: allInterest, rebalanceAnnually: true }),
+                    nonReg({ id: 'gic', balance: 500_000, adjustedCostBase: 500_000, assetMix: allCash, rebalanceAnnually: true }),
                     nonReg({ id: 'etf', balance: 50_000, adjustedCostBase: 50_000, rebalanceAnnually: false })
                 ]
             }),
             postRetirementSpend: 0,
-            returnRates: { interest: 0.03, dividend: 0, capitalGrowth: 0.06 }
+            returnRates: { bondReturn: 0, cashInterest: 0.03, dividend: 0, capitalGrowth: 0.06 }
         }));
         // Drift readout sees only the all-equity account — the big rebalanced
         // GIC can't register as drift no matter how balances shift between them
@@ -410,9 +410,9 @@ describe('foreign yield input', () => {
         const scenario = (foreignYield?: number) => inputs({
             person: person({
                 tfsa: { type: 'TFSA', balance: 2_000_000 },
-                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: { interest: 0, dividend: 0, foreignDividend: 1, capitalGain: 0 } })]
+                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: { bonds: 0, cash: 0, dividend: 0, foreignDividend: 1, capitalGain: 0 } })]
             }),
-            returnRates: { interest: 0, dividend: 0.04, foreignYield, capitalGrowth: 0 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, foreignYield, capitalGrowth: 0 }
         });
         // investmentIncome = foreign dividend cash
         expect(runSimulation(scenario(0.02))[0].investmentIncome).toBeCloseTo(20_000, 0);
@@ -437,14 +437,29 @@ describe('investment tax attribution by source', () => {
         const res = runSimulation(inputs({
             person: person({
                 age: 55, retirementAge: 60, lifeExpectancy: 70, currentIncome: 100_000,
-                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: { interest: 0.25, dividend: 0.25, foreignDividend: 0.25, capitalGain: 0.25 } })]
+                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: { bonds: 0, cash: 0.25, dividend: 0.25, foreignDividend: 0.25, capitalGain: 0.25 } })]
             }),
-            returnRates: { interest: 0.04, dividend: 0.04, capitalGrowth: 0 }
+            returnRates: { bondReturn: 0, cashInterest: 0.04, dividend: 0.04, capitalGrowth: 0 }
         }));
         const y = res[0];
         // $10k interest + $10k foreign div (ordinary) vs $10k eligible Cdn dividends
         expect(y.interestTaxPaid).toBeGreaterThan(y.dividendTaxPaid);
         expect(y.interestTaxPaid).toBeGreaterThan(3_000); // ~$20k ordinary at ~30%+
+    });
+
+    it('bonds and cash slices earn their own rates; both are ordinary income', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                age: 55, retirementAge: 60, lifeExpectancy: 70, currentIncome: 100_000,
+                nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 500_000, assetMix: { bonds: 0.5, cash: 0.5, dividend: 0, capitalGain: 0 } })]
+            }),
+            returnRates: { bondReturn: 0.04, cashInterest: 0.02, dividend: 0, capitalGrowth: 0 }
+        }));
+        const y = res[0];
+        // 500k × (50% × 4% + 50% × 2%)
+        expect(y.investmentIncome).toBeCloseTo(15_000, 0);
+        expect(y.interestTaxPaid).toBeGreaterThan(0);
+        expect(y.dividendTaxPaid).toBe(0);
     });
 });
 
@@ -452,18 +467,18 @@ describe('per-account non-reg mixes and tax breakdown', () => {
     it("spouse's non-reg uses its own asset mix (household override removed)", () => {
         const base = {
             person: person({
-                nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 250_000, assetMix: { interest: 0.2, dividend: 0.3, capitalGain: 0.5 }, equityTurnoverRate: 0.1 })]
+                nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 250_000, assetMix: { bonds: 0, cash: 0.2, dividend: 0.3, capitalGain: 0.5 }, equityTurnoverRate: 0.1 })]
             }),
-            returnRates: { interest: 0.03, dividend: 0.04, capitalGrowth: 0.05 }
+            returnRates: { bondReturn: 0, cashInterest: 0.03, dividend: 0.04, capitalGrowth: 0.05 }
         };
-        const spouseWith = (mix: { interest: number; dividend: number; foreignDividend?: number; capitalGain: number }) =>
+        const spouseWith = (mix: { bonds: number; cash: number; dividend: number; foreignDividend?: number; capitalGain: number }) =>
             person({ nonRegisteredAccounts: [nonReg({ balance: 400_000, adjustedCostBase: 100_000, assetMix: mix })] });
 
-        // All-interest spouse: 400k × 3% = 12k interest; mixed spouse: 2.4k interest
+        // All-cash spouse: 400k × 3% = 12k interest; mixed spouse: 2.4k interest
         // + 4.8k dividends. Different mixes must now produce different results.
-        const allInterest = runSimulation(inputs({ ...base, spouse: spouseWith({ interest: 1, dividend: 0, capitalGain: 0 }) }));
-        const mixed = runSimulation(inputs({ ...base, spouse: spouseWith({ interest: 0.2, dividend: 0.3, capitalGain: 0.5 }) }));
-        expect(allInterest[0].investmentIncome - mixed[0].investmentIncome).toBeCloseTo(12_000 - (2_400 + 4_800), 0);
+        const allCash = runSimulation(inputs({ ...base, spouse: spouseWith({ bonds: 0, cash: 1, dividend: 0, capitalGain: 0 }) }));
+        const mixed = runSimulation(inputs({ ...base, spouse: spouseWith({ bonds: 0, cash: 0.2, dividend: 0.3, capitalGain: 0.5 }) }));
+        expect(allCash[0].investmentIncome - mixed[0].investmentIncome).toBeCloseTo(12_000 - (2_400 + 4_800), 0);
     });
 
     it('per-person taxes sum to the household total; OAS clawback is surfaced', () => {
@@ -485,11 +500,11 @@ describe('multiple non-registered accounts', () => {
             person: person({
                 tfsa: { type: 'TFSA', balance: 2_000_000 }, // funds spending so nothing is sold
                 nonRegisteredAccounts: [
-                    nonReg({ id: 'gic', balance: 500_000, adjustedCostBase: 500_000, assetMix: { interest: 1, dividend: 0, capitalGain: 0 } }),
-                    nonReg({ id: 'div', balance: 500_000, adjustedCostBase: 500_000, assetMix: { interest: 0, dividend: 1, capitalGain: 0 } })
+                    nonReg({ id: 'gic', balance: 500_000, adjustedCostBase: 500_000, assetMix: { bonds: 0, cash: 1, dividend: 0, capitalGain: 0 } }),
+                    nonReg({ id: 'div', balance: 500_000, adjustedCostBase: 500_000, assetMix: { bonds: 0, cash: 0, dividend: 1, capitalGain: 0 } })
                 ]
             }),
-            returnRates: { interest: 0.02, dividend: 0.04, capitalGrowth: 0 }
+            returnRates: { bondReturn: 0, cashInterest: 0.02, dividend: 0.04, capitalGrowth: 0 }
         }));
         // 500k × 2% interest + 500k × 4% dividends
         expect(res[0].investmentIncome).toBeCloseTo(10_000 + 20_000, 0);
@@ -604,7 +619,7 @@ describe('runMonteCarlo', () => {
     it('zero volatility is deterministic: all percentiles collapse to the median', () => {
         const result = runMonteCarlo(inputs({
             person: person({ tfsa: { type: 'TFSA', balance: 5_000_000 } }),
-            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05, volatility: 0 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0.05, volatility: 0 }
         }), 20);
         expect(result.successRate).toBe(100);
         for (const p of result.percentiles) {
@@ -617,7 +632,7 @@ describe('runMonteCarlo', () => {
         const result = runMonteCarlo(inputs({
             person: person({ tfsa: { type: 'TFSA', balance: 50_000 } }),
             postRetirementSpend: 100_000,
-            returnRates: { interest: 0, dividend: 0, capitalGrowth: 0.05, volatility: 0.1 }
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0.05, volatility: 0.1 }
         }), 20);
         expect(result.successRate).toBe(0);
     });
