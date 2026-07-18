@@ -19,7 +19,7 @@ interface AssetMixInputProps {
     onRebalanceChange: (rebalance: boolean) => void;
 }
 
-const MIX_FIELDS = ['cash', 'bonds', 'dividend', 'foreignDividend', 'capitalGain'] as const;
+const MIX_FIELDS = ['capitalGain', 'bonds', 'dividend', 'foreignDividend', 'cash'] as const;
 type MixField = typeof MIX_FIELDS[number];
 
 export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChange, onTurnoverChange, onRebalanceChange }: AssetMixInputProps) {
@@ -55,6 +55,14 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                     max={headroom('capitalGain')}
                 />
                 <FinancialInput
+                    label="Bonds"
+                    value={Math.round(share('bonds') * 100)}
+                    onChange={(e) => handleChange('bonds', Number(e.target.value))}
+                    prefix="%"
+                    min={0}
+                    max={headroom('bonds')}
+                />
+                <FinancialInput
                     label="Cdn Dividends"
                     value={Math.round(share('dividend') * 100)}
                     onChange={(e) => handleChange('dividend', Number(e.target.value))}
@@ -69,14 +77,6 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                     prefix="%"
                     min={0}
                     max={headroom('foreignDividend')}
-                />
-                <FinancialInput
-                    label="Bonds"
-                    value={Math.round(share('bonds') * 100)}
-                    onChange={(e) => handleChange('bonds', Number(e.target.value))}
-                    prefix="%"
-                    min={0}
-                    max={headroom('bonds')}
                 />
                 <FinancialInput
                     label="Cash"

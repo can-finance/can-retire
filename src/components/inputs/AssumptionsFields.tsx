@@ -109,6 +109,18 @@ export function ReturnsFields({ inputs, onChange }: {
                 tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
             />
             <FinancialInput
+                label="Bonds Total Return"
+                prefix="%"
+                minFractionDigits={1}
+                maxFractionDigits={1}
+                accentColor={CHART_COLORS.nonReg}
+                value={Number((inputs.returnRates.bondReturn * 100).toFixed(1))}
+                onChange={(e) => onChange({
+                    returnRates: { ...inputs.returnRates, bondReturn: Number(e.target.value) / 100 }
+                })}
+                tooltip="Total annual return on the Bonds slice of the non-registered mix; taxed as ordinary income."
+            />
+            <FinancialInput
                 label="Cdn Dividend Yield"
                 prefix="%"
                 minFractionDigits={1}
@@ -131,18 +143,6 @@ export function ReturnsFields({ inputs, onChange }: {
                     returnRates: { ...inputs.returnRates, foreignYield: Number(e.target.value) / 100 }
                 })}
                 tooltip="Yield on the Foreign Dividends slice of the non-registered mix (e.g. US ETFs). Taxed as ordinary income."
-            />
-            <FinancialInput
-                label="Bonds Total Return"
-                prefix="%"
-                minFractionDigits={1}
-                maxFractionDigits={1}
-                accentColor={CHART_COLORS.nonReg}
-                value={Number((inputs.returnRates.bondReturn * 100).toFixed(1))}
-                onChange={(e) => onChange({
-                    returnRates: { ...inputs.returnRates, bondReturn: Number(e.target.value) / 100 }
-                })}
-                tooltip="Total annual return on the Bonds slice of the non-registered mix; taxed as ordinary income."
             />
             <FinancialInput
                 label="Cash Interest"
