@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Person, SimulationInputs } from '../../engine/types';
-import { CrapLogo } from '../layout/AppLayout';
+import { BrandLockup } from '../layout/AppLayout';
+import { SectionCard } from '../ui/SectionCard';
 import { commitOnboardingInputs, hasSavedPlan, markOnboardingDone } from '../../utils/onboarding';
 import { createDefaultPerson } from '../../utils/inputSanitizer';
 import { OnboardingIntro } from './OnboardingIntro';
@@ -111,13 +112,17 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
         else onDone(hasCommitted);
     };
 
-    const skip = () => {
+    // Wrapped in useCallback (rather than a plain function redefined each
+    // render) so the Escape-key effect below can depend on it without that
+    // dependency changing on every render — its identity only changes when
+    // one of its actual inputs (onDone, hasCommitted) does.
+    const skip = useCallback(() => {
         // Write nothing new — but if a Save already fired earlier this session
         // (Back from the closing screen, then Skip), data WAS written, so report
         // that via `hasCommitted` rather than unconditionally false.
         markOnboardingDone();
         onDone(hasCommitted);
-    };
+    }, [onDone, hasCommitted]);
 
     // Escape mirrors the header's skip/cancel button. The closing screen hides
     // that button (Save already committed, or there's nothing left to skip), so
@@ -245,12 +250,11 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
         >
             <header className="w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
-                    <div className="flex items-center gap-2.5">
-                        <CrapLogo />
+                    <BrandLockup>
                         <span className="text-lg font-bold tracking-tight text-slate-900 hidden sm:inline">
                             Retirement setup
                         </span>
-                    </div>
+                    </BrandLockup>
                     {screen !== 'closing' && (
                         <button
                             onClick={skip}
@@ -313,12 +317,12 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
 
 function SectionForStep({ title, blurb, children }: { title: string; blurb: string; children: ReactNode }) {
     return (
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-100 border-l-4 border-l-brand-400 p-6 space-y-5">
+        <SectionCard accent="brand" className="space-y-5">
             <div>
                 <h2 className="text-xl font-bold text-slate-900">{title}</h2>
                 <p className="text-sm text-slate-500 mt-1">{blurb}</p>
             </div>
             {children}
-        </section>
+        </SectionCard>
     );
 }

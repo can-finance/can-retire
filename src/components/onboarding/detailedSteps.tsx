@@ -1,14 +1,25 @@
 /* eslint-disable react-refresh/only-export-components -- step-factory module: buildDetailedSteps returns JSX-producing steps built from local field groups; not a Fast-Refresh component module. */
 import type { Dispatch, SetStateAction, ReactNode } from 'react';
 import { FinancialInput } from '../inputs/FinancialInput';
-import { NonRegAccountsInput } from '../inputs/NonRegAccountsInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
 import { AssumptionsFields } from '../inputs/AssumptionsFields';
+import {
+    AboutFields as SharedAboutFields,
+    BenefitsFields as SharedBenefitsFields,
+    AccountsFields as SharedAccountsFields,
+    MeltdownFields as SharedMeltdownFields,
+} from '../inputs/PersonFields';
 import { Toggle } from '../ui/Toggle';
 import { ValidationBanner } from '../ui/ValidationBanner';
 import { getValidationErrors } from '../../utils/personValidation';
-import { CHART_COLORS } from '../../constants/chartColors';
-import type { Person, NonRegisteredAccount, SimulationInputs } from '../../engine/types';
+import type { Person, SimulationInputs } from '../../engine/types';
+
+// Wizard label wording — sentence case, spoken to the user one step at a time
+// (see ABOUT_LABELS etc. in ../dashboard/PersonSection.tsx for the dashboard's
+// terser equivalents).
+const WIZARD_ABOUT_LABELS = { age: 'Current age', retirementAge: 'Retirement age', lifeExpectancy: 'Life expectancy' };
+const WIZARD_BENEFITS_LABELS = { cppStartAge: 'CPP start age', yearsContributed: 'Years contributed', oasStartAge: 'OAS start age' };
+const WIZARD_MELTDOWN_LABELS = { meltStartAge: 'Melt start age', meltAmount: 'Melt amount per year' };
 
 type SetDraft = Dispatch<SetStateAction<SimulationInputs>>;
 type Who = 'person' | 'spouse';
@@ -32,37 +43,19 @@ function patchPerson(setDraft: SetDraft, who: Who, patch: Partial<Person>) {
     });
 }
 
-function patchAccount(setDraft: SetDraft, who: Who, account: 'rrsp' | 'tfsa', balance: number) {
-    setDraft((d) => {
-        const target = who === 'person' ? d.person : d.spouse;
-        if (!target) return d;
-        return { ...d, [who]: { ...target, [account]: { ...target[account], balance } } };
-    });
-}
-
-function setNonReg(setDraft: SetDraft, who: Who, accounts: NonRegisteredAccount[]) {
-    setDraft((d) => {
-        const target = who === 'person' ? d.person : d.spouse;
-        if (!target) return d;
-        return { ...d, [who]: { ...target, nonRegisteredAccounts: accounts } };
-    });
-}
-
 // --- reusable per-person field groups (shared by person + spouse) -------------
+// Each wraps the shared PersonFields.tsx group with this wizard's extras
+// (validation banner, income field, disclaimer/explanation copy) that don't
+// belong in the shared component — see src/components/inputs/PersonFields.tsx
+// and src/components/dashboard/PersonSection.tsx for the dashboard's equivalent
+// wrapping of the same shared groups.
 
 function AboutFields({ person, who, setDraft }: { person: Person; who: Who; setDraft: SetDraft }) {
     return (
         <div className="space-y-4">
             <ValidationBanner errors={getValidationErrors(person)} />
-            <div className="grid grid-cols-3 gap-3">
-                <FinancialInput label="Current age" prefix="" value={person.age}
-                    onChange={(e) => patchPerson(setDraft, who, { age: Number(e.target.value) })} />
-                <FinancialInput label="Retirement age" prefix="" value={person.retirementAge}
-                    onChange={(e) => patchPerson(setDraft, who, { retirementAge: Number(e.target.value) })} />
-                <FinancialInput label="Life expectancy" prefix="" value={person.lifeExpectancy}
-                    onChange={(e) => patchPerson(setDraft, who, { lifeExpectancy: Number(e.target.value) })}
-                    tooltip="The age the plan runs to. Assets are projected until this age, then estate/terminal tax is calculated." />
-            </div>
+            <SharedAboutFields person={person} labels={WIZARD_ABOUT_LABELS}
+                onPatch={(patch) => patchPerson(setDraft, who, patch)} />
             <FinancialInput label="Annual income (before tax)" value={person.currentIncome}
                 onChange={(e) => patchPerson(setDraft, who, { currentIncome: Number(e.target.value) })} />
         </div>
@@ -73,17 +66,8 @@ function BenefitsFields({ person, who, setDraft }: { person: Person; who: Who; s
     return (
         <div className="space-y-4">
             <ValidationBanner errors={getValidationErrors(person)} />
-            <div className="grid grid-cols-3 gap-3">
-                <FinancialInput label="CPP start age" prefix="" value={person.cppStartAge}
-                    onChange={(e) => patchPerson(setDraft, who, { cppStartAge: Number(e.target.value) })}
-                    tooltip="Between 60 and 70. Starting later increases the monthly amount." />
-                <FinancialInput label="Years contributed" prefix="" value={person.cppContributedYears ?? 35}
-                    onChange={(e) => patchPerson(setDraft, who, { cppContributedYears: Number(e.target.value) })}
-                    tooltip="Years you paid into CPP. The plan estimates CPP as Years Contributed ÷ 40 of the maximum." />
-                <FinancialInput label="OAS start age" prefix="" value={person.oasStartAge}
-                    onChange={(e) => patchPerson(setDraft, who, { oasStartAge: Number(e.target.value) })}
-                    tooltip="Between 65 and 70. Starting later increases the monthly amount." />
-            </div>
+            <SharedBenefitsFields person={person} labels={WIZARD_BENEFITS_LABELS}
+                onPatch={(patch) => patchPerson(setDraft, who, patch)} />
             <p className="text-xs text-slate-400">
                 These are rough estimates. You can refine your CPP later with the CPP Calculator and feed the result back into your plan.
             </p>
@@ -92,24 +76,9 @@ function BenefitsFields({ person, who, setDraft }: { person: Person; who: Who; s
 }
 
 function AccountsFields({ person, who, setDraft }: { person: Person; who: Who; setDraft: SetDraft }) {
-    const isSpouse = who === 'spouse';
-    const rrspColor = isSpouse ? CHART_COLORS.spRrsp : CHART_COLORS.rrsp;
-    const tfsaColor = isSpouse ? CHART_COLORS.spTfsa : CHART_COLORS.tfsa;
-    const nonRegColor = isSpouse ? CHART_COLORS.spNonReg : CHART_COLORS.nonReg;
     return (
-        <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-                <FinancialInput label="RRSP" value={person.rrsp.balance} accentColor={rrspColor}
-                    onChange={(e) => patchAccount(setDraft, who, 'rrsp', Number(e.target.value))} />
-                <FinancialInput label="TFSA" value={person.tfsa.balance} accentColor={tfsaColor}
-                    onChange={(e) => patchAccount(setDraft, who, 'tfsa', Number(e.target.value))} />
-            </div>
-            <NonRegAccountsInput
-                accounts={person.nonRegisteredAccounts}
-                onChange={(accounts) => setNonReg(setDraft, who, accounts)}
-                accentColor={nonRegColor}
-            />
-        </div>
+        <SharedAccountsFields person={person} isSpouse={who === 'spouse'}
+            onPatch={(patch) => patchPerson(setDraft, who, patch)} />
     );
 }
 
@@ -131,24 +100,14 @@ function SpouseToggleField({ draft, onToggleSpouse }: { draft: SimulationInputs;
 }
 
 function MeltdownFields({ person, who, setDraft }: { person: Person; who: Who; setDraft: SetDraft }) {
-    const isSpouse = who === 'spouse';
-    const rrspColor = isSpouse ? CHART_COLORS.spRrsp : CHART_COLORS.rrsp;
     return (
         <div className="space-y-4">
             <p className="text-sm text-slate-500">
                 An RRSP "meltdown" means deliberately withdrawing from your RRSP early — often between retirement and age 71 — to
                 smooth out taxable income and avoid a large forced RRIF withdrawal later. Leave the amount at 0 to skip it.
             </p>
-            <div className="grid grid-cols-2 gap-4">
-                <FinancialInput label="Melt start age" prefix="" accentColor={rrspColor}
-                    value={person.rrspMeltStartAge || person.retirementAge}
-                    onChange={(e) => patchPerson(setDraft, who, { rrspMeltStartAge: Number(e.target.value) })}
-                    tooltip="Age to begin deliberate early RRSP withdrawals. Melt automatically stops at age 71 (before mandatory RRIF conversion at 72)." />
-                <FinancialInput label="Melt amount per year" accentColor={rrspColor}
-                    value={person.rrspMeltAmount || 0}
-                    onChange={(e) => patchPerson(setDraft, who, { rrspMeltAmount: Number(e.target.value) })}
-                    tooltip="Annual amount to withdraw from RRSP from the start age until age 71." />
-            </div>
+            <SharedMeltdownFields person={person} isSpouse={who === 'spouse'} labels={WIZARD_MELTDOWN_LABELS}
+                onPatch={(patch) => patchPerson(setDraft, who, patch)} />
         </div>
     );
 }

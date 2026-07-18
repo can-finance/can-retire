@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppLayout } from './components/layout/AppLayout';
 import type { PageId } from './components/layout/AppLayout';
 import { Dashboard } from './components/dashboard/Dashboard';
@@ -6,6 +6,7 @@ import { HowItWorks } from './components/pages/HowItWorks';
 import { CppCalculator } from './components/pages/CppCalculator';
 import { OnboardingFlow } from './components/onboarding/OnboardingFlow';
 import { isOnboardingEligible, loadDraftSeed, markOnboardingDone } from './utils/onboarding';
+import { scrollToAnchorSoon } from './utils/scrollToAnchor';
 
 // Pages are addressable via the URL hash (e.g. /#cpp-calculator) so they can
 // be linked to directly. The dashboard's share links use #start=... and must
@@ -31,15 +32,27 @@ function App() {
   // signal as it stood at load — before anything the user does this session
   // (including the eligibility re-check below) can change it.
   const [eligible] = useState(isOnboardingEligible);
-  // 'auto'  — first-run takeover, shows only on the dashboard page.
-  // 'manual' — re-launched via "Guided setup"; shows over any page.
-  // 'off'   — dismissed (Finish/Skip) or never eligible.
-  const [onboarding, setOnboarding] = useState<'auto' | 'manual' | 'off'>(eligible ? 'auto' : 'off');
-  // Latch: once the takeover becomes visible it stays mounted regardless of
-  // hashchange / back / forward, until Finish or Skip. Seeded synchronously so
-  // Dashboard can't mount for a frame first — for auto, only when the landing
-  // page is already the dashboard.
+
+  // Whether the takeover is currently up. Once true it's a latch: nothing
+  // outside of closeOnboarding sets it back to false, so it survives an
+  // unrelated hashchange (back/forward, clicking around the nav) until the
+  // user actually finishes or skips. Seeded synchronously so a visitor who's
+  // eligible AND already landing on the dashboard never sees an unoverlaid
+  // frame — no effect needed to "catch up" after the fact.
   const [active, setActive] = useState<boolean>(() => eligible && pageFromHash() === 'dashboard');
+
+  // Whether the auto (first-run) takeover still has a decision to make. Only
+  // relevant when the visitor was eligible at mount but landed somewhere
+  // other than the dashboard (they may land on #cpp / #how-it-works first) —
+  // if they landed straight on the dashboard, `active`'s initializer above
+  // already resolved the decision. Flipped to false the first time
+  // tryAutoActivate runs — whether that lands on "activate" or "cancel" (e.g.
+  // data appeared mid-session). Once false, auto never fires again this
+  // session; a later re-open can only be manual (the "Edit My Plan" button),
+  // which sets `active` directly.
+  const [autoPending, setAutoPending] = useState<boolean>(
+    () => eligible && pageFromHash() !== 'dashboard'
+  );
 
   // Bumped whenever onboarding closes so the always-mounted Dashboard remounts
   // and re-reads localStorage. This is what makes Finish reflect the freshly
@@ -47,10 +60,11 @@ function App() {
   // re-runs Dashboard's mount-only hash-hydration effect.
   const [epoch, setEpoch] = useState(0);
 
-  // Focus restore target: whatever was focused right before onboarding activated
-  // (manual launch click, or the render-phase auto activation below). Consumed
-  // and cleared by the effect that watches `active` go false — by then the
-  // background tree's `inert` has already been lifted, so `.focus()` succeeds.
+  // Focus restore target: whatever was focused right before onboarding
+  // activated (captured in launchOnboarding for a manual re-launch, or in
+  // tryAutoActivate below for an auto takeover). Consumed and cleared by the
+  // effect that watches `active` go false — by then the background tree's
+  // `inert` has already been lifted, so `.focus()` succeeds.
   const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   // Bumps `epoch` (remounting Dashboard) only when the draft was actually
@@ -61,7 +75,6 @@ function App() {
   // remounted Dashboard's mount effect is what performs the share import.
   const closeOnboarding = (committed: boolean) => {
     setActive(false);
-    setOnboarding('off');
     if (committed) setEpoch((e) => e + 1);
   };
 
@@ -98,8 +111,43 @@ function App() {
     }
   };
 
+  // Give the pending auto (first-run) takeover a chance to fire now that the
+  // visitor is on the dashboard. A no-op once `autoPending` is false (already
+  // decided, or never eligible). Re-checks eligibility at this exact moment:
+  // if data appeared mid-session (e.g. the CPP Calculator's "Apply to plan"
+  // wrote the sim key while parked elsewhere), cancel instead of taking over.
+  // Called synchronously from the same event handler that lands currentPage
+  // on 'dashboard' (a nav click, or a hashchange), so activation and the page
+  // change land in the same commit — no frame where Dashboard is visible
+  // without the overlay covering it, no effect required. Wrapped in
+  // useCallback (keyed on its one real input, `autoPending`) so the
+  // hashchange effect below can depend on it without resubscribing every
+  // render.
+  const tryAutoActivate = useCallback(() => {
+    if (!autoPending) return;
+    setAutoPending(false);
+    if (!isOnboardingEligible()) return;
+    // Capture focus here (nav click into the dashboard) — same point
+    // activation state gets set.
+    lastFocusedRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setActive(true);
+  }, [autoPending]);
+
+  // Wraps navigate() for the nav bar's own clicks so a pending auto takeover
+  // gets its chance exactly when the user actually lands on the dashboard via
+  // nav click. Deliberately NOT folded into navigate() itself — launchOnboarding
+  // below also calls navigate('dashboard') as part of a MANUAL re-launch, which
+  // must not incidentally resolve/retrigger the separate auto pathway.
+  const handleNavigate = (page: PageId) => {
+    navigate(page);
+    if (page === 'dashboard') tryAutoActivate();
+  };
+
   // Keep the page in sync with back/forward navigation. Re-subscribed when
-  // `active` changes so the #start= handler sees the current latch state.
+  // `active` changes (for the #start= handler) or `tryAutoActivate` changes
+  // identity (i.e. when `autoPending` changes) so neither closes over a
+  // stale mount-time value.
   useEffect(() => {
     const onHashChange = () => {
       // A #start= share link arriving mid-wizard reflects the user's latest
@@ -113,60 +161,37 @@ function App() {
         // the #start= share import.
         closeOnboarding(true);
       }
-      setCurrentPage(pageFromHash());
+      const next = pageFromHash();
+      setCurrentPage(next);
+      // Landing on the dashboard via back/forward or a share link is just as
+      // much a legitimate auto trigger as a nav click (isOnboardingEligible's
+      // own #start= check keeps a share link from ever activating it here).
+      if (next === 'dashboard') tryAutoActivate();
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, [active]);
-
-  // Decide synchronously whether the takeover is visible this render. Auto waits
-  // until the user is on the dashboard (they may land on #cpp / #how-it-works
-  // first); manual re-launch shows over any page. `show` mirrors the latch this
-  // render so that on the very render where Dashboard first mounts (currentPage
-  // becomes 'dashboard'), the overlay is already up too — Dashboard is never
-  // visible without the inert scrim covering it, even for one paint. setActive
-  // persists the decision for subsequent renders (updating state during render
-  // re-runs App before committing, so `show` and `active` agree by the time
-  // anything commits to the DOM).
-  let show = active;
-  if (!active) {
-    const wantsToShow =
-      onboarding === 'manual' || (onboarding === 'auto' && currentPage === 'dashboard');
-    if (wantsToShow) {
-      // Re-check eligibility at the moment auto would first show: if data appeared
-      // mid-session (e.g. the CPP Calculator's "Apply to plan" wrote the sim key),
-      // cancel the pending auto takeover instead of taking over.
-      if (onboarding === 'auto' && !isOnboardingEligible()) {
-        setOnboarding('off');
-      } else {
-        // Capture focus here too (nav click into the dashboard, or initial load
-        // landing on it) — same point activation state gets set. If it's just
-        // `body` (initial load), restoring to it later is a harmless no-op.
-        lastFocusedRef.current =
-          document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        setActive(true);
-        show = true;
-      }
-    }
-  }
+  }, [active, tryAutoActivate]);
 
   // Manual re-launch from the Setup nav button: always peek at the dashboard, so
-  // navigate there first (if elsewhere), then open the intro over live data.
+  // navigate there first (if elsewhere), then open the intro over live data —
+  // unlike auto, manual shows over any page, so it sets `active` directly.
+  // Uses navigate() (not handleNavigate) so this never incidentally triggers
+  // the auto pathway — see the comment on handleNavigate above.
   const launchOnboarding = () => {
     lastFocusedRef.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
     if (currentPage !== 'dashboard') navigate('dashboard');
-    setOnboarding('manual');
+    setActive(true);
   };
 
   // Read the draft seed once per overlay activation, not on every App re-render
   // — OnboardingFlow only consumes `seed` in its useState initializers at mount,
   // so re-parsing + re-sanitizing localStorage on each keystroke-driven re-render
-  // while the overlay is up is wasted work. Keyed on `show` (not `[]`) so a
-  // second activation (e.g. re-opening "Edit My Plan" after an earlier session
+  // while the overlay is up is wasted work. Keyed on `active` so a second
+  // activation (e.g. re-opening "Edit My Plan" after an earlier session
   // committed new data) re-reads fresh rather than reusing a stale first-mount
-  // value. Null while hidden; only read where `show` is already true below.
-  const seed = useMemo(() => (show ? loadDraftSeed() : null), [show]);
+  // value. Null while hidden; only read where `active` is already true below.
+  const seed = useMemo(() => (active ? loadDraftSeed() : null), [active]);
 
   // The app tree is always rendered; the onboarding overlay sits on top of it.
   // While the overlay is up, the background tree is made inert so the dashboard
@@ -178,15 +203,15 @@ function App() {
   // committed inputs (and re-runs its mount-only #start= hydration).
   return (
     <>
-      <div inert={show || undefined}>
-        <AppLayout currentPage={currentPage} onNavigate={navigate} onLaunchOnboarding={launchOnboarding}>
+      <div inert={active || undefined}>
+        <AppLayout currentPage={currentPage} onNavigate={handleNavigate} onLaunchOnboarding={launchOnboarding}>
           {currentPage === 'dashboard' && <Dashboard key={epoch} />}
           {currentPage === 'cpp-calculator' && <CppCalculator />}
           {currentPage === 'how-it-works' && <HowItWorks />}
         </AppLayout>
       </div>
 
-      {show && (
+      {active && (
         <OnboardingFlow
           seed={seed!}
           onDone={closeOnboarding}
@@ -194,9 +219,7 @@ function App() {
             closeOnboarding(committed);
             navigate('how-it-works');
             // Scroll after the page has rendered (mirrors AppLayout's disclaimer link).
-            setTimeout(() => {
-              document.getElementById('privacy')?.scrollIntoView({ behavior: 'smooth' });
-            }, 100);
+            scrollToAnchorSoon('privacy');
           }}
         />
       )}

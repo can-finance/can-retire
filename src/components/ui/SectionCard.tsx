@@ -1,6 +1,6 @@
 import React from 'react';
 
-type AccentColor = 'sky' | 'purple' | 'emerald' | 'amber' | 'slate' | 'indigo' | 'rose' | 'teal' | 'orange' | 'violet' | 'cyan' | 'none';
+type AccentColor = 'sky' | 'purple' | 'emerald' | 'amber' | 'slate' | 'indigo' | 'rose' | 'teal' | 'orange' | 'violet' | 'cyan' | 'brand' | 'none';
 
 interface SectionCardProps {
     children: React.ReactNode;
@@ -23,6 +23,7 @@ const ACCENT_CLASSES: Record<AccentColor, string> = {
     orange:  'border-l-4 border-l-orange-400',
     violet:  'border-l-4 border-l-violet-400',
     cyan:    'border-l-4 border-l-cyan-400',
+    brand:   'border-l-4 border-l-brand-400',
     none:    '',
 };
 

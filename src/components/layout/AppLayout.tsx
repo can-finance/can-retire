@@ -1,7 +1,16 @@
 import React from 'react';
 import { HelpTooltip } from '../ui/HelpTooltip';
+import { scrollToAnchorSoon } from '../../utils/scrollToAnchor';
 
 export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works';
+
+// Single source for the nav pill order/labels — mapped to one button element
+// below so all three stay in sync (classes, active logic) instead of drifting.
+const NAV_ITEMS: { id: PageId; label: string }[] = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'cpp-calculator', label: 'CPP Calculator' },
+    { id: 'how-it-works', label: 'How does this work?' },
+];
 
 // Single source for the "re-run setup" button's label, shared with the copy
 // in OnboardingIntro/OnboardingClosing so the two never drift out of sync.
@@ -48,17 +57,35 @@ export function CrapLogo() {
     );
 }
 
+// Shared logo+title lockup: CrapLogo plus whatever title content the caller
+// supplies. AppLayout's header and OnboardingFlow's overlay header show
+// different text at different sizes, so only the logo + flex wrapper are
+// truly common — title markup is passed in as children.
+export function BrandLockup({
+    children,
+    className = 'flex items-center gap-2.5',
+}: {
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={className}>
+            <CrapLogo />
+            {children}
+        </div>
+    );
+}
+
 export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboarding }: AppLayoutProps) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900">
             <header className="lg:sticky lg:top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
                 <div className="container mx-auto flex min-h-16 items-center justify-between px-4 py-2">
-                    <div className="flex min-w-0 items-center gap-2.5">
-                        <CrapLogo />
+                    <BrandLockup className="flex min-w-0 items-center gap-2.5">
                         <h1 className="min-w-0 truncate text-xl font-bold tracking-tight text-slate-900">
                             Canadian Retirement Asset Planning <span className="text-brand-500">tool</span>
                         </h1>
-                    </div>
+                    </BrandLockup>
 
                     <div className="hidden xl:flex items-center gap-2 whitespace-nowrap text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
@@ -67,33 +94,18 @@ export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboardin
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                         <nav className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl">
-                            <button
-                                onClick={() => onNavigate('dashboard')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'dashboard'
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-900'
-                                    }`}
-                            >
-                                Dashboard
-                            </button>
-                            <button
-                                onClick={() => onNavigate('cpp-calculator')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'cpp-calculator'
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-900'
-                                    }`}
-                            >
-                                CPP Calculator
-                            </button>
-                            <button
-                                onClick={() => onNavigate('how-it-works')}
-                                className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === 'how-it-works'
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-900'
-                                    }`}
-                            >
-                                How does this work?
-                            </button>
+                            {NAV_ITEMS.map(({ id, label }) => (
+                                <button
+                                    key={id}
+                                    onClick={() => onNavigate(id)}
+                                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === id
+                                        ? 'bg-white text-slate-900 shadow-sm'
+                                        : 'text-slate-500 hover:text-slate-900'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
                         </nav>
                         {/* Setup is an action (opens the guided-setup overlay), not a page —
                             styled distinctly from the segmented nav pill and never "active". */}
@@ -122,10 +134,7 @@ export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboardin
                         <button
                             onClick={() => {
                                 onNavigate('how-it-works');
-                                // Scroll after the page has rendered
-                                setTimeout(() => {
-                                    document.getElementById('full-disclaimer')?.scrollIntoView({ behavior: 'smooth' });
-                                }, 100);
+                                scrollToAnchorSoon('full-disclaimer');
                             }}
                             className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
                         >

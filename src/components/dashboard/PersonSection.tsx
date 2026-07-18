@@ -1,11 +1,17 @@
 import { FinancialInput } from '../inputs/FinancialInput';
-import { NonRegAccountsInput } from '../inputs/NonRegAccountsInput';
+import { AboutFields, BenefitsFields, AccountsFields, MeltdownFields } from '../inputs/PersonFields';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { ValidationBanner } from '../ui/ValidationBanner';
 import type { Person, NonRegisteredAccount } from '../../engine/types';
-import { CHART_COLORS } from '../../constants/chartColors';
 import { getValidationErrors } from '../../utils/personValidation';
+
+// Dashboard label wording — terser than the wizard's sentence-case labels
+// (see WIZARD_*_LABELS in ../onboarding/detailedSteps.tsx), since these sit in
+// a dense sidebar of many fields rather than one wizard step at a time.
+const ABOUT_LABELS = { age: 'Current Age', retirementAge: 'Retire Age', lifeExpectancy: 'Death Age' };
+const BENEFITS_LABELS = { cppStartAge: 'CPP Start Age', yearsContributed: 'Years Contributed', oasStartAge: 'OAS Start Age' };
+const MELTDOWN_LABELS = { meltStartAge: 'RRSP Melt Start Age', meltAmount: 'RRSP Melt Amount' };
 
 interface PersonSectionProps {
     title: string;
@@ -46,9 +52,20 @@ export function PersonSection({
     const isSpouse = colorTheme === 'purple';
     const avatar = PERSON_AVATAR[colorTheme] ?? PERSON_AVATAR.slate;
 
-    const rrspColor   = isSpouse ? CHART_COLORS.spRrsp   : CHART_COLORS.rrsp;
-    const tfsaColor   = isSpouse ? CHART_COLORS.spTfsa   : CHART_COLORS.tfsa;
-    const nonRegColor = isSpouse ? CHART_COLORS.spNonReg : CHART_COLORS.nonReg;
+    // Every shared field group patches the same person via one merge callback —
+    // mirrors the wizard's patchPerson (see ../onboarding/detailedSteps.tsx),
+    // adapted to this component's existing onChange/onAccountChange/onNonRegChange props.
+    const onPatch = (patch: Partial<Person>) => {
+        for (const [key, value] of Object.entries(patch)) {
+            if (key === 'rrsp' || key === 'tfsa') {
+                onAccountChange(key, 'balance', (value as { balance: number }).balance);
+            } else if (key === 'nonRegisteredAccounts') {
+                onNonRegChange(value as NonRegisteredAccount[]);
+            } else {
+                onChange(key, value as number | undefined);
+            }
+        }
+    };
 
     const headerContent = (
         <div className="flex items-center gap-3">
@@ -82,23 +99,10 @@ export function PersonSection({
             <div className="space-y-4">
                 <ValidationBanner errors={validationErrors} />
 
-                <div className="grid grid-cols-3 gap-2">
-                    <FinancialInput label="Current Age" prefix="" value={person.age}
-                        onChange={(e) => onChange('age', Number(e.target.value))} />
-                    <FinancialInput label="Retire Age" prefix="" value={person.retirementAge}
-                        onChange={(e) => onChange('retirementAge', Number(e.target.value))} />
-                    <FinancialInput label="Death Age" prefix="" value={person.lifeExpectancy}
-                        onChange={(e) => onChange('lifeExpectancy', Number(e.target.value))} />
-                </div>
+                <AboutFields person={person} onPatch={onPatch} labels={ABOUT_LABELS}
+                    gridClassName="grid grid-cols-3 gap-2" />
 
-                <div className="grid grid-cols-3 gap-3">
-                    <FinancialInput label="CPP Start Age" prefix="" value={person.cppStartAge}
-                        onChange={(e) => onChange('cppStartAge', Number(e.target.value))} />
-                    <FinancialInput label="Years Contributed" prefix="" value={person.cppContributedYears ?? 35}
-                        onChange={(e) => onChange('cppContributedYears', Number(e.target.value))} />
-                    <FinancialInput label="OAS Start Age" prefix="" value={person.oasStartAge}
-                        onChange={(e) => onChange('oasStartAge', Number(e.target.value))} />
-                </div>
+                <BenefitsFields person={person} onPatch={onPatch} labels={BENEFITS_LABELS} />
 
                 {person.cppAnnualOverride == null && (
                     <HelpTooltip text="The plan estimates CPP simply as Years Contributed ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings (with drop-out and child-rearing provisions) and can feed the result back into this plan.">
@@ -132,30 +136,11 @@ export function PersonSection({
                 <FinancialInput label="Annual Income" value={person.currentIncome}
                     onChange={(e) => onChange('currentIncome', Number(e.target.value))} />
 
-                <div className="grid grid-cols-2 gap-3">
-                    <FinancialInput label="RRSP" value={person.rrsp.balance} accentColor={rrspColor}
-                        onChange={(e) => onAccountChange('rrsp', 'balance', Number(e.target.value))} />
-                    <FinancialInput label="TFSA" value={person.tfsa.balance} accentColor={tfsaColor}
-                        onChange={(e) => onAccountChange('tfsa', 'balance', Number(e.target.value))} />
-                </div>
+                <AccountsFields person={person} isSpouse={isSpouse} onPatch={onPatch}
+                    driftSummary={nonRegDriftSummary} />
 
-                <NonRegAccountsInput
-                    accounts={person.nonRegisteredAccounts}
-                    onChange={onNonRegChange}
-                    accentColor={nonRegColor}
-                    driftSummary={nonRegDriftSummary}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                    <FinancialInput label="RRSP Melt Start Age" prefix=""
-                        value={person.rrspMeltStartAge || person.retirementAge} accentColor={rrspColor}
-                        onChange={(e) => onChange('rrspMeltStartAge', Number(e.target.value))}
-                        tooltip="Age to begin deliberate early RRSP withdrawals. Melt automatically stops at age 71 (before mandatory RRIF conversion at 72)." />
-                    <FinancialInput label="RRSP Melt Amount"
-                        value={person.rrspMeltAmount || 0} accentColor={rrspColor}
-                        onChange={(e) => onChange('rrspMeltAmount', Number(e.target.value))}
-                        tooltip="Annual amount to withdraw from RRSP from start age until age 71." />
-                </div>
+                <MeltdownFields person={person} isSpouse={isSpouse} onPatch={onPatch}
+                    labels={MELTDOWN_LABELS} />
             </div>
         </CollapsibleSection>
     );
