@@ -5,6 +5,19 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- Updated build/dev tooling (Vite, Rollup, Babel, PostCSS, ESLint dependencies)
+  to resolve all 11 npm audit advisories (5 high, 5 moderate, 1 low). No runtime
+  dependencies were affected.
+
+### Fixed
+- Added the missing `jsdom` dev dependency and rebuilt the dev container image —
+  the four component/hook test files (App, OnboardingFlow, useScenarios,
+  usePersistentState) had been failing at worker startup and silently not
+  running; the suite now runs all 182 tests.
+
 ## [0.5.0] - 2026-07-17
 
 ### Added
