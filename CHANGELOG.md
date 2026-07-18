@@ -5,9 +5,15 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-07-18
 
 ### Added
+- **How It Works as its own page.** The methodology page now lives at
+  `/how-it-works/` (legacy `/#how-it-works` and `/#cpp-calculator` links
+  redirect before first paint) and was rewritten top to bottom: a short purpose
+  statement with a feature-card grid, collapsible detail sections behind a
+  modelling overview, an FAQ, and a warning that future tax/program changes
+  will affect results.
 - **Bonds/Cash split.** The single "Interest" concept is now two: the
   non-registered asset mix has separate **Bonds** and **Cash** slices, and the
   return assumptions have **Bonds Total Return** (default 3.5%) and **Cash
@@ -16,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatically (legacy interest → Cash, Bonds at 0%) with identical results.
 
 ### Changed
+- **Withdrawal strategies relabeled.** "Tax-Efficient" is now **RRSP Last
+  (defer taxes)** and "RRSP First" is **RRSP First (early melt)**, with an
+  explicit caveat that deferral can mean a higher tax bill for the estate and
+  higher total lifetime tax. Display text only — stored scenario values are
+  unchanged.
+- **Asset-mix and Returns fields reordered** to a consistent equity, bonds,
+  dividends, foreign, cash sequence across the mix editor, the collapsed
+  account summary, and the Returns panel.
 - **Assumptions box split into three.** The sidebar's Assumptions section is now
   **Settings** (province, inflation, pension splitting, RRSP-first, real
   dollars), **Returns** (per-account return rates, each field accented with its
@@ -27,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependencies were affected.
 
 ### Fixed
+- **Pension credit and income splitting are now RRIF-only.** Voluntary RRSP
+  melt withdrawals are ordinary withdrawals under CRA rules and no longer
+  qualify for the Pension Income Credit or count as eligible pension income
+  for splitting. Previously both counted, which overstated the benefit of the
+  RRSP-first melt strategy; projections change slightly as a result.
 - Added the missing `jsdom` dev dependency and rebuilt the dev container image —
   the four component/hook test files (App, OnboardingFlow, useScenarios,
   usePersistentState) had been failing at worker startup and silently not
