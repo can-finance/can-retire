@@ -25,6 +25,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         'cpp-calculator': fileURLToPath(new URL('./cpp-calculator/index.html', import.meta.url)),
+        'how-it-works': fileURLToPath(new URL('./how-it-works/index.html', import.meta.url)),
       },
       output: {
         manualChunks: {

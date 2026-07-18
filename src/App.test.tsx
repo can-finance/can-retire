@@ -7,15 +7,17 @@ import '@testing-library/jest-dom/vitest';
 import { ONBOARDING_KEY, SIM_KEY } from './utils/onboarding';
 import { INITIAL_INPUTS } from './utils/inputSanitizer';
 import { EDIT_PLAN_LABEL } from './components/layout/AppLayout';
+import { redirectTargetForHash } from './utils/bootRedirect';
 
 // React's act() warns unless it knows it's running in a test environment.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 // --- mocks -----------------------------------------------------------------
-// Dashboard, CppCalculator, and HowItWorks are heavy (recharts, simulation
-// engine, etc.) and irrelevant to the activation state machine under test
-// here. `mountState` is created via vi.hoisted so both the (hoisted) vi.mock
-// factory and the test bodies below can share the same counter object.
+// The SPA is dashboard-only now, so Dashboard is the only heavy child to mock
+// out (recharts, simulation engine, etc. — irrelevant to the activation state
+// machine under test here). `mountState` is created via vi.hoisted so both the
+// (hoisted) vi.mock factory and the test bodies below can share the same
+// counter object.
 const { mountState } = vi.hoisted(() => ({ mountState: { count: 0 } }));
 
 vi.mock('./components/dashboard/Dashboard', () => ({
@@ -25,14 +27,6 @@ vi.mock('./components/dashboard/Dashboard', () => ({
         }, []);
         return <div data-testid="dashboard-mock">Dashboard Mock</div>;
     },
-}));
-
-vi.mock('./components/pages/CppCalculator', () => ({
-    CppCalculator: () => <div data-testid="cpp-calculator-mock">CPP Calculator Mock</div>,
-}));
-
-vi.mock('./components/pages/HowItWorks', () => ({
-    HowItWorks: () => <div data-testid="how-it-works-mock">How It Works Mock</div>,
 }));
 
 // Imported AFTER the mocks above are registered (vi.mock calls are hoisted to
@@ -66,6 +60,10 @@ function navigateHash(hash: string) {
 describe('App activation state machine', () => {
     beforeEach(() => {
         window.localStorage.clear();
+        // Reset the full URL (not just the hash) so a `?setup=1` set by one test
+        // can't leak into the next — App strips it on mount, but resetting here
+        // keeps each test's starting URL independent of run order regardless.
+        window.history.replaceState(null, '', '/');
         setHash('');
         mountState.count = 0;
     });
@@ -86,19 +84,6 @@ describe('App activation state machine', () => {
         expect(inertWrapper).not.toBeNull();
     });
 
-    it('fresh + #cpp-calculator at load: no dialog until navigating to the dashboard', async () => {
-        setHash('#cpp-calculator');
-        renderApp();
-
-        expect(screen.queryByRole('dialog')).toBeNull();
-        expect(screen.getByTestId('cpp-calculator-mock')).toBeInTheDocument();
-
-        const user = userEvent.setup();
-        await user.click(screen.getByRole('button', { name: 'Dashboard' }));
-
-        expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    });
-
     it('#start= at load: the dialog never shows', async () => {
         setHash('#start=xyz');
         renderApp();
@@ -113,26 +98,11 @@ describe('App activation state machine', () => {
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('F2: data written (e.g. CPP Apply) while parked on #cpp-calculator cancels the pending auto takeover', async () => {
-        setHash('#cpp-calculator');
-        renderApp();
-        expect(screen.queryByRole('dialog')).toBeNull();
-
-        // Simulate the CPP Calculator's "Apply to plan" writing the sim key
-        // before the user ever navigates to the dashboard.
-        window.localStorage.setItem(SIM_KEY, JSON.stringify(INITIAL_INPUTS));
-
-        const user = userEvent.setup();
-        await user.click(screen.getByRole('button', { name: 'Dashboard' }));
-
-        expect(screen.queryByRole('dialog')).toBeNull();
-    });
-
     it('latch: once shown, the dialog survives an unrelated hashchange', async () => {
         renderApp();
         expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
-        navigateHash('#how-it-works');
+        navigateHash('#foo');
 
         expect(screen.getByRole('dialog')).toBeInTheDocument();
     });
@@ -178,17 +148,56 @@ describe('App activation state machine', () => {
         expect(mountState.count).toBe(before);
     });
 
-    it('history guard: clicking Edit My Plan while already on the dashboard does not push a duplicate history entry', async () => {
+    it('?setup=1 at load with existing saved data: overlay opens and the param is stripped', async () => {
+        window.localStorage.setItem(SIM_KEY, JSON.stringify(INITIAL_INPUTS));
+        window.history.replaceState(null, '', '/?setup=1');
+
+        renderApp();
+
+        expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        expect(window.location.search).not.toContain('setup');
+    });
+
+    it('?setup=1 combined with a #start= hash: the overlay does not open', async () => {
+        window.history.replaceState(null, '', '/?setup=1#start=xyz');
+
+        renderApp();
+
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('history guard: clicking Edit My Plan just opens the overlay in place, touching no history', async () => {
         window.localStorage.setItem(SIM_KEY, JSON.stringify(INITIAL_INPUTS));
         window.localStorage.setItem(ONBOARDING_KEY, '1');
         const user = userEvent.setup();
         renderApp();
         expect(screen.queryByRole('dialog')).toBeNull();
 
+        // Onboarding is a pure in-place overlay now — no navigation, so nothing
+        // should push onto the history stack when it opens.
         const pushStateSpy = vi.spyOn(window.history, 'pushState');
         await user.click(screen.getByRole('button', { name: EDIT_PLAN_LABEL }));
 
         expect(pushStateSpy).not.toHaveBeenCalled();
         expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    });
+});
+
+describe('redirectTargetForHash (legacy hash → MPA path)', () => {
+    it('redirects the CPP Calculator hashes to /cpp-calculator/', () => {
+        expect(redirectTargetForHash('#cpp-calculator')).toBe('/cpp-calculator/');
+        expect(redirectTargetForHash('#cpp')).toBe('/cpp-calculator/');
+        expect(redirectTargetForHash('#/cpp-calculator')).toBe('/cpp-calculator/');
+    });
+
+    it('redirects the How-It-Works hash to /how-it-works/', () => {
+        expect(redirectTargetForHash('#how-it-works')).toBe('/how-it-works/');
+        expect(redirectTargetForHash('#/how-it-works')).toBe('/how-it-works/');
+    });
+
+    it('leaves the dashboard, share links, and unknown hashes untouched', () => {
+        expect(redirectTargetForHash('')).toBeNull();
+        expect(redirectTargetForHash('#start=abc')).toBeNull();
+        expect(redirectTargetForHash('#foo')).toBeNull();
     });
 });

@@ -107,7 +107,7 @@ export function PersonSection({
                 {person.cppAnnualOverride == null && (
                     <HelpTooltip text="The plan estimates CPP simply as Years Contributed ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings (with drop-out and child-rearing provisions) and can feed the result back into this plan.">
                         <a
-                            href="#cpp-calculator"
+                            href="/cpp-calculator/"
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
                         >
                             Want a more accurate CPP estimate? Try the CPP Calculator →

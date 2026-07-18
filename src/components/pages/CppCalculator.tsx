@@ -191,11 +191,9 @@ export function CppCalculator() {
     const [linkCopied, setLinkCopied] = useState(false);
 
     const copyShareLink = async () => {
-        // On the standalone /cpp-calculator/ page the path IS the calculator;
-        // in the SPA it's a hash route on the main page
-        const url = window.location.pathname.includes('cpp-calculator')
-            ? `${window.location.origin}${window.location.pathname}`
-            : `${window.location.origin}${window.location.pathname}#cpp-calculator`;
+        // The CPP Calculator is a real page at /cpp-calculator/; always share
+        // that canonical path (the dashboard links here, it's not a hash route).
+        const url = `${window.location.origin}/cpp-calculator/`;
         try {
             await navigator.clipboard.writeText(url);
         } catch {
@@ -804,7 +802,11 @@ export function CppCalculator() {
                                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                     </svg>
-                                    Applied to {appliedTo} — open the Dashboard to see the impact
+                                    Applied to {appliedTo} —{' '}
+                                    <a href="/" className="text-emerald-600 hover:text-emerald-700 underline decoration-dotted">
+                                        open the Dashboard
+                                    </a>
+                                    {' '}to see the impact
                                 </span>
                             )}
                         </div>

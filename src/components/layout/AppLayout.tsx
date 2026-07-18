@@ -1,15 +1,16 @@
 import React from 'react';
 import { HelpTooltip } from '../ui/HelpTooltip';
-import { scrollToAnchorSoon } from '../../utils/scrollToAnchor';
 
 export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works';
 
-// Single source for the nav pill order/labels — mapped to one button element
-// below so all three stay in sync (classes, active logic) instead of drifting.
-const NAV_ITEMS: { id: PageId; label: string }[] = [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'cpp-calculator', label: 'CPP Calculator' },
-    { id: 'how-it-works', label: 'How does this work?' },
+// Single source for the nav pill order/labels/targets. The three pages are now
+// real MPA routes, so each item is a plain <a href> to the page's path — the
+// active-page highlight is derived from AppLayout's `activePage` prop rather
+// than in-SPA routing state.
+const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
+    { id: 'dashboard', label: 'Dashboard', href: '/' },
+    { id: 'cpp-calculator', label: 'CPP Calculator', href: '/cpp-calculator/' },
+    { id: 'how-it-works', label: 'How does this work?', href: '/how-it-works/' },
 ];
 
 // Single source for the "re-run setup" button's label, shared with the copy
@@ -18,10 +19,17 @@ export const EDIT_PLAN_LABEL = 'Edit My Plan';
 
 interface AppLayoutProps {
     children: React.ReactNode;
-    currentPage: PageId;
-    onNavigate: (page: PageId) => void;
-    /** Re-launch the guided setup overlay. */
-    onLaunchOnboarding: () => void;
+    /** Which nav item to highlight as the current page. */
+    activePage: PageId;
+    /**
+     * Re-launch the guided setup overlay in place. Only the dashboard SPA
+     * passes this — the standalone MPA pages omit it, so the "Edit My Plan"
+     * control renders as a plain link to `/?setup=1` instead, which navigates
+     * to the dashboard and opens the overlay there (see the `setupRequested`
+     * capture in App.tsx). Either way the control itself is always rendered,
+     * in the same position, so the header doesn't shift between pages.
+     */
+    onLaunchOnboarding?: () => void;
 }
 
 export function CrapLogo() {
@@ -64,24 +72,40 @@ export function CrapLogo() {
 export function BrandLockup({
     children,
     className = 'flex items-center gap-2.5',
+    href,
 }: {
     children: React.ReactNode;
     className?: string;
+    href?: string;
 }) {
-    return (
-        <div className={className}>
+    const content = (
+        <>
             <CrapLogo />
             {children}
+        </>
+    );
+
+    if (href) {
+        return (
+            <a href={href} className={`${className} hover:opacity-80 transition-opacity`}>
+                {content}
+            </a>
+        );
+    }
+
+    return (
+        <div className={className}>
+            {content}
         </div>
     );
 }
 
-export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboarding }: AppLayoutProps) {
+export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayoutProps) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900">
             <header className="lg:sticky lg:top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
                 <div className="container mx-auto flex min-h-16 items-center justify-between px-4 py-2">
-                    <BrandLockup className="flex min-w-0 items-center gap-2.5">
+                    <BrandLockup className="flex min-w-0 items-center gap-2.5" href="/">
                         <h1 className="min-w-0 truncate text-xl font-bold tracking-tight text-slate-900">
                             Canadian Retirement Asset Planning <span className="text-brand-500">tool</span>
                         </h1>
@@ -93,32 +117,50 @@ export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboardin
                     </div>
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                        <nav className="flex items-center gap-1 bg-slate-100/50 p-1 rounded-xl">
-                            {NAV_ITEMS.map(({ id, label }) => (
-                                <button
+                        <nav className="flex items-center gap-5">
+                            {NAV_ITEMS.map(({ id, label, href }) => (
+                                <a
                                     key={id}
-                                    onClick={() => onNavigate(id)}
-                                    className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === id
-                                        ? 'bg-white text-slate-900 shadow-sm'
+                                    href={href}
+                                    aria-current={activePage === id ? 'page' : undefined}
+                                    className={`whitespace-nowrap text-sm font-medium transition-colors ${activePage === id
+                                        ? 'text-slate-900 font-semibold underline decoration-brand-500 decoration-2 underline-offset-[6px]'
                                         : 'text-slate-500 hover:text-slate-900'
                                         }`}
                                 >
                                     {label}
-                                </button>
+                                </a>
                             ))}
                         </nav>
                         {/* Setup is an action (opens the guided-setup overlay), not a page —
-                            styled distinctly from the segmented nav pill and never "active". */}
+                            styled distinctly from the text nav links and never "active".
+                            Always rendered, in the same spot, so the header doesn't shift
+                            between pages. The dashboard SPA passes onLaunchOnboarding and
+                            opens the overlay in place; the standalone MPA pages have no
+                            overlay of their own, so they link to /?setup=1, which navigates
+                            to the dashboard and opens the overlay there. */}
                         <HelpTooltip text="Re-run the guided setup. Your current numbers are pre-filled — nothing changes until you save the plan.">
-                            <button
-                                onClick={onLaunchOnboarding}
-                                className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 hover:border-brand-300 transition-colors"
-                            >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                {EDIT_PLAN_LABEL}
-                            </button>
+                            {onLaunchOnboarding ? (
+                                <button
+                                    onClick={onLaunchOnboarding}
+                                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 hover:border-brand-300 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    {EDIT_PLAN_LABEL}
+                                </button>
+                            ) : (
+                                <a
+                                    href="/?setup=1"
+                                    className="flex items-center gap-1.5 px-4 py-1.5 text-sm font-semibold rounded-lg border border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 hover:border-brand-300 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                    {EDIT_PLAN_LABEL}
+                                </a>
+                            )}
                         </HelpTooltip>
                     </div>
                 </div>
@@ -131,15 +173,12 @@ export function AppLayout({ children, currentPage, onNavigate, onLaunchOnboardin
                     <p className="text-sm text-slate-400">
                         For planning and educational purposes only — not financial, tax, or investment advice.
                         Projections are estimates based on simplified assumptions.{' '}
-                        <button
-                            onClick={() => {
-                                onNavigate('how-it-works');
-                                scrollToAnchorSoon('full-disclaimer');
-                            }}
+                        <a
+                            href="/how-it-works/#full-disclaimer"
                             className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
                         >
                             Full disclaimer
-                        </button>
+                        </a>
                     </p>
                     <p className="text-sm text-slate-400">
                         Calculations use 2025 federal and provincial tax rules.
