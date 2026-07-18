@@ -5,7 +5,7 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-07-17
 
 ### Added
 - **First-time-user onboarding.** New visitors get an intro screen explaining the
@@ -46,6 +46,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Filled in the missing `brand-200/300/400/800` Tailwind shades — completed
   progress dots, wizard card accents, and two pre-existing hover styles
   (dashboard "Add Spouse", CPP calculator) now render their intended colors.
+
+### Fixed
+- **Estate tax showed $0 when a younger spouse outlived the primary person.** The
+  projection horizon had the couple's age difference flipped, so the simulation
+  ended at the primary person's death and never reached the surviving spouse's
+  final year — skipping the deemed disposition of their RRSP/RRIF and unrealized
+  capital gains. The projection now runs to the survivor's death year and taxes
+  their estate.
 
 ## [0.4.0] - 2026-07-13
 

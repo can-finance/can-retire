@@ -286,7 +286,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
     const startAge = p.age;
     const endAge = Math.max(
         p.lifeExpectancy,
-        s ? s.lifeExpectancy + (s.age - p.age) : 0
+        s ? s.lifeExpectancy + (p.age - s.age) : 0
     );
 
     // Guard: Prevent infinite loops

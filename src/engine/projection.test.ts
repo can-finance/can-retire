@@ -574,6 +574,23 @@ describe('estate / terminal tax', () => {
         // Spouse now holds the rolled-over RRSP
         expect(deathYear.spouseAccounts!.rrsp).toBeCloseTo(deathYear.rrspRolledToSpouse!, 0);
     });
+
+    it('younger spouse outliving the primary: projection runs to the spouse death year and taxes their estate', () => {
+        const res = runSimulation(inputs({
+            // Primary dies first (85); younger spouse outlives them (dies at 90)
+            person: person({ age: 65, lifeExpectancy: 85, tfsa: { type: 'TFSA', balance: 500_000 } }),
+            spouse: person({ age: 60, lifeExpectancy: 90, rrsp: { type: 'RRSP', balance: 800_000 } }),
+            postRetirementSpend: 20_000
+        }));
+        const last = res[res.length - 1];
+        // The simulation must run all the way to the spouse's death year, not stop
+        // early in the primary person's age scale (the age-difference-sign bug)
+        expect(last.spouseDeathThisYear).toBe(true);
+        expect(last.spouseAge).toBe(90);
+        // The spouse's estate is taxed via deemed disposition (RRSP), so terminal tax > 0
+        expect(last.totalTerminalTax!).toBeGreaterThan(0);
+        expect(last.netEstateValue).toBeCloseTo(last.grossEstateValue! - last.totalTerminalTax!, 0);
+    });
 });
 
 describe('runMonteCarlo', () => {
