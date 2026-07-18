@@ -60,7 +60,7 @@ export function SettingsFields({ inputs, onChange }: {
                 checked={inputs.withdrawalStrategy === 'rrsp-first'}
                 onChange={(val) => onChange({ withdrawalStrategy: val ? 'rrsp-first' : 'tax-efficient' })}
                 label="Withdraw from RRSP First"
-                tooltip="If off, withdrawals come from Non-Registered accounts first (Tax-Efficient strategy), then TFSA, then RRSP."
+                tooltip="Off = RRSP Last (defer taxes): withdrawals come from Non-Registered first, then TFSA, then RRSP. Deferring can mean a higher tax bill for your estate and higher total lifetime tax. On = RRSP First (early melt)."
             />
         </>
     );
