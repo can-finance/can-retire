@@ -32,8 +32,8 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                 <div className="space-y-1.5 pt-3 border-t border-emerald-200/50">
                     <h2 className="text-sm font-bold text-slate-900">Sharing your plan</h2>
                     <p className="text-sm text-slate-600">
-                        The <span className="font-semibold">Share</span> button (in the Scenarios panel) encodes your whole
-                        scenario into a link. The numbers live inside the link itself, so anyone you send it to can see them.
+                        The <span className="font-semibold">Share</span> button (in the Plans panel) encodes your whole
+                        plan into a link. The numbers live inside the link itself, so anyone you send it to can see them.
                     </p>
                 </div>
 

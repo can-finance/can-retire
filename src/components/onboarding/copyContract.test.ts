@@ -15,7 +15,7 @@ const appLayoutSrc = readFileSync(appLayoutPath, 'utf-8');
 const introSrc = readFileSync(introPath, 'utf-8');
 const closingSrc = readFileSync(closingPath, 'utf-8');
 
-// Guards the "Edit My Plan" button label against copy drift: AppLayout owns
+// Guards the "Guided Setup" button label against copy drift: AppLayout owns
 // the one literal string (EDIT_PLAN_LABEL); OnboardingIntro/OnboardingClosing
 // must reference that constant rather than re-hardcoding their own copy of it.
 describe('EDIT_PLAN_LABEL copy contract', () => {
@@ -33,8 +33,8 @@ describe('EDIT_PLAN_LABEL copy contract', () => {
     });
 
     it('the literal label string appears only in AppLayout.tsx (its definition)', () => {
-        expect(appLayoutSrc).toContain("'Edit My Plan'");
-        expect(introSrc).not.toContain('Edit My Plan');
-        expect(closingSrc).not.toContain('Edit My Plan');
+        expect(appLayoutSrc).toContain("'Guided Setup'");
+        expect(introSrc).not.toContain('Guided Setup');
+        expect(closingSrc).not.toContain('Guided Setup');
     });
 });

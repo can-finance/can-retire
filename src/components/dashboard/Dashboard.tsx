@@ -1,8 +1,8 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
-import { useScenarios } from '../../hooks/useScenarios';
-import type { SavedScenario } from '../../hooks/useScenarios';
+import { usePlans, DEFAULT_PLAN_NAME } from '../../hooks/usePlans';
+import type { SavedPlan } from '../../hooks/usePlans';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
 import { SettingsFields, ReturnsFields } from '../inputs/AssumptionsFields';
@@ -13,21 +13,38 @@ import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
 import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
-import { runSimulation, runMonteCarlo, blendedNonRegMix, totalNonRegBalance } from '../../engine/projection';
+import { runSimulation, runMonteCarlo, blendedNonRegMix } from '../../engine/projection';
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
 import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
 import { SIM_KEY } from '../../utils/onboarding';
 import { formatCurrencyCAD } from '../../utils/formatters';
+import { computeSummaryMetrics } from '../../utils/summaryMetrics';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
-import { ScenarioManager } from './ScenarioManager';
+import { PlanManager } from './PlanManager';
+import { ComparisonView } from '../comparison/ComparisonView';
+
+// Smallest 'Plan N' (N >= 2) whose name isn't already taken.
+function nextPlanName(plans: SavedPlan[]): string {
+    const taken = new Set(plans.map(p => p.name));
+    let n = 2;
+    while (taken.has(`Plan ${n}`)) n++;
+    return `Plan ${n}`;
+}
 
 export function Dashboard() {
-    const [inputs, setInputs] = usePersistentState<SimulationInputs>(SIM_KEY, INITIAL_INPUTS, sanitizeSimulationInputs);
-    const { scenarios, saveScenario, updateScenario, deleteScenario } = useScenarios();
-    const [activeScenarioId, setActiveScenarioId] = useState<string | null>(null);
+    const [inputs, setInputsRaw] = usePersistentState<SimulationInputs>(SIM_KEY, INITIAL_INPUTS, sanitizeSimulationInputs);
+    const { plans, activePlanId, activePlan, createPlan, duplicatePlan, deletePlan, renamePlan, activatePlan, syncActiveInputs } = usePlans();
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
     const [isMonteCarlo, setIsMonteCarlo] = useState(false);
+    const [isComparing, setIsComparing] = useState(false);
+
+    // Every EDIT writes through to the active plan. Plan activation/loading uses
+    // setInputsRaw directly — activating is not an edit and must not bump lastSaved.
+    const updateInputs = (next: SimulationInputs) => {
+        setInputsRaw(next);
+        syncActiveInputs(next);
+    };
 
     // Derived, not stored — keeps spouse UI in sync with every load path (hash, scenario, reset)
     const hasSpouse = !!inputs.spouse;
@@ -41,10 +58,15 @@ export function Dashboard() {
                 const json = LZString.decompressFromEncodedURIComponent(compressed);
                 if (json) {
                     // Untrusted payload (often truncated by mail clients) — sanitize before
-                    // applying, since setInputs persists it to localStorage.
+                    // applying, since setInputsRaw persists it to localStorage.
                     const clean = sanitizeSimulationInputs(JSON.parse(json));
                     if (clean) {
-                        setInputs(clean);
+                        // Shared links land as a NEW plan instead of silently overwriting the
+                        // active one. Deliberately NOT updateInputs: createPlan activates via a
+                        // state update that hasn't committed yet, so syncActiveInputs in the same
+                        // tick would write through to the PREVIOUS active plan.
+                        createPlan('Shared plan', clean);
+                        setInputsRaw(clean);
                     }
                 }
             } catch (e) {
@@ -53,7 +75,9 @@ export function Dashboard() {
             // Clear the hash either way so a reload doesn't keep overwriting user edits
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
         }
-    }, [setInputs]); // Run once on mount — setInputs is a stable setter (see usePersistentState)
+        // Run once on mount — setInputsRaw is a stable setter (see usePersistentState).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
@@ -113,13 +137,13 @@ export function Dashboard() {
     const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object | undefined) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
         if (!target) return;
-        setInputs({ ...inputs, [who]: { ...target, [field]: value } });
+        updateInputs({ ...inputs, [who]: { ...target, [field]: value } });
     };
 
     const updateNestedAccount = (who: 'person' | 'spouse', account: 'rrsp' | 'tfsa', field: string, value: number) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
         if (!target) return;
-        setInputs({
+        updateInputs({
             ...inputs,
             [who]: {
                 ...target,
@@ -134,141 +158,56 @@ export function Dashboard() {
     const updateNonRegAccounts = (who: 'person' | 'spouse', accounts: NonRegisteredAccount[]) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
         if (!target) return;
-        setInputs({ ...inputs, [who]: { ...target, nonRegisteredAccounts: accounts } });
+        updateInputs({ ...inputs, [who]: { ...target, nonRegisteredAccounts: accounts } });
     };
 
     const toggleSpouse = () => {
-        setInputs({ ...inputs, spouse: hasSpouse ? undefined : createDefaultPerson(true) });
+        updateInputs({ ...inputs, spouse: hasSpouse ? undefined : createDefaultPerson(true) });
     };
 
-    const handleSaveScenario = (name: string) => {
-        saveScenario(name, inputs);
+    const loadPlanInputs = (p: SavedPlan) => setInputsRaw(sanitizeSimulationInputs(p.inputs) ?? INITIAL_INPUTS);
+
+    const handleActivate = (id: string) => {
+        if (id === activePlanId) return;
+        const p = activatePlan(id);
+        if (p) loadPlanInputs(p);
     };
 
-    const loadScenario = (savedScenario: SavedScenario) => {
-        // Saved scenarios may predate schema changes — sanitize on the way in
-        setInputs(sanitizeSimulationInputs(savedScenario.inputs) ?? INITIAL_INPUTS);
-        setActiveScenarioId(savedScenario.id);
+    const handleRenameActive = (name: string) => {
+        if (activePlanId) { renamePlan(activePlanId, name); return; }
+        // Virtual plan: renaming materializes it. The clone below is load-bearing —
+        // same-reference setState is dropped by React's Object.is bail-out and the
+        // SIM_KEY persist effect would never fire, breaking the mirror invariant.
+        createPlan(name, inputs);
+        setInputsRaw({ ...inputs });
     };
 
-    const handleUpdateScenario = (newName?: string) => {
-        if (activeScenarioId) {
-            updateScenario(activeScenarioId, inputs, newName);
-        }
+    const handleNewPlan = () => {
+        const fresh = JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs;
+        createPlan(nextPlanName(plans), fresh);
+        setInputsRaw(fresh);
     };
 
-    const handleCreateNew = () => {
-        setInputs(INITIAL_INPUTS);
-        setActiveScenarioId(null);
+    const handleDuplicate = (id: string) => {
+        const copy = duplicatePlan(id);
+        if (copy) loadPlanInputs(copy);
     };
 
-    const metrics = useMemo(() => {
-        // Guard: Return default metrics if no simulation results
-        if (simulationResults.length === 0) {
-            return {
-                estate: 0,
-                estateTax: 0,
-                annualTaxRetirement: 0,
-                effectiveTaxRateRetirement: 0,
-                effectiveTaxRateEstate: 0,
-                totalEffectiveTaxRate: 0,
-                totalTaxPlusEstate: 0,
-                totalRetirementIncome: 0,
-                netRetirementIncome: 0,
-                netEstateValue: 0,
-                totalNetValue: 0,
-                initialWithdrawalRate: 0,
-                outOfMoneyAge: null as number | null,
-                totalShortfall: 0
-            };
-        }
+    const handleDelete = (id: string) => {
+        const next = deletePlan(id);
+        if (next) loadPlanInputs(next);
+    };
 
-        const lastYear = simulationResults[simulationResults.length - 1];
-        const retirementResults = simulationResults.filter(r => r.age >= inputs.person.retirementAge);
-
-        // Inflation adjustment helper
-        const adj = (val: number, factor: number) => isInflationAdjusted ? val / factor : val;
-
-        const annualTaxRetirement = retirementResults.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0);
-        const totalRetirementIncome = retirementResults.reduce((acc, curr) => acc + adj(curr.grossIncome, curr.inflationFactor), 0);
-
-        // Terminal tax is now calculated by the engine and includes:
-        // - Deemed disposition of RRSP/RRIF at death (if no surviving spouse)
-        // - Capital gains on unrealized Non-Reg gains at death
-        // - Proper spouse rollover logic (tax-free transfer if spouse survives)
-        const estateTax = lastYear.totalTerminalTax || 0;
-
-        // Convert final estate values to real dollars if needed
-        const estateValue = adj(lastYear.grossEstateValue || lastYear.totalAssets, lastYear.inflationFactor);
-        const adjustedEstateTax = adj(estateTax, lastYear.inflationFactor);
-
-        const totalTaxPlusEstate = annualTaxRetirement + adjustedEstateTax;
-
-        const effectiveTaxRateRetirement = totalRetirementIncome > 0 ? (annualTaxRetirement / totalRetirementIncome) * 100 : 0;
-        // A shortfall year is one where the engine could not fund target spending
-        const firstShortfallYear = simulationResults.find(r => r.shortfall > 1);
-        const outOfMoneyAge = firstShortfallYear ? firstShortfallYear.age : null;
-        const totalShortfall = simulationResults.reduce((acc, curr) => acc + adj(curr.shortfall, curr.inflationFactor), 0);
-
-        const effectiveTaxRateEstate = estateValue > 0 ? (adjustedEstateTax / estateValue) * 100 : 0;
-        const totalEffectiveTaxRate = (totalRetirementIncome + estateValue) > 0 ? (totalTaxPlusEstate / (totalRetirementIncome + estateValue)) * 100 : 0;
-
-        // Withdrawal Rate Calculation
-        let initialWithdrawalRate = 0;
-        const retirementIndex = simulationResults.findIndex(r => r.age === inputs.person.retirementAge);
-
-        // If retirementIndex > 0, use that year for withdrawals with previous year's assets as base.
-        // Otherwise (already retired), use input balances as starting assets.
-        if (retirementIndex > 0) {
-            const firstRetYear = simulationResults[retirementIndex];
-            const prevYear = simulationResults[retirementIndex - 1];
-            const totalWithdrawal = firstRetYear.totalRRSPWithdrawal + firstRetYear.totalTFSAWithdrawal + firstRetYear.totalNonRegWithdrawal;
-            if (prevYear.totalAssets > 0) {
-                initialWithdrawalRate = (totalWithdrawal / prevYear.totalAssets) * 100;
-            }
-        } else {
-            const firstRetYear = simulationResults[0];
-            const personNonReg = totalNonRegBalance(inputs.person);
-            const spouseNonReg = inputs.spouse ? totalNonRegBalance(inputs.spouse) : 0;
-            const startAssets =
-                inputs.person.rrsp.balance +
-                inputs.person.tfsa.balance +
-                personNonReg +
-                (inputs.spouse ? (inputs.spouse.rrsp.balance + inputs.spouse.tfsa.balance + spouseNonReg) : 0);
-
-            if (firstRetYear && startAssets > 0) {
-                const totalWithdrawal = firstRetYear.totalRRSPWithdrawal + firstRetYear.totalTFSAWithdrawal + firstRetYear.totalNonRegWithdrawal;
-                initialWithdrawalRate = (totalWithdrawal / startAssets) * 100;
-            }
-        }
-
-        const netRetirementIncome = totalRetirementIncome - annualTaxRetirement;
-        const netEstateValue = estateValue - adjustedEstateTax;
-        const totalNetValue = netRetirementIncome + netEstateValue;
-
-        return {
-            estate: estateValue,
-            annualTaxRetirement,
-            estateTax: adjustedEstateTax,
-            totalTaxPlusEstate,
-            effectiveTaxRateRetirement,
-            effectiveTaxRateEstate,
-            totalEffectiveTaxRate,
-            totalRetirementIncome,
-            netRetirementIncome,
-            netEstateValue,
-            totalNetValue,
-            outOfMoneyAge,
-            initialWithdrawalRate,
-            totalShortfall
-        };
+    const metrics = useMemo(
+        () => computeSummaryMetrics(simulationResults, inputs, isInflationAdjusted),
         // Deps intentionally list only the specific inputs.person fields this memo reads
         // (retirementAge, rrsp.balance, tfsa.balance, nonRegisteredAccounts — the latter is
         // all totalNonRegBalance() touches). Depending on the whole inputs.person object would
         // recompute on unrelated field changes (e.g. birth year, CPP start age) that don't
         // affect this result.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegisteredAccounts, inputs.spouse]);
+        [simulationResults, inputs.person.retirementAge, inputs.province, isInflationAdjusted, inputs.person.rrsp.balance, inputs.person.tfsa.balance, inputs.person.nonRegisteredAccounts, inputs.spouse]
+    );
 
     const globalMaxY = useMemo(() => {
         if (simulationResults.length === 0) return 0;
@@ -282,6 +221,17 @@ export function Dashboard() {
 
     return (
         <div className="flex flex-col gap-6">
+            {isComparing ? (
+                <ComparisonView
+                    plans={plans}
+                    activePlanId={activePlanId}
+                    liveInputs={inputs}
+                    isInflationAdjusted={isInflationAdjusted}
+                    onToggleInflation={setIsInflationAdjusted}
+                    onExit={() => setIsComparing(false)}
+                />
+            ) : (
+                <>
             <SummaryHeader metrics={metrics} monteCarlo={displayedMonteCarloResults} />
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -333,19 +283,19 @@ export function Dashboard() {
                             <FinancialInput
                                 label="Pre-Retirement"
                                 value={inputs.preRetirementSpend}
-                                onChange={(e) => setInputs({ ...inputs, preRetirementSpend: Number(e.target.value) })}
+                                onChange={(e) => updateInputs({ ...inputs, preRetirementSpend: Number(e.target.value) })}
                             />
                             <FinancialInput
                                 label="Post-Retirement"
                                 value={inputs.postRetirementSpend}
-                                onChange={(e) => setInputs({ ...inputs, postRetirementSpend: Number(e.target.value) })}
+                                onChange={(e) => updateInputs({ ...inputs, postRetirementSpend: Number(e.target.value) })}
                             />
                         </div>
 
                         <div className="pt-2 border-t border-emerald-200/50 mt-4">
                             <OneTimeSpendingInput
                                 expenses={inputs.oneTimeExpenses || []}
-                                onChange={(expenses) => setInputs({ ...inputs, oneTimeExpenses: expenses })}
+                                onChange={(expenses) => updateInputs({ ...inputs, oneTimeExpenses: expenses })}
                             />
                         </div>
                     </CollapsibleSection>
@@ -355,7 +305,7 @@ export function Dashboard() {
                         <div className="space-y-4">
                             <SettingsFields
                                 inputs={inputs}
-                                onChange={(p) => setInputs({ ...inputs, ...p })}
+                                onChange={(p) => updateInputs({ ...inputs, ...p })}
                             />
 
                             <Toggle
@@ -370,7 +320,7 @@ export function Dashboard() {
                     <CollapsibleSection title="Returns" accent="violet" defaultOpen={false}>
                         <ReturnsFields
                             inputs={inputs}
-                            onChange={(p) => setInputs({ ...inputs, ...p })}
+                            onChange={(p) => updateInputs({ ...inputs, ...p })}
                         />
                     </CollapsibleSection>
 
@@ -395,7 +345,7 @@ export function Dashboard() {
                                         minFractionDigits={1}
                                         maxFractionDigits={1}
                                         value={Number(((inputs.returnRates.volatility || 0.10) * 100).toFixed(1))}
-                                        onChange={(e) => setInputs({
+                                        onChange={(e) => updateInputs({
                                             ...inputs,
                                             returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
                                         })}
@@ -406,16 +356,19 @@ export function Dashboard() {
                         </div>
                     </CollapsibleSection>
 
-                    {/* Saved Scenarios */}
-                    <ScenarioManager
-                        scenarios={scenarios}
-                        activeScenarioId={activeScenarioId}
+                    {/* Plans */}
+                    <PlanManager
+                        plans={plans}
+                        activePlanId={activePlanId}
+                        activePlanName={activePlan?.name ?? DEFAULT_PLAN_NAME}
+                        activeLastSaved={activePlan?.lastSaved ?? null}
                         currentInputs={inputs}
-                        onSave={handleSaveScenario}
-                        onUpdate={handleUpdateScenario}
-                        onLoad={loadScenario}
-                        onDelete={deleteScenario}
-                        onCreateNew={handleCreateNew}
+                        onRenameActive={handleRenameActive}
+                        onNewPlan={handleNewPlan}
+                        onActivate={handleActivate}
+                        onDuplicate={handleDuplicate}
+                        onDelete={handleDelete}
+                        onCompare={() => setIsComparing(true)}
                     />
                 </div>
 
@@ -471,6 +424,8 @@ export function Dashboard() {
                     />
                 </div>
             </div>
+                </>
+            )}
         </div>
     );
 }

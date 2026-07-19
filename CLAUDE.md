@@ -17,9 +17,12 @@ Everything larger is delegated to subagents (Agent tool) with an explicit
 
 When in doubt between two tiers, take the higher one. The orchestrator always
 verifies the result itself (diff review, typecheck, tests in the Docker dev
-container) — especially for haiku/sonnet work. Caution: resuming a subagent via
-SendMessage does not preserve its `model:` override — spawn a fresh agent for
-non-trivial coding continuations instead.
+container) — especially for haiku/sonnet work. Exception: simple changes — copy
+or text edits, label swaps, comment tweaks, anything with no logic impact — do
+NOT need the typecheck/test gate after each edit; batch verification into the
+next natural gate (a logic change, pre-commit, or pre-release) instead. Caution:
+resuming a subagent via SendMessage does not preserve its `model:` override —
+spawn a fresh agent for non-trivial coding continuations instead.
 
 **Why:** cost/usage management — match model cost to task difficulty and keep the
 expensive orchestrator tier for planning and review; but flat per-agent overhead

@@ -166,7 +166,7 @@ describe('App activation state machine', () => {
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('history guard: clicking Edit My Plan just opens the overlay in place, touching no history', async () => {
+    it('history guard: clicking Guided Setup just opens the overlay in place, touching no history', async () => {
         window.localStorage.setItem(SIM_KEY, JSON.stringify(INITIAL_INPUTS));
         window.localStorage.setItem(ONBOARDING_KEY, '1');
         const user = userEvent.setup();

@@ -87,7 +87,7 @@ export function HowItWorks() {
                 </h2>
                 <div className="prose prose-amber max-w-none text-amber-900/80 leading-relaxed space-y-3">
                     <p>
-                        Treat results as comparisons between scenarios, not forecasts. A small difference (even 1-2%) between assumed and actual returns, compounded over 20-30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
+                        Treat results as comparisons between plans, not forecasts. A small difference (even 1-2%) between assumed and actual returns, compounded over 20-30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
                     </p>
                     <p>
                         The simulation also assumes today's rules stay in place. Future changes to tax rates and brackets, government programs like CPP and OAS, and other laws will affect real-world results in ways no projection can anticipate.
@@ -269,7 +269,7 @@ export function HowItWorks() {
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>No Data Transfer:</strong> personal financial information is never sent to a server.</li>
                         <li><strong>Local Logic:</strong> the projection engine and tax models run entirely on your own device.</li>
-                        <li><strong>No Persistent Tracking:</strong> saved scenarios are stored only in your browser's local storage.</li>
+                        <li><strong>No Persistent Tracking:</strong> saved plans are stored only in your browser's local storage.</li>
                         <li><strong>Anonymous Analytics:</strong> Cloudflare Web Analytics monitors aggregate, non-identifiable traffic only.</li>
                     </ul>
                 </div>

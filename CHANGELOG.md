@@ -5,6 +5,22 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Compare plans side by side.** Pick 2–3 plans and see overlaid net-worth
+  projections with Monte Carlo uncertainty bands, plus a table of headline
+  metrics — success rate, estate values, lifetime tax, realized capital gains,
+  and when money runs out.
+
+### Changed
+- **Named plans replace saved scenarios.** You're always editing a named plan
+  ("My Plan"), and edits save automatically to the active plan — no more
+  Save/Update buttons. Rename a plan inline by clicking its title. New Plan,
+  Duplicate, and Delete controls manage the rest. Share links now open as a
+  new "Shared plan" instead of overwriting your current inputs. Existing
+  saved scenarios are preserved and become plans automatically.
+
 ## [0.6.1] - 2026-07-19
 
 ### Added

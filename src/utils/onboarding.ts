@@ -29,7 +29,7 @@ export function isOnboardingEligible(): boolean {
  * loadDraftSeed (actual seed value) so the "is this a real plan" logic lives
  * in exactly one place.
  */
-function readSavedPlan(): SimulationInputs | null {
+export function readStoredSimInputs(): SimulationInputs | null {
     try {
         const raw = localStorage.getItem(SIM_KEY);
         if (!raw) return null;
@@ -48,7 +48,7 @@ function readSavedPlan(): SimulationInputs | null {
  * Fails closed to false on any storage error.
  */
 export function hasSavedPlan(): boolean {
-    return readSavedPlan() !== null;
+    return readStoredSimInputs() !== null;
 }
 
 export function markOnboardingDone(): void {
@@ -66,7 +66,7 @@ export function markOnboardingDone(): void {
  * wizard edits can never alias INITIAL_INPUTS.
  */
 export function loadDraftSeed(): SimulationInputs {
-    return readSavedPlan() ?? (JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs);
+    return readStoredSimInputs() ?? (JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs);
 }
 
 /** Sanitize and persist the finished draft, then mark onboarding done. */

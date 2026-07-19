@@ -7,7 +7,7 @@ import { AppLayout } from './components/layout/AppLayout';
  * imported by BOTH the client entry (`how-it-works-standalone.tsx`, which mounts
  * it with createRoot) and the build-time SSR entry (`prerender/how-it-works-ssr.tsx`,
  * which renders it to static HTML). No onLaunchOnboarding — the standalone MPA
- * pages have no onboarding overlay, so the "Edit My Plan" control links to the
+ * pages have no onboarding overlay, so the "Guided Setup" control links to the
  * dashboard instead (see AppLayout).
  */
 export function StandaloneHowItWorksPage() {

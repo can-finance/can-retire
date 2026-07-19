@@ -15,7 +15,7 @@ const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
 
 // Single source for the "re-run setup" button's label, shared with the copy
 // in OnboardingIntro/OnboardingClosing so the two never drift out of sync.
-export const EDIT_PLAN_LABEL = 'Edit My Plan';
+export const EDIT_PLAN_LABEL = 'Guided Setup';
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -23,7 +23,7 @@ interface AppLayoutProps {
     activePage: PageId;
     /**
      * Re-launch the guided setup overlay in place. Only the dashboard SPA
-     * passes this — the standalone MPA pages omit it, so the "Edit My Plan"
+     * passes this — the standalone MPA pages omit it, so the "Guided Setup"
      * control renders as a plain link to `/?setup=1` instead, which navigates
      * to the dashboard and opens the overlay there (see the `setupRequested`
      * capture in App.tsx). Either way the control itself is always rendered,

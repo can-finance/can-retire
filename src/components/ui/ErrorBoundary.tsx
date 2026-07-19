@@ -1,11 +1,12 @@
 import React from 'react';
 import { ONBOARDING_KEY, SIM_KEY } from '../../utils/onboarding';
+import { PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY } from '../../hooks/usePlans';
 
 interface ErrorBoundaryState {
     hasError: boolean;
 }
 
-const STORAGE_KEYS = [SIM_KEY, 'retirement_saved_scenarios', ONBOARDING_KEY];
+const STORAGE_KEYS = [SIM_KEY, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY, ONBOARDING_KEY];
 
 export class ErrorBoundary extends React.Component<React.PropsWithChildren, ErrorBoundaryState> {
     state: ErrorBoundaryState = { hasError: false };

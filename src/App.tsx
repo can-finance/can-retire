@@ -10,7 +10,7 @@ import { isOnboardingEligible, loadDraftSeed, markOnboardingDone } from './utils
 // those paths at boot (see src/utils/bootRedirect.ts + main.tsx) before React
 // mounts. Besides that, this component cares about two URL signals at boot:
 // #start=... (share links that import a scenario into the dashboard) and
-// ?setup=1 (a manual "Edit My Plan" launch, e.g. from the standalone MPA
+// ?setup=1 (a manual "Guided Setup" launch, e.g. from the standalone MPA
 // pages' header link — see the `setupRequested` capture below).
 function App() {
   // Capture first-visit eligibility ONCE, synchronously, at mount. Dashboard is
@@ -23,7 +23,7 @@ function App() {
   // signal as it stood at load.
   const [eligible] = useState(isOnboardingEligible);
 
-  // Capture a manual "Edit My Plan" launch via `?setup=1` ONCE, synchronously,
+  // Capture a manual "Guided Setup" launch via `?setup=1` ONCE, synchronously,
   // at mount, alongside `eligible` above. This is how the standalone MPA
   // pages' header link (AppLayout's `<a href="/?setup=1">`, rendered when
   // `onLaunchOnboarding` is absent) opens the overlay after navigating back to
@@ -51,7 +51,7 @@ function App() {
   // sees the intro immediately with no unoverlaid frame and no effect needed
   // to "catch up". `loadDraftSeed()` below already loads the saved plan when
   // one exists, so a `setupRequested` launch with existing data pre-fills the
-  // wizard exactly like the manual "Edit My Plan" relaunch does.
+  // wizard exactly like the manual "Guided Setup" relaunch does.
   const [active, setActive] = useState<boolean>(() => eligible || setupRequested);
 
   // Bumped whenever onboarding closes with a commit so the always-mounted
@@ -112,7 +112,7 @@ function App() {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [active]);
 
-  // Manual re-launch from the "Edit My Plan" nav button: open the intro over
+  // Manual re-launch from the "Guided Setup" nav button: open the intro over
   // the live dashboard. Captures focus so it can be restored on close. No
   // navigation — the dashboard is the only page this SPA renders.
   const launchOnboarding = () => {
@@ -125,7 +125,7 @@ function App() {
   // — OnboardingFlow only consumes `seed` in its useState initializers at mount,
   // so re-parsing + re-sanitizing localStorage on each keystroke-driven re-render
   // while the overlay is up is wasted work. Keyed on `active` so a second
-  // activation (e.g. re-opening "Edit My Plan" after an earlier session
+  // activation (e.g. re-opening "Guided Setup" after an earlier session
   // committed new data) re-reads fresh rather than reusing a stale first-mount
   // value. Null while hidden; only read where `active` is already true below.
   const seed = useMemo(() => (active ? loadDraftSeed() : null), [active]);
