@@ -37,6 +37,7 @@ export function FinancialInput({
     className,
     min,
     max,
+    disabled,
     ...props
 }: FinancialInputProps) {
     // Format initial value (0 is a real value and must render as "0", not blank)
@@ -108,7 +109,8 @@ export function FinancialInput({
                 "text-sm font-semibold",
                 tooltip && "cursor-help border-b border-dashed w-fit",
                 accentColor ? "" : "text-slate-700",
-                tooltip && !accentColor && "border-slate-300"
+                tooltip && !accentColor && "border-slate-300",
+                disabled && !accentColor && "text-slate-400"
             )}
             style={accentColor ? { color: accentColor, borderColor: accentColor + '80' } : undefined}
         >
@@ -133,11 +135,13 @@ export function FinancialInput({
                     onFocus={handleFocus}
                     onBlur={handleBlur}
                     onKeyDown={handleKeyDown}
+                    disabled={disabled}
                     className={twMerge(
                         "w-full rounded-lg border bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 sm:text-sm",
                         accentColor ? "border-slate-200" : "border-slate-300 focus:border-brand-500 focus:ring-brand-500",
                         prefix && "pl-7",
-                        suffix && "pr-8"
+                        suffix && "pr-8",
+                        "disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                     )}
                     style={accentColor ? {
                         borderLeftColor: accentColor,

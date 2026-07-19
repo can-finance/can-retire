@@ -54,13 +54,14 @@ export function SettingsFields({ inputs, onChange }: {
                 checked={inputs.useIncomeSplitting ?? true}
                 onChange={(val) => onChange({ useIncomeSplitting: val })}
                 label="Pension Income Splitting"
+                tooltip={'ON = the engine calculates the optimal pension income split of up to 50%.\nOFF = each spouse is taxed on their own income with no splitting.'}
             />
 
             <Toggle
                 checked={inputs.withdrawalStrategy === 'rrsp-first'}
                 onChange={(val) => onChange({ withdrawalStrategy: val ? 'rrsp-first' : 'tax-efficient' })}
                 label="Withdraw from RRSP First"
-                tooltip="Off = RRSP Last (defer taxes): withdrawals come from Non-Registered first, then TFSA, then RRSP. Deferring can mean a higher tax bill for your estate and higher total lifetime tax. On = RRSP First (early melt)."
+                tooltip={'ON = RRSP First (early melt): drain the RRSP first.\nOFF = RRSP Last (defer taxes): Non-Registered first, then TFSA, then RRSP. Deferring can raise estate and lifetime tax.'}
             />
         </>
     );
@@ -82,7 +83,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Whole-account annual return on RRSP/RRIF balances (growth is tax-sheltered, so no yield/gains split is needed)."
+                tooltip="Whole-account annual return on RRSP/RRIF balances — tax-sheltered, so no yield/gains split."
             />
             <FinancialInput
                 label="TFSA Return"
@@ -94,7 +95,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Whole-account annual return on TFSA balances (growth is tax-free, so no yield/gains split is needed)."
+                tooltip="Whole-account annual return on TFSA balances — tax-free, so no yield/gains split."
             />
             <FinancialInput
                 label="Non-Reg Growth"
@@ -109,7 +110,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
             />
             <FinancialInput
-                label="Bonds Total Return"
+                label="Non-Reg Bonds Total Return"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}
@@ -121,7 +122,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 tooltip="Total annual return on the Bonds slice of the non-registered mix; taxed as ordinary income."
             />
             <FinancialInput
-                label="Cdn Dividend Yield"
+                label="Non-Reg Cdn Dividend Yield"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}
@@ -133,7 +134,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 tooltip="Yield on the Cdn Dividends slice of the non-registered mix. Eligible dividends: 38% gross-up plus dividend tax credit."
             />
             <FinancialInput
-                label="Foreign Yield"
+                label="Non-Reg Foreign Yield"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}
@@ -145,7 +146,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 tooltip="Yield on the Foreign Dividends slice of the non-registered mix (e.g. US ETFs). Taxed as ordinary income."
             />
             <FinancialInput
-                label="Cash Interest"
+                label="Non-Reg Cash Interest"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}

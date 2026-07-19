@@ -1,3 +1,4 @@
+import { FAQ_ITEMS } from './how-it-works-faq';
 
 export function HowItWorks() {
     return (
@@ -278,24 +279,12 @@ export function HowItWorks() {
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
                 <h2 className="text-2xl font-bold text-slate-900">FAQs</h2>
                 <div className="space-y-6">
-                    <div className="space-y-2">
-                        <h4 className="font-bold text-slate-900">Who made this?</h4>
-                        <p className="text-slate-600 leading-relaxed">
-                            I'm just a guy with some financial training and a Claude subscription. I originally made this to convert my own retirement planning spreadsheet into a web-based tool to explore different scenarios. It has since grown into a more fully featured product so I figured if it can help others, why not put it online.
-                        </p>
-                    </div>
-                    <div className="space-y-2">
-                        <h4 className="font-bold text-slate-900">Is it free?</h4>
-                        <p className="text-slate-600 leading-relaxed">
-                            Yes, completely free to use, with no ads. I may accept sponsors in the future but all features will remain 100% free without any paywalls.
-                        </p>
-                    </div>
-                    <div className="space-y-2">
-                        <h4 className="font-bold text-slate-900">What's with the name?</h4>
-                        <p className="text-slate-600 leading-relaxed">
-                            Money, investing and retirement are serious business but you can't take everything too seriously.
-                        </p>
-                    </div>
+                    {FAQ_ITEMS.map(({ question, answer }) => (
+                        <div key={question} className="space-y-2">
+                            <h4 className="font-bold text-slate-900">{question}</h4>
+                            <p className="text-slate-600 leading-relaxed">{answer}</p>
+                        </div>
+                    ))}
                 </div>
             </section>
 

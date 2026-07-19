@@ -5,6 +5,23 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-07-19
+
+### Added
+- **Crawler-ready How It Works.** The page is prerendered to static HTML at
+  build time and carries FAQ structured data, and a sitemap now lists all three
+  pages — search engines and AI crawlers see the full methodology content
+  without running JavaScript.
+
+### Changed
+- **Clearer assumption controls.** Toggle tooltips follow a consistent
+  "ON = / OFF =" format, long tooltips were shortened, non-registered return
+  fields are labelled "Non-Reg", and Bonds sits next to Equity (Growth) in both
+  the asset mix editor and the Returns box.
+- **Years Contributed is disabled while a CPP Calculator estimate is applied**
+  — the estimate replaces the simple years-based formula, and the field's
+  tooltip says so.
+
 ## [0.6.0] - 2026-07-18
 
 ### Added

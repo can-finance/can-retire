@@ -155,10 +155,10 @@ export function NonRegAccountsInput({ accounts, onChange, accentColor, driftSumm
 
                             <button
                                 onClick={() => toggleExpanded(account.id)}
-                                className="w-full flex items-center justify-between text-xs text-slate-500 hover:text-slate-700 transition-colors"
+                                className="w-full flex items-center justify-between transition-colors"
                             >
-                                <span className="font-medium">{expanded ? '▾' : '▸'} Asset mix & settings</span>
-                                {!expanded && <span className="text-slate-400 truncate ml-2">{mixSummary(account)}</span>}
+                                <span className="text-sm font-medium text-brand-600 hover:text-brand-700">{expanded ? '▾' : '▸'} Asset mix & settings</span>
+                                {!expanded && <span className="text-xs text-slate-400 truncate ml-2">{mixSummary(account)}</span>}
                             </button>
 
                             {expanded && (

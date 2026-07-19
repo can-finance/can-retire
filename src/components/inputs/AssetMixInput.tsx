@@ -105,7 +105,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                         min={0}
                         max={100}
                     />
-                    <HelpTooltip text="Share of the account's unrealized gains realized and distributed each year (0% for buy-and-hold index ETFs; ~10–30% for typical mutual funds). Taxed annually as capital gains and reinvested, raising the cost base — the yearly tax drag of active funds.">
+                    <HelpTooltip text="Share of unrealized gains realized each year — ~2–3% for index ETFs, ~10–30% for active funds. Taxed as capital gains and reinvested, raising the cost base.">
                         <span className="text-xs text-slate-400 cursor-help border-b border-dashed border-slate-300 pb-1 inline-block">What is this?</span>
                     </HelpTooltip>
                 </div>
@@ -114,7 +114,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                 label="Rebalance annually"
                 checked={rebalanceAnnually}
                 onChange={onRebalanceChange}
-                tooltip="On: this account is rebalanced back to these weights every year, so dividend/interest income grows with the account (Fund Turnover approximates the tax cost of realizing gains to do this). Off: only the Equity slice compounds — dividend and interest income stay flat in dollars and the equity share drifts up over time. Compare the table's investment income in both modes."
+                tooltip={'ON = the account is rebalanced to these weights each year, so income grows with the account.\nOFF = only the Equity slice compounds — income stays flat in dollars and equity drifts up.'}
             />
         </div>
     );

@@ -105,7 +105,7 @@ export function PersonSection({
                 <BenefitsFields person={person} onPatch={onPatch} labels={BENEFITS_LABELS} />
 
                 {person.cppAnnualOverride == null && (
-                    <HelpTooltip text="The plan estimates CPP simply as Years Contributed ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings (with drop-out and child-rearing provisions) and can feed the result back into this plan.">
+                    <HelpTooltip text="The plan estimates CPP as Years Contributed ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings and can feed the result back into this plan.">
                         <a
                             href="/cpp-calculator/"
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"

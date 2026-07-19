@@ -60,6 +60,10 @@ export function BenefitsFields({
     onPatch: (patch: Partial<Person>) => void;
     labels: BenefitsFieldsLabels;
 }) {
+    // Years Contributed only feeds the plan's simple CPP estimate; once a CPP
+    // Calculator estimate is applied (cppAnnualOverride), the engine uses that
+    // fixed annual amount instead and this field has no effect.
+    const cppOverrideApplied = person.cppAnnualOverride != null;
     return (
         <div className="grid grid-cols-3 gap-3">
             <FinancialInput label={labels.cppStartAge} prefix="" value={person.cppStartAge}
@@ -67,7 +71,10 @@ export function BenefitsFields({
                 tooltip="Between 60 and 70. Starting later increases the monthly amount." />
             <FinancialInput label={labels.yearsContributed} prefix="" value={person.cppContributedYears ?? 35}
                 onChange={(e) => onPatch({ cppContributedYears: Number(e.target.value) })}
-                tooltip="Years you paid into CPP. The plan estimates CPP as Years Contributed ÷ 40 of the maximum." />
+                disabled={cppOverrideApplied}
+                tooltip={cppOverrideApplied
+                    ? "Not used while a CPP Calculator estimate is applied."
+                    : "Years you paid into CPP. The plan estimates CPP as Years Contributed ÷ 40 of the maximum."} />
             <FinancialInput label={labels.oasStartAge} prefix="" value={person.oasStartAge}
                 onChange={(e) => onPatch({ oasStartAge: Number(e.target.value) })}
                 tooltip="Between 65 and 70. Starting later increases the monthly amount." />

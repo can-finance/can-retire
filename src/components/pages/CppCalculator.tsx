@@ -400,7 +400,7 @@ export function CppCalculator() {
                                     <FinancialInput
                                         label="Stop Working (age)" prefix="" value={state.simple.workEndAge}
                                         min={18} max={70}
-                                        tooltip="Last age with employment earnings. Retiring years before starting CPP adds zero-earning years that can drag your average down — this calculator shows that effect."
+                                        tooltip="Last age with employment earnings. Retiring years before starting CPP adds zero-earning years that can drag your average down."
                                         onChange={(e) => update({ simple: { ...state.simple, workEndAge: Number(e.target.value) } })}
                                     />
                                 </div>
@@ -580,7 +580,7 @@ export function CppCalculator() {
                             checked={state.useChildRearing}
                             onChange={(val) => update({ useChildRearing: val })}
                             label="I was the primary caregiver of young children"
-                            tooltip="Years when you were the primary caregiver of a child under 7 and earned less than your career average are excluded from the calculation instead of dragging your average down."
+                            tooltip={'ON = years when you were the primary caregiver of a child under 7 and earned less than your career average are excluded from the calculation instead of dragging your average down.\nOFF = all years, including low-earning caregiving years, count normally toward your average.'}
                         />
                         {state.useChildRearing && (
                             <div className="mt-2 space-y-2">
