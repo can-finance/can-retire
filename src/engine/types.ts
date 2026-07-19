@@ -104,6 +104,10 @@ export interface SimulationResult {
     // on top of all other income). dividendTaxPaid can be negative — the dividend
     // tax credit can shelter other income at low incomes.
     capGainsTaxPaid: number;
+    // Gains deemed realized at death this year (full gain amount). Nonzero only
+    // in a death year with no surviving spouse (rollover branches contribute 0,
+    // since ACB transfers and the gains surface at the second death).
+    terminalRealizedGains: number;
     dividendTaxPaid: number;
     interestTaxPaid: number; // Bonds + cash interest + foreign dividends (all ordinary income)
     accounts: {
@@ -153,6 +157,9 @@ export interface SimulationResult {
     totalRRSPWithdrawal: number;   // RRIF + Melt + Extra
     employmentIncome: number;
     investmentIncome: number; // Interest + Dividends Only
+    // Household capital gains realized this year from non-reg sales while living
+    // (the full gain, not the 50% taxable portion). Terminal (at-death) deemed
+    // gains are reported separately in terminalRealizedGains.
     totalRealizedCapGains: number;
     inflationFactor: number;
     householdSurplus: number;

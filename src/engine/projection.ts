@@ -823,6 +823,10 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         let terminalTaxOnRRSP = 0;
         let terminalTaxOnCapGains = 0;
         let rrspRolledToSpouse = 0;
+        // Gross gains deemed realized at death this year. Accumulated only in the
+        // no-rollover (deemed disposition) branches below; rollover branches keep
+        // it 0 because ACB transfers to the survivor and the gains surface later.
+        let terminalRealizedGains = 0;
 
         // Calculate terminal taxes when someone dies
         if (pDiedThisYear) {
@@ -846,6 +850,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 p.tfsa.balance = 0;
             } else {
                 // No surviving spouse: Full deemed disposition
+                terminalRealizedGains += pUnrealizedGains;
                 // Combine RRSP + capital gains for single tax calculation (proper marginal rates)
                 const taxableGains = calculateTaxableCapitalGains(pUnrealizedGains);
                 const totalDeemedIncome = pRRSPBalance + taxableGains;
@@ -893,6 +898,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 s.tfsa.balance = 0;
             } else {
                 // No surviving spouse: Full deemed disposition
+                terminalRealizedGains += sUnrealizedGains;
                 const taxableGains = calculateTaxableCapitalGains(sUnrealizedGains);
                 const totalDeemedIncome = sRRSPBalance + taxableGains;
 
@@ -964,6 +970,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             oasClawbackPaid: (pFinal?.oasRecovery || 0) + (sFinal?.oasRecovery || 0),
             // Investment tax by source (household, marginal attribution, pre-split)
             capGainsTaxPaid: (pFinal?.capGainsTax || 0) + (sFinal?.capGainsTax || 0),
+            terminalRealizedGains,
             dividendTaxPaid: (pFinal?.dividendTax || 0) + (sFinal?.dividendTax || 0),
             interestTaxPaid: (pFinal?.interestTax || 0) + (sFinal?.interestTax || 0),
             accounts: {

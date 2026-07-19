@@ -608,6 +608,82 @@ describe('estate / terminal tax', () => {
     });
 });
 
+describe('realized capital gains reporting', () => {
+    it('living non-reg sales surface totalRealizedCapGains; no gain year means no living cap-gains tax', () => {
+        // Single person, retirement funded entirely from a non-reg account whose
+        // balance ($1M) far exceeds its ACB ($100k) — every sale realizes gains.
+        const res = runSimulation(inputs({
+            person: person({
+                lifeExpectancy: 72,
+                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 100_000 })]
+            }),
+            postRetirementSpend: 80_000
+        }));
+        // At least one year realizes living gains from the forced sales
+        expect(res.some(r => r.totalRealizedCapGains > 0)).toBe(true);
+        // capGainsTaxPaid is living-only: a year with no realized gains owes no living cap-gains tax
+        for (const r of res) {
+            if (r.totalRealizedCapGains === 0) {
+                expect(r.capGainsTaxPaid).toBe(0);
+            }
+        }
+    });
+
+    it('single person: full unrealized gain is deemed realized at death (gross)', () => {
+        // No spending, no growth, no turnover → balance and ACB are untouched until
+        // death, so the deemed gain equals the initial balance minus ACB exactly.
+        const res = runSimulation(inputs({
+            person: person({
+                lifeExpectancy: 66,
+                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 0 })]
+            }),
+            postRetirementSpend: 0
+        }));
+        const last = res[res.length - 1];
+        expect(last.terminalRealizedGains).toBeCloseTo(1_000_000, 0);
+        expect(last.totalTerminalTax!).toBeGreaterThan(0);
+        // No living sales or turnover → living realized gains are zero throughout
+        expect(res.every(r => r.totalRealizedCapGains === 0)).toBe(true);
+    });
+
+    it('spousal rollover: no deemed gains at the first death, gains surface at the second', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                lifeExpectancy: 66,
+                nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 100_000 })]
+            }),
+            spouse: person({
+                lifeExpectancy: 80,
+                nonRegisteredAccounts: [nonReg({ balance: 500_000, adjustedCostBase: 100_000 })]
+            }),
+            postRetirementSpend: 0
+        }));
+        const firstDeath = res.find(r => r.personDeathThisYear)!;
+        // First death rolls the non-reg over (ACB transfers), so nothing is deemed realized
+        expect(firstDeath.terminalRealizedGains).toBe(0);
+        // The survivor's death deems the combined non-reg disposed
+        const last = res[res.length - 1];
+        expect(last.spouseDeathThisYear).toBe(true);
+        expect(last.terminalRealizedGains).toBeGreaterThan(0);
+    });
+
+    it('both new fields are non-negative numbers on every row', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                lifeExpectancy: 72,
+                nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 100_000 })]
+            }),
+            postRetirementSpend: 80_000
+        }));
+        for (const r of res) {
+            expect(typeof r.totalRealizedCapGains).toBe('number');
+            expect(r.totalRealizedCapGains).toBeGreaterThanOrEqual(0);
+            expect(typeof r.terminalRealizedGains).toBe('number');
+            expect(r.terminalRealizedGains).toBeGreaterThanOrEqual(0);
+        }
+    });
+});
+
 describe('runMonteCarlo', () => {
     it('returns an empty result for invalid inputs instead of crashing', () => {
         const result = runMonteCarlo(inputs({ person: person({ age: 90, lifeExpectancy: 70 }) }), 10);

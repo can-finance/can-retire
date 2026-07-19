@@ -1,19 +1,5 @@
-interface SummaryMetrics {
-    estate: number;
-    estateTax: number;
-    annualTaxRetirement: number;
-    effectiveTaxRateRetirement: number;
-    effectiveTaxRateEstate: number;
-    totalEffectiveTaxRate: number;
-    totalTaxPlusEstate: number;
-    totalRetirementIncome: number;
-    netRetirementIncome: number;
-    netEstateValue: number;
-    totalNetValue: number;
-    initialWithdrawalRate: number;
-}
-
 import type { MonteCarloResult } from '../../engine/types';
+import type { SummaryMetrics } from '../../utils/summaryMetrics';
 import { formatCurrencyCAD } from '../../utils/formatters';
 
 interface SummaryHeaderProps {
