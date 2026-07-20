@@ -148,7 +148,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
         },
         {
             id: 'meltdown-you',
-            title: 'RRSP meltdown (optional)',
+            title: 'Early RRSP withdrawals (optional)',
             blurb: 'Optionally draw down your RRSP early to smooth taxes.',
             render: (d, setDraft) => <MeltdownFields person={d.person} who="person" setDraft={setDraft} />,
         },
@@ -179,7 +179,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
             },
             {
                 id: 'meltdown-spouse',
-                title: "Spouse's RRSP meltdown (optional)",
+                title: "Spouse's early RRSP withdrawals (optional)",
                 blurb: "Optionally draw down your spouse's RRSP early.",
                 render: (d, setDraft) =>
                     d.spouse ? <MeltdownFields person={d.spouse} who="spouse" setDraft={setDraft} /> : null,
@@ -212,7 +212,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
         {
             id: 'assumptions',
             title: 'Assumptions',
-            blurb: "Defaults are reasonable — these are rough estimates, don't over-optimize.",
+            blurb: 'Defaults are reasonable — you can fine-tune anytime later.',
             render: (d, setDraft) => (
                 <div className="space-y-4">
                     <AssumptionsFields inputs={d} onChange={(p) => setDraft((c) => ({ ...c, ...p }))} />

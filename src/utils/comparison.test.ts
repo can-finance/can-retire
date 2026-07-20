@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildComparisonChartData, MAX_COMPARANDS } from './comparison';
+import { buildComparisonChartData, bestIndex, MAX_COMPARANDS } from './comparison';
 import type { ComparisonRun } from './comparison';
 import type { SimulationResult, MonteCarloPercentile, MonteCarloResult } from '../engine/types';
 import type { SummaryMetrics } from './summaryMetrics';
@@ -119,5 +119,36 @@ describe('buildComparisonChartData', () => {
         const data = buildComparisonChartData([runA, runB], 'off', false);
         expect(data[0].age0).toBe(60);
         expect(data[0].age1).toBe(58);
+    });
+});
+
+describe('bestIndex', () => {
+    it('returns the index of the max for dir "max"', () => {
+        expect(bestIndex([10, 30, 20], 'max')).toBe(1);
+    });
+
+    it('returns the index of the min for dir "min"', () => {
+        expect(bestIndex([10, 30, 5], 'min')).toBe(2);
+    });
+
+    it('ignores nulls when finding the best', () => {
+        expect(bestIndex([null, 30, 10], 'max')).toBe(1);
+        expect(bestIndex([50, null, 20], 'min')).toBe(2);
+    });
+
+    it('returns null when fewer than two non-null values', () => {
+        expect(bestIndex([null, 42, null], 'max')).toBeNull();
+        expect(bestIndex([], 'max')).toBeNull();
+        expect(bestIndex([null, null], 'min')).toBeNull();
+    });
+
+    it('returns null when every non-null value is tied', () => {
+        expect(bestIndex([7, 7, 7], 'max')).toBeNull();
+        expect(bestIndex([7, null, 7], 'min')).toBeNull();
+    });
+
+    it('returns the first index on a max/min tie among distinct values', () => {
+        // Two values share the winning magnitude — the first wins.
+        expect(bestIndex([30, 30, 10], 'max')).toBe(0);
     });
 });

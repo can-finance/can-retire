@@ -244,7 +244,7 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
             ref={rootRef}
             role="dialog"
             aria-modal="true"
-            aria-label="Retirement plan setup"
+            aria-label="Guided Setup"
             tabIndex={-1}
             className={`fixed inset-0 z-[200] overflow-y-auto overscroll-contain outline-none ${rootBg} font-sans text-slate-900 flex flex-col`}
         >
@@ -252,13 +252,13 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
                 <div className="container mx-auto flex h-16 items-center justify-between px-4">
                     <BrandLockup>
                         <span className="text-lg font-bold tracking-tight text-slate-900 hidden sm:inline">
-                            Retirement setup
+                            Guided Setup
                         </span>
                     </BrandLockup>
                     {screen !== 'closing' && (
                         <button
                             onClick={skip}
-                            className="text-sm font-medium text-slate-400 hover:text-slate-600 transition-colors"
+                            className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors"
                         >
                             {isRelaunch ? 'Cancel — keep my current numbers' : 'Skip setup'}
                         </button>

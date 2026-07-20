@@ -49,13 +49,13 @@ const getColumns = (hasSpouse: boolean) => {
     ];
 
     if (hasSpouse) {
-        baseColumns.push({ key: 'spouseAge', label: 'Sp. Age', tooltip: "Spouse's age at the start of this year", align: 'left' });
+        baseColumns.push({ key: 'spouseAge', label: 'Sp Age', tooltip: "Spouse's age at the start of this year", align: 'left' });
     }
 
     const accountColumns = [
         { key: 'rrsp', label: 'RRSP', tooltip: 'Your RRSP balance after contributions, withdrawals, and growth. Withdrawals are fully taxable.', align: 'right', className: 'text-sky-600' },
         { key: 'tfsa', label: 'TFSA', tooltip: 'Your TFSA balance after contributions, withdrawals, and growth. Withdrawals are tax-free.', align: 'right', className: 'text-emerald-600' },
-        { key: 'nonReg', label: 'Non-Reg', tooltip: 'Your Non-registered balance. Capital gains calculated using ACB; only 50% taxable.', align: 'right', className: 'text-amber-600' },
+        { key: 'nonReg', label: 'Non-Reg', tooltip: 'Your Non-registered balance. Capital gains are calculated against your adjusted cost base (ACB); only 50% of gains are taxable.', align: 'right', className: 'text-amber-600' },
     ];
 
     if (hasSpouse) {
@@ -70,7 +70,7 @@ const getColumns = (hasSpouse: boolean) => {
         { key: 'total', label: 'Total Assets', tooltip: 'Sum of all account balances (yours + spouse if applicable)', align: 'right' },
         { key: 'netCPP', label: 'Net CPP', tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).', align: 'right', color: 'blue' },
         { key: 'netOAS', label: 'Net OAS', tooltip: 'Combined Old Age Security benefits (Net of Tax).', align: 'right', color: 'blue' },
-        { key: 'netIncome', label: 'Total Spend', tooltip: 'Actual household spending funded this year (after-tax cash minus reinvested surplus). Matches Target Spend when funded; reduced by any Shortfall.', align: 'right', color: 'green' },
+        { key: 'netIncome', label: 'Total Spend', tooltip: "What the household actually spent this year. Equals your spending target unless accounts ran short.", align: 'right', color: 'green' },
         { key: 'surplusShortfall', label: 'Surplus / Shortfall', tooltip: 'Green (+): income exceeded the spending target; the excess was reinvested into TFSA/RRSP/Non-Reg. Red (−): spending that could NOT be funded after draining all accounts.', align: 'right' },
         { key: 'taxPaid', label: 'Tax Paid', tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback', align: 'right', color: 'red' },
         { key: 'estateTax', label: 'Estate Tax', tooltip: 'Terminal tax at death: deemed disposition of RRSP/RRIF plus unrealized capital gains. Already deducted from the account balances shown on this row.', align: 'right', color: 'red' }

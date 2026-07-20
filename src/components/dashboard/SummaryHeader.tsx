@@ -34,7 +34,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
 
                     {/* Retirement Tax Rate */}
                     <div className="summary-card summary-card--red-300">
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Retirement Tax</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Retirement Tax Rate</p>
                         <p className="text-xl font-bold text-red-500 font-mono leading-tight mt-0.5">
                             {metrics.effectiveTaxRateRetirement.toFixed(1)}%
                         </p>
@@ -46,7 +46,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
 
                     {/* Estate Tax Rate */}
                     <div className="summary-card summary-card--red-300">
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Estate Tax</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Estate Tax Rate</p>
                         <p className="text-xl font-bold text-red-500 font-mono leading-tight mt-0.5">
                             {metrics.effectiveTaxRateEstate.toFixed(1)}%
                         </p>
@@ -58,7 +58,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
 
                     {/* Total Tax Rate */}
                     <div className="summary-card summary-card--red-400">
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Tax</p>
+                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Total Tax Rate</p>
                         <p className="text-xl font-bold text-red-600 font-mono leading-tight mt-0.5">
                             {metrics.totalEffectiveTaxRate.toFixed(1)}%
                         </p>

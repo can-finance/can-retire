@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
-import { usePlans, DEFAULT_PLAN_NAME } from '../../hooks/usePlans';
+import { usePlans, DEFAULT_PLAN_NAME, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY } from '../../hooks/usePlans';
 import type { SavedPlan } from '../../hooks/usePlans';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
@@ -182,15 +182,47 @@ export function Dashboard() {
         setInputsRaw({ ...inputs });
     };
 
-    const handleNewPlan = () => {
-        const fresh = JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs;
-        createPlan(nextPlanName(plans), fresh);
-        setInputsRaw(fresh);
+    // Duplicate the active plan (or materialize-then-copy when still virtual).
+    const handleDuplicateActive = () => {
+        if (activePlanId) {
+            const copy = duplicatePlan(activePlanId);
+            if (copy) loadPlanInputs(copy);
+            return;
+        }
+        // Virtual plan: materialize it first so the duplicate has a parent entry.
+        const base = createPlan(DEFAULT_PLAN_NAME, inputs);
+        setInputsRaw({ ...inputs }); // clone forces SIM_KEY persistence (see handleRenameActive)
+        const copy = duplicatePlan(base.id);
+        if (copy) loadPlanInputs(copy);
     };
 
-    const handleDuplicate = (id: string) => {
-        const copy = duplicatePlan(id);
-        if (copy) loadPlanInputs(copy);
+    // "New Plan" = guided setup into a fresh plan: create a plan (named "Plan N")
+    // seeded from default values (not the current plan), activate it, make sure
+    // SIM_KEY is persisted, then relaunch the wizard via the existing ?setup=1
+    // path so the user is walked through a clean slate. The wizard's Save commits
+    // to SIM_KEY and reconciliation row 5 then updates this new plan. Skipping the
+    // wizard leaves the plan at default values as-is (accepted trade-off).
+    const handleNewPlanGuided = () => {
+        const fresh = createPlan(nextPlanName(plans), INITIAL_INPUTS);
+        setInputsRaw({ ...INITIAL_INPUTS });
+        // usePersistentState/usePlans both persist via a plain `useEffect` (no
+        // flushSync), and window.location.assign below unloads the page. Whether
+        // a setTimeout(0) callback is guaranteed to run after those effects have
+        // flushed is NOT something React's public API promises — in practice a
+        // MessageChannel-scheduled passive-effect flush usually preempts a
+        // same-tick setTimeout(0) (setTimeout carries timer overhead even at
+        // delay 0), so the timer below is very likely safe, but "very likely" is
+        // not good enough for a persisted write. Belt-and-braces: write the two
+        // localStorage keys directly/synchronously here too, mirroring exactly
+        // what the effects would write (see usePersistentState.ts / usePlans.ts).
+        try {
+            localStorage.setItem(SIM_KEY, JSON.stringify(INITIAL_INPUTS));
+            localStorage.setItem(PLANS_STORAGE_KEY, JSON.stringify([...plans, fresh]));
+            localStorage.setItem(ACTIVE_PLAN_STORAGE_KEY, fresh.id);
+        } catch (e) {
+            console.error('Failed to persist before guided setup navigation', e);
+        }
+        setTimeout(() => window.location.assign(window.location.pathname + '?setup=1'), 0);
     };
 
     const handleDelete = (id: string) => {
@@ -311,13 +343,13 @@ export function Dashboard() {
                             <Toggle
                                 checked={isInflationAdjusted}
                                 onChange={setIsInflationAdjusted}
-                                label="Show Real Dollars (Inflation Adjusted)"
+                                label="Show Today's Dollars (Inflation-Adjusted)"
                             />
                         </div>
                     </CollapsibleSection>
 
-                    {/* Returns */}
-                    <CollapsibleSection title="Returns" accent="violet" defaultOpen={false}>
+                    {/* Rates of Return */}
+                    <CollapsibleSection title="Rates of Return" accent="slate" defaultOpen={false}>
                         <ReturnsFields
                             inputs={inputs}
                             onChange={(p) => updateInputs({ ...inputs, ...p })}
@@ -349,7 +381,7 @@ export function Dashboard() {
                                             ...inputs,
                                             returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
                                         })}
-                                        tooltip="Standard deviation of annual returns (e.g. 10% for equities)."
+                                        tooltip="How much returns swing from year to year (standard deviation) — e.g. 10% for equities."
                                     />
                                 </div>
                             )}
@@ -364,9 +396,9 @@ export function Dashboard() {
                         activeLastSaved={activePlan?.lastSaved ?? null}
                         currentInputs={inputs}
                         onRenameActive={handleRenameActive}
-                        onNewPlan={handleNewPlan}
+                        onDuplicateActive={handleDuplicateActive}
+                        onNewPlanGuided={handleNewPlanGuided}
                         onActivate={handleActivate}
-                        onDuplicate={handleDuplicate}
                         onDelete={handleDelete}
                         onCompare={() => setIsComparing(true)}
                     />

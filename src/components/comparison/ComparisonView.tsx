@@ -9,6 +9,7 @@ import { computeSummaryMetrics } from '../../utils/summaryMetrics';
 import { sanitizeSimulationInputs } from '../../utils/inputSanitizer';
 import { Toggle } from '../ui/Toggle';
 import { ComparisonChart } from '../charts/ComparisonChart';
+import { ComparisonSummaryCards } from './ComparisonSummaryCards';
 import { ComparisonMetricsTable } from './ComparisonMetricsTable';
 
 interface ComparisonViewProps {
@@ -22,8 +23,8 @@ interface ComparisonViewProps {
 
 const BAND_OPTIONS: { mode: BandMode; label: string }[] = [
     { mode: 'off', label: 'No bands' },
-    { mode: 'p25p75', label: 'Likely (25–75)' },
-    { mode: 'p5p95', label: 'Full (5–95)' },
+    { mode: 'p25p75', label: 'Likely (25–75%)' },
+    { mode: 'p5p95', label: 'Full (5–95%)' },
 ];
 
 // Default selection: the active plan plus the most recently edited OTHER
@@ -202,7 +203,7 @@ export function ComparisonView({
                     <Toggle
                         checked={isInflationAdjusted}
                         onChange={onToggleInflation}
-                        label="Show Real Dollars (Inflation Adjusted)"
+                        label="Show Today's Dollars (Inflation-Adjusted)"
                     />
                 </div>
 
@@ -244,7 +245,7 @@ export function ComparisonView({
                             {p.id === activePlanId && (
                                 <span className="text-slate-400 font-normal">(active)</span>
                             )}
-                            <span className="text-[10px] font-normal text-slate-400">
+                            <span className="text-xs font-normal text-slate-400">
                                 {new Date(p.lastSaved).toLocaleDateString()}
                             </span>
                         </button>
@@ -270,6 +271,7 @@ export function ComparisonView({
                         bandMode={bandMode}
                         inflationAdjusted={isInflationAdjusted}
                     />
+                    <ComparisonSummaryCards runs={runs} />
                     <ComparisonMetricsTable runs={runs} inflationAdjusted={isInflationAdjusted} />
                 </>
             )}

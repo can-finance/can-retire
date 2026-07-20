@@ -18,9 +18,9 @@ function makePlan(overrides: Partial<SavedPlan> = {}): SavedPlan {
 
 type Handlers = {
     onRenameActive: ReturnType<typeof vi.fn<(name: string) => void>>;
-    onNewPlan: ReturnType<typeof vi.fn<() => void>>;
+    onDuplicateActive: ReturnType<typeof vi.fn<() => void>>;
+    onNewPlanGuided: ReturnType<typeof vi.fn<() => void>>;
     onActivate: ReturnType<typeof vi.fn<(id: string) => void>>;
-    onDuplicate: ReturnType<typeof vi.fn<(id: string) => void>>;
     onDelete: ReturnType<typeof vi.fn<(id: string) => void>>;
     onCompare: ReturnType<typeof vi.fn<() => void>>;
 };
@@ -35,9 +35,9 @@ function renderManager(opts: {
     const active = plans.find(p => p.id === opts.activePlanId) ?? plans[0];
     const handlers: Handlers = {
         onRenameActive: vi.fn<(name: string) => void>(),
-        onNewPlan: vi.fn<() => void>(),
+        onDuplicateActive: vi.fn<() => void>(),
+        onNewPlanGuided: vi.fn<() => void>(),
         onActivate: vi.fn<(id: string) => void>(),
-        onDuplicate: vi.fn<(id: string) => void>(),
         onDelete: vi.fn<(id: string) => void>(),
         onCompare: vi.fn<() => void>(),
     };
@@ -110,20 +110,29 @@ describe('PlanManager', () => {
         expect(screen.getByRole('button', { name: 'Rename plan' })).toHaveTextContent('Base');
     });
 
-    it('calls onNewPlan when New Plan is clicked', async () => {
+    it('calls onNewPlanGuided when New Plan is clicked', async () => {
         const user = userEvent.setup();
-        const { onNewPlan } = renderManager({ plans: [makePlan()] });
+        const { onNewPlanGuided } = renderManager({ plans: [makePlan()] });
 
         await user.click(screen.getByRole('button', { name: 'New Plan' }));
 
-        expect(onNewPlan).toHaveBeenCalledTimes(1);
+        expect(onNewPlanGuided).toHaveBeenCalledTimes(1);
     });
 
-    it('activates on row click; duplicate/delete fire their handlers with the row id and not onActivate', async () => {
+    it('calls onDuplicateActive when Duplicate Plan is clicked', async () => {
+        const user = userEvent.setup();
+        const { onDuplicateActive } = renderManager({ plans: [makePlan()] });
+
+        await user.click(screen.getByRole('button', { name: 'Duplicate Plan' }));
+
+        expect(onDuplicateActive).toHaveBeenCalledTimes(1);
+    });
+
+    it('activates on row click; the delete button opens a confirm dialog without activating or deleting', async () => {
         const user = userEvent.setup();
         const a = makePlan({ name: 'Plan A' });
         const b = makePlan({ name: 'Plan B' });
-        const { onActivate, onDuplicate, onDelete } = renderManager({ plans: [a, b], activePlanId: a.id });
+        const { onActivate, onDelete } = renderManager({ plans: [a, b], activePlanId: a.id });
 
         // Row click on the inactive plan activates it.
         await user.click(screen.getByText('Plan B'));
@@ -131,17 +140,52 @@ describe('PlanManager', () => {
 
         onActivate.mockClear();
 
-        // Duplicate on Plan B: handler with id, no activation.
-        const dupButtons = screen.getAllByRole('button', { name: 'Duplicate plan' });
-        await user.click(dupButtons[1]);
-        expect(onDuplicate).toHaveBeenCalledWith(b.id);
-        expect(onActivate).not.toHaveBeenCalled();
-
-        // Delete on Plan B: handler with id, no activation.
+        // Delete on Plan B: opens the confirm dialog, no activation, no delete yet.
         const delButtons = screen.getAllByRole('button', { name: 'Delete plan' });
         await user.click(delButtons[1]);
-        expect(onDelete).toHaveBeenCalledWith(b.id);
         expect(onActivate).not.toHaveBeenCalled();
+        expect(onDelete).not.toHaveBeenCalled();
+        const dialog = screen.getByRole('dialog');
+        expect(dialog).toHaveTextContent('Delete plan?');
+        expect(dialog).toHaveTextContent('Plan B');
+    });
+
+    it('delete then Cancel does not delete; delete then Delete calls onDelete with the row id', async () => {
+        const user = userEvent.setup();
+        const a = makePlan({ name: 'Plan A' });
+        const b = makePlan({ name: 'Plan B' });
+        const { onDelete } = renderManager({ plans: [a, b], activePlanId: a.id });
+
+        // Open confirm for Plan B, then Cancel — nothing deleted, dialog closes.
+        await user.click(screen.getAllByRole('button', { name: 'Delete plan' })[1]);
+        await user.click(screen.getByRole('button', { name: 'Cancel' }));
+        expect(onDelete).not.toHaveBeenCalled();
+        expect(screen.queryByRole('dialog')).toBeNull();
+
+        // Open again and confirm — onDelete fires with Plan B's id.
+        await user.click(screen.getAllByRole('button', { name: 'Delete plan' })[1]);
+        await user.click(screen.getByRole('button', { name: 'Delete' }));
+        expect(onDelete).toHaveBeenCalledWith(b.id);
+    });
+
+    it('Share opens a dialog showing the copyable link', async () => {
+        const user = userEvent.setup();
+        const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+        Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+
+        renderManager({ plans: [makePlan({ name: 'Plan A' })] });
+
+        await user.click(screen.getByRole('button', { name: /Share/ }));
+
+        // Clipboard write attempted; success dialog shown with the URL in a field.
+        expect(writeText).toHaveBeenCalledTimes(1);
+        const urlWritten = writeText.mock.calls[0][0];
+        expect(urlWritten).toContain('#start=');
+
+        const dialog = await screen.findByRole('dialog');
+        expect(dialog).toHaveTextContent('Share link copied');
+        expect(screen.getByLabelText('Share link')).toHaveValue(urlWritten);
     });
 
     it('disables Delete at one plan and enables it at two', () => {
@@ -158,13 +202,13 @@ describe('PlanManager', () => {
 
     it('disables Compare below two plans with a caption, enables it at two', () => {
         renderManager({ plans: [makePlan()] });
-        expect(screen.getByRole('button', { name: /Compare plans/ })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /Compare Plans/ })).toBeDisabled();
         expect(screen.getByText('Create a second plan to compare')).toBeInTheDocument();
 
         cleanup();
 
         renderManager({ plans: [makePlan(), makePlan()] });
-        expect(screen.getByRole('button', { name: /Compare plans/ })).toBeEnabled();
+        expect(screen.getByRole('button', { name: /Compare Plans/ })).toBeEnabled();
         expect(screen.queryByText('Create a second plan to compare')).toBeNull();
     });
 });

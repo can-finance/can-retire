@@ -15,9 +15,9 @@ interface SurplusChartProps {
 }
 
 const LABEL_MAP: Record<string, string> = {
-    TFSA:   'TFSA',
-    RRSP:   'RRSP',
-    NonReg: 'Non-Reg',
+    TFSA:   'To TFSA',
+    RRSP:   'To RRSP',
+    NonReg: 'To Non-Reg',
 };
 
 export const SurplusChart = React.memo(function SurplusChart({ data, inflationAdjusted, domainMax }: SurplusChartProps) {

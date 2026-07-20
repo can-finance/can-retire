@@ -13,6 +13,22 @@ export interface ComparisonRun {
 }
 export type BandMode = 'off' | 'p25p75' | 'p5p95';
 
+// Index of the "best" value in a row, or null when it can't be meaningfully
+// highlighted: fewer than two non-null values, or every value tied.
+export function bestIndex(values: (number | null)[], dir: 'max' | 'min'): number | null {
+    const present = values
+        .map((v, i) => ({ v, i }))
+        .filter((x): x is { v: number; i: number } => x.v !== null);
+    if (present.length < 2) return null;
+    const allEqual = present.every(x => x.v === present[0].v);
+    if (allEqual) return null;
+    let best = present[0];
+    for (const x of present) {
+        if (dir === 'max' ? x.v > best.v : x.v < best.v) best = x;
+    }
+    return best.i;
+}
+
 export interface ComparisonChartRow {
     year: number;
     det0?: number; det1?: number; det2?: number;          // deterministic totalAssets per slot

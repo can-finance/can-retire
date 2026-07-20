@@ -9,7 +9,7 @@ import { getValidationErrors } from '../../utils/personValidation';
 // Dashboard label wording — terser than the wizard's sentence-case labels
 // (see WIZARD_*_LABELS in ../onboarding/detailedSteps.tsx), since these sit in
 // a dense sidebar of many fields rather than one wizard step at a time.
-const ABOUT_LABELS = { age: 'Current Age', retirementAge: 'Retire Age', lifeExpectancy: 'Death Age' };
+const ABOUT_LABELS = { age: 'Current Age', retirementAge: 'Retirement Age', lifeExpectancy: 'Life Expectancy' };
 const BENEFITS_LABELS = { cppStartAge: 'CPP Start Age', yearsContributed: 'Years Contributed', oasStartAge: 'OAS Start Age' };
 const MELTDOWN_LABELS = { meltStartAge: 'RRSP Melt Start Age', meltAmount: 'RRSP Melt Amount' };
 

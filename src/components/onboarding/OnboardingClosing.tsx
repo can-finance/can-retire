@@ -20,24 +20,42 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">You're set.</h1>
             </div>
 
-            <SectionCard accent="emerald" className="space-y-4">
+            <SectionCard className="space-y-4">
                 <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next steps</p>
+                    <h2 className="text-sm font-bold text-slate-900">Review your plan on the dashboard</h2>
+                    <p className="text-sm text-slate-600">
+                        Make changes and the projection updates instantly — your plan saves automatically.
+                    </p>
+                </div>
+
+                <div className="space-y-1.5">
+                    <h2 className="text-sm font-bold text-slate-900">Try a second plan and compare</h2>
+                    <p className="text-sm text-slate-600">
+                        In the Plans panel, <span className="font-semibold">Duplicate Plan</span> copies your current
+                        plan so you can change one assumption — retire earlier, spend more, start CPP later. Then use{' '}
+                        <span className="font-semibold">Compare Plans</span> to see the plans side by side.
+                    </p>
+                </div>
+
+                <div className="space-y-1.5 pt-3 border-t border-slate-100">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Good to know</p>
                     <h2 className="text-sm font-bold text-slate-900">Your plan is saved on this device</h2>
                     <p className="text-sm text-slate-600">
                         Your numbers are saved in this browser's local storage, on this device only — nothing is sent to
-                        any server. They'll be here next time you visit. Clearing your browser data will remove them.
+                        any server. They'll be here next time you visit.
                     </p>
                 </div>
 
-                <div className="space-y-1.5 pt-3 border-t border-emerald-200/50">
+                <div className="space-y-1.5">
                     <h2 className="text-sm font-bold text-slate-900">Sharing your plan</h2>
                     <p className="text-sm text-slate-600">
-                        The <span className="font-semibold">Share</span> button (in the Plans panel) encodes your whole
-                        plan into a link. The numbers live inside the link itself, so anyone you send it to can see them.
+                        The <span className="font-semibold">Share</span> button (in the Plans panel) packs your whole
+                        plan into the link itself — anyone you send it to can see your numbers.
                     </p>
                 </div>
 
-                <div className="pt-3 border-t border-emerald-200/50">
+                <div>
                     <button
                         onClick={onPrivacy}
                         className="text-sm font-medium text-brand-600 hover:text-brand-700 underline decoration-dotted underline-offset-2 transition-colors"
@@ -55,7 +73,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                     Go to my dashboard
                 </button>
                 <p className="text-xs text-slate-400 text-center">
-                    You can re-run this setup anytime from the {EDIT_PLAN_LABEL} button in the top menu.
+                    You can run this setup again anytime from the {EDIT_PLAN_LABEL} button in the top menu.
                 </p>
             </div>
         </div>

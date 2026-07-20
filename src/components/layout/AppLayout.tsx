@@ -111,7 +111,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                         </h1>
                     </BrandLockup>
 
-                    <div className="hidden xl:flex items-center gap-2 whitespace-nowrap text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
+                    <div className="hidden xl:flex items-center gap-2 whitespace-nowrap text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                         Runs Entirely in Your Browser • Your Data Never Leaves Your Device
                     </div>

@@ -363,7 +363,7 @@ describe('mergeSimpleAnswers', () => {
 describe('simpleAnswersErrors (raw quick-form validation)', () => {
     it('flags retirement age below current age from the RAW answers (no clamp hiding it)', () => {
         const { person } = simpleAnswersErrors({ ...baseAnswers, age: 60, retirementAge: 55 });
-        expect(person).toContain('Retirement age must be ≥ current age');
+        expect(person).toContain("Retirement age can't be earlier than current age");
     });
 
     it('is clean for consistent answers', () => {

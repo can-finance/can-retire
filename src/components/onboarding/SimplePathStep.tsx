@@ -33,7 +33,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
 
                 <div className="grid grid-cols-2 gap-4">
                     <FinancialInput
-                        label="Your current age"
+                        label="Current age"
                         prefix=""
                         value={answers.age}
                         onChange={(e) => onChange({ age: Number(e.target.value) })}

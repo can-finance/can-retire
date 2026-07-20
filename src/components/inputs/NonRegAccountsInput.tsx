@@ -120,7 +120,7 @@ export function NonRegAccountsInput({ accounts, onChange, accentColor, driftSumm
                                 />
                                 {accounts.length > 1 && (
                                     <HelpTooltip text="Surplus cash left over each year (after TFSA/RRSP contributions) is invested into this account.">
-                                        <label className="flex items-center gap-1 text-[10px] font-medium text-slate-500 cursor-pointer whitespace-nowrap">
+                                        <label className="flex items-center gap-1 text-xs font-medium text-slate-500 cursor-pointer whitespace-nowrap">
                                             <input
                                                 type="radio"
                                                 name={surplusGroup}
@@ -157,7 +157,7 @@ export function NonRegAccountsInput({ accounts, onChange, accentColor, driftSumm
                                 onClick={() => toggleExpanded(account.id)}
                                 className="w-full flex items-center justify-between transition-colors"
                             >
-                                <span className="text-sm font-medium text-brand-600 hover:text-brand-700">{expanded ? '▾' : '▸'} Asset mix & settings</span>
+                                <span className="text-sm font-medium text-brand-600 hover:text-brand-700">{expanded ? '▾' : '▸'} Adjust asset mix</span>
                                 {!expanded && <span className="text-xs text-slate-400 truncate ml-2">{mixSummary(account)}</span>}
                             </button>
 

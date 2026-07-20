@@ -163,7 +163,7 @@ export function mergeSimpleAnswers(draft: SimulationInputs, a: SimpleAnswers): S
 export function simpleAnswersErrors(a: SimpleAnswers): { person: string[]; spouse: string[] } {
     const person: string[] = [];
     if (a.age < 18 || a.age > 99) person.push('Current age must be between 18 and 99');
-    if (a.retirementAge < a.age) person.push('Retirement age must be ≥ current age');
+    if (a.retirementAge < a.age) person.push("Retirement age can't be earlier than current age");
 
     const spouse: string[] = [];
     if (a.includeSpouse && (a.spouseAge < 18 || a.spouseAge > 99))

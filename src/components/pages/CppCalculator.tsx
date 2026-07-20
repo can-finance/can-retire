@@ -144,7 +144,7 @@ function ModeTab({ active, onClick, title, subtitle }: {
                 }`}
         >
             <span className={`block text-sm font-semibold ${active ? 'text-slate-900' : 'text-slate-500'}`}>{title}</span>
-            <span className={`block text-[11px] ${active ? 'text-slate-500' : 'text-slate-400'}`}>{subtitle}</span>
+            <span className={`block text-xs ${active ? 'text-slate-500' : 'text-slate-400'}`}>{subtitle}</span>
         </button>
     );
 }
@@ -156,7 +156,7 @@ function YearEarningsInput({ year, age, value, onChange }: {
     const isFuture = year > LATEST_DATA_YEAR;
     return (
         <div className="flex flex-col gap-0.5">
-            <label className={`text-[11px] font-medium ${isFuture ? 'text-indigo-400' : 'text-slate-500'}`}>
+            <label className={`text-xs font-medium ${isFuture ? 'text-indigo-400' : 'text-slate-500'}`}>
                 {year} <span className="opacity-70">(age {age})</span>
             </label>
             <div className="relative flex items-center">
@@ -364,7 +364,7 @@ export function CppCalculator() {
                 {/* ------------------------------------------------ Inputs */}
                 <div className="lg:col-span-5 space-y-6">
                     <SectionCard accent="sky">
-                        <h2 className="text-xl font-bold text-slate-900 mb-1">Earnings history</h2>
+                        <h2 className="text-xl font-bold text-slate-900 mb-1">Earnings History</h2>
                         <p className="text-sm text-slate-500 mb-4">
                             The more detail you provide, the more accurate the estimate. All three levels use the same
                             calculation underneath — each mode uses only its own entries. Your start age defaults to 65;
@@ -383,9 +383,9 @@ export function CppCalculator() {
                             <ModeTab active={state.mode === 'simple'} onClick={() => update({ mode: 'simple' })}
                                 title="Simple" subtitle="Average salary" />
                             <ModeTab active={state.mode === 'blocks'} onClick={() => update({ mode: 'blocks' })}
-                                title="Career blocks" subtitle="Salary by period" />
+                                title="Career Blocks" subtitle="Salary by period" />
                             <ModeTab active={state.mode === 'exact'} onClick={() => update({ mode: 'exact' })}
-                                title="Year by year" subtitle="Exact earnings" />
+                                title="Year by Year" subtitle="Exact earnings" />
                         </div>
 
                         {/* ---- Simple ---- */}
@@ -393,12 +393,12 @@ export function CppCalculator() {
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <FinancialInput
-                                        label="Started Working (age)" prefix="" value={state.simple.workStartAge}
+                                        label="Starting Working Age" prefix="" value={state.simple.workStartAge}
                                         min={18} max={70}
                                         onChange={(e) => update({ simple: { ...state.simple, workStartAge: Number(e.target.value) } })}
                                     />
                                     <FinancialInput
-                                        label="Stop Working (age)" prefix="" value={state.simple.workEndAge}
+                                        label="Ending Working Age" prefix="" value={state.simple.workEndAge}
                                         min={18} max={70}
                                         tooltip="Last age with employment earnings. Retiring years before starting CPP adds zero-earning years that can drag your average down."
                                         onChange={(e) => update({ simple: { ...state.simple, workEndAge: Number(e.target.value) } })}
@@ -423,7 +423,7 @@ export function CppCalculator() {
                                 {state.blocks.map((block) => (
                                     <div key={block.id} className="flex items-end gap-2 bg-slate-50 rounded-lg p-2.5 border border-slate-100">
                                         <div className="flex flex-col gap-1 w-20">
-                                            <label className="text-[11px] font-medium text-slate-500">From year</label>
+                                            <label className="text-xs font-medium text-slate-500">From year</label>
                                             <input type="text" inputMode="numeric" className={`${inputClass} !px-2 !py-1.5 !text-xs`}
                                                 value={block.fromYear}
                                                 onChange={(e) => {
@@ -432,7 +432,7 @@ export function CppCalculator() {
                                                 }} />
                                         </div>
                                         <div className="flex flex-col gap-1 w-20">
-                                            <label className="text-[11px] font-medium text-slate-500">To year</label>
+                                            <label className="text-xs font-medium text-slate-500">To year</label>
                                             <input type="text" inputMode="numeric" className={`${inputClass} !px-2 !py-1.5 !text-xs`}
                                                 value={block.toYear}
                                                 onChange={(e) => {
@@ -441,7 +441,7 @@ export function CppCalculator() {
                                                 }} />
                                         </div>
                                         <div className="flex flex-col gap-1 flex-1">
-                                            <label className="text-[11px] font-medium text-slate-500">Annual salary</label>
+                                            <label className="text-xs font-medium text-slate-500">Annual salary</label>
                                             <div className="relative flex items-center">
                                                 <span className="absolute left-2 text-xs text-slate-400">$</span>
                                                 <input type="text" inputMode="numeric" className={`${inputClass} !pl-5 !pr-2 !py-1.5 !text-xs`}
@@ -511,7 +511,7 @@ export function CppCalculator() {
                                             onClick={() => prefillExact(earningsFromBlocks(state.blocks))}
                                             className="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
                                         >
-                                            Prefill from Career blocks
+                                            Prefill from Career Blocks
                                         </button>
                                     )}
                                     <button
@@ -575,7 +575,7 @@ export function CppCalculator() {
 
                     {/* Child-rearing provision */}
                     <SectionCard accent="rose">
-                        <h2 className="text-xl font-bold text-slate-900">Child-rearing provision</h2>
+                        <h2 className="text-xl font-bold text-slate-900">Child-Rearing Provision</h2>
                         <Toggle
                             checked={state.useChildRearing}
                             onChange={(val) => update({ useChildRearing: val })}
@@ -628,7 +628,7 @@ export function CppCalculator() {
 
                     {/* Start age comparison */}
                     <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-                        <h3 className="text-xl font-bold text-slate-900">Benefit by start age</h3>
+                        <h3 className="text-xl font-bold text-slate-900">Benefit by Start Age</h3>
                         <p className="text-sm text-slate-500 mb-4">
                             Click a bar to change your start age. Ignoring investment returns and taxes, total payments to age 85
                             are highest if you start at <strong>{bestByEightyFive.startAge}</strong>.
@@ -673,7 +673,7 @@ export function CppCalculator() {
 
                     {/* Calculation details */}
                     <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-                        <h3 className="text-xl font-bold text-slate-900 mb-4">How this was calculated</h3>
+                        <h3 className="text-xl font-bold text-slate-900 mb-4">How This Was Calculated</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center">
                             <div className="bg-slate-50 rounded-xl p-3">
                                 <p className="text-2xl font-bold text-slate-900">{result.contributoryYears}</p>
@@ -777,7 +777,7 @@ export function CppCalculator() {
 
                     {/* Apply to plan */}
                     <SectionCard accent="emerald">
-                        <h3 className="text-xl font-bold text-slate-900 mb-1">Use in your retirement plan</h3>
+                        <h3 className="text-xl font-bold text-slate-900 mb-1">Use in Your Retirement Plan</h3>
                         <p className="text-sm text-slate-500 mb-4">
                             Replaces the Dashboard's simple CPP estimate with this result ({formatCurrencyCAD(result.annualBenefit)}/year
                             starting at {startAge}) for the selected person.
@@ -787,14 +787,14 @@ export function CppCalculator() {
                                 onClick={() => applyToPlan('person')}
                                 className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-colors"
                             >
-                                Apply to "You"
+                                Apply to You
                             </button>
                             {savedPlan?.spouse && (
                                 <button
                                     onClick={() => applyToPlan('spouse')}
                                     className="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors"
                                 >
-                                    Apply to "Spouse"
+                                    Apply to Spouse
                                 </button>
                             )}
                             {appliedTo && (
@@ -814,7 +814,7 @@ export function CppCalculator() {
 
                     {/* Assumptions */}
                     <div className="rounded-2xl bg-amber-50/60 border border-amber-100 p-5">
-                        <h3 className="text-base font-bold text-amber-900 mb-2">Assumptions & limitations</h3>
+                        <h3 className="text-base font-bold text-amber-900 mb-2">Assumptions & Limitations</h3>
                         <ul className="text-sm text-amber-900/70 space-y-1.5 list-disc pl-4 leading-relaxed">
                             <li>Estimates the <strong>base CPP</strong> only — the post-2019 CPP enhancement is not modelled, so results for people retiring after ~2035 will be slightly understated.</li>
                             <li>Works in whole years; the real calculation uses months. Future earnings are assumed to keep pace with wage growth (enter them in today's dollars).</li>

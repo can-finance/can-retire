@@ -5,21 +5,35 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-19
 
 ### Added
 - **Compare plans side by side.** Pick 2–3 plans and see overlaid net-worth
-  projections with Monte Carlo uncertainty bands, plus a table of headline
-  metrics — success rate, estate values, lifetime tax, realized capital gains,
-  and when money runs out.
+  projections with Monte Carlo uncertainty bands, headline summary cards
+  (success rate, net estate, when money runs out), and a metrics table grouped
+  into Outcomes / Estate / Taxes / Lifetime income. Best values are
+  highlighted, and comparing exactly two plans adds a difference column with
+  better/worse coloring.
+- **Delete confirmation.** Deleting a plan now asks for confirmation first
+  instead of deleting immediately.
 
 ### Changed
 - **Named plans replace saved scenarios.** You're always editing a named plan
   ("My Plan"), and edits save automatically to the active plan — no more
-  Save/Update buttons. Rename a plan inline by clicking its title. New Plan,
-  Duplicate, and Delete controls manage the rest. Share links now open as a
-  new "Shared plan" instead of overwriting your current inputs. Existing
-  saved scenarios are preserved and become plans automatically.
+  Save/Update buttons. Rename a plan inline by clicking its title. "New Plan"
+  walks through guided setup starting from default values (a fresh, blank
+  plan); "Duplicate Plan" copies the active plan. Delete removes one. Share
+  links now open as a new "Shared plan" instead of overwriting your current
+  inputs. Existing saved scenarios are preserved and become plans automatically.
+- **Share uses an in-app dialog.** The Share button shows the link in a proper
+  dialog with a copy button and privacy note, replacing browser alert/prompt
+  popups (which some browsers block).
+- **Plainer wording throughout.** Notable renames: "Death Age" → "Life
+  Expectancy", "Retire Age" → "Retirement Age", the summary tax cards now say
+  "… Tax Rate", and "Show Real Dollars" → "Show Today's Dollars". Validation
+  messages drop math symbols for plain language, chart legends and tooltips
+  now use matching labels, and the guided-setup closing page walks through
+  next steps (review on the dashboard, duplicate and compare).
 
 ## [0.6.1] - 2026-07-19
 

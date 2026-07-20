@@ -34,7 +34,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                         A handful of questions. We'll use sensible defaults for everything else.
                     </p>
                     <span className="inline-block mt-4 text-sm font-medium text-brand-600 group-hover:text-brand-700">
-                        Start quick →
+                        Quick start →
                     </span>
                 </button>
 
@@ -64,7 +64,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
             <div className="text-center">
                 <button
                     onClick={onSkip}
-                    className="text-sm text-slate-400 hover:text-slate-600 underline decoration-dotted underline-offset-2 transition-colors"
+                    className="text-sm text-slate-700 hover:text-slate-900 underline decoration-dotted underline-offset-2 transition-colors"
                 >
                     {isRelaunch ? 'Cancel — keep my current numbers' : 'Skip — explore with sample numbers instead'}
                 </button>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { ComparisonView } from './ComparisonView';
@@ -17,111 +17,120 @@ import type { SimulationResult } from '../../engine/types';
 // are plausible and internally consistent. summaryMetrics also imports
 // `totalNonRegBalance` from this same module, so the real module is spread in
 // first and only runSimulation/runMonteCarlo are overridden.
+// Deterministic rows are scaled by a per-plan factor so plan-vs-plan deltas are
+// testable. The factor derives from preRetirementSpend (INITIAL = 60000 → 1.0),
+// so plans on INITIAL_INPUTS are unchanged and a plan with a raised spend scales
+// its tax/estate figures proportionally.
+function makeRows(f: number): SimulationResult[] {
+    return [
+        {
+            year: 2026,
+            age: 60,
+            totalAssets: 900000 * f,
+            grossIncome: 60000,
+            cppIncome: 0,
+            oasIncome: 0,
+            netIncome: 55000,
+            spending: 55000,
+            taxPaid: 8000 * f,
+            personTaxPaid: 8000 * f,
+            spouseTaxPaid: 0,
+            oasClawbackPaid: 0,
+            capGainsTaxPaid: 500,
+            terminalRealizedGains: 0,
+            dividendTaxPaid: 0,
+            interestTaxPaid: 0,
+            accounts: { rrsp: 400000, tfsa: 200000, nonRegistered: 300000, nonRegisteredACB: 150000 },
+            netEmploymentIncome: 0,
+            netCPPIncome: 0,
+            netOASIncome: 0,
+            netInvestmentIncome: 10000,
+            personNetCPP: 0,
+            spouseNetCPP: 0,
+            personNetOAS: 0,
+            spouseNetOAS: 0,
+            netRRSPWithdrawal: 30000,
+            netTFSAWithdrawal: 10000,
+            netNonRegWithdrawal: 15000,
+            reinvestedTFSA: 0,
+            reinvestedRRSP: 0,
+            reinvestedNonReg: 0,
+            personNetRRSP: 30000,
+            spouseNetRRSP: 0,
+            personNetTFSA: 10000,
+            spouseNetTFSA: 0,
+            personNetNonReg: 15000,
+            spouseNetNonReg: 0,
+            totalTFSAWithdrawal: 10000,
+            totalNonRegWithdrawal: 15000,
+            totalRRSPWithdrawal: 30000,
+            employmentIncome: 0,
+            investmentIncome: 10000,
+            totalRealizedCapGains: 5000,
+            inflationFactor: 1.0,
+            householdSurplus: 0,
+            shortfall: 0,
+        },
+        {
+            year: 2027,
+            age: 61,
+            totalAssets: 870000 * f,
+            grossIncome: 58000,
+            cppIncome: 0,
+            oasIncome: 0,
+            netIncome: 54000,
+            spending: 55000,
+            taxPaid: 7800 * f,
+            personTaxPaid: 7800 * f,
+            spouseTaxPaid: 0,
+            oasClawbackPaid: 0,
+            capGainsTaxPaid: 450,
+            terminalRealizedGains: 147000, // death year: gross non-reg gains (nonRegistered - ACB)
+            dividendTaxPaid: 0,
+            interestTaxPaid: 0,
+            accounts: { rrsp: 380000, tfsa: 195000, nonRegistered: 295000, nonRegisteredACB: 148000 },
+            netEmploymentIncome: 0,
+            netCPPIncome: 0,
+            netOASIncome: 0,
+            netInvestmentIncome: 9800,
+            personNetCPP: 0,
+            spouseNetCPP: 0,
+            personNetOAS: 0,
+            spouseNetOAS: 0,
+            netRRSPWithdrawal: 29000,
+            netTFSAWithdrawal: 9500,
+            netNonRegWithdrawal: 14500,
+            reinvestedTFSA: 0,
+            reinvestedRRSP: 0,
+            reinvestedNonReg: 0,
+            personNetRRSP: 29000,
+            spouseNetRRSP: 0,
+            personNetTFSA: 9500,
+            spouseNetTFSA: 0,
+            personNetNonReg: 14500,
+            spouseNetNonReg: 0,
+            totalTFSAWithdrawal: 9500,
+            totalNonRegWithdrawal: 14500,
+            totalRRSPWithdrawal: 29000,
+            employmentIncome: 0,
+            investmentIncome: 9800,
+            totalRealizedCapGains: 4800,
+            inflationFactor: 1.025,
+            householdSurplus: 0,
+            shortfall: 0,
+            isDeathYear: true,
+            totalTerminalTax: 20000 * f,
+            grossEstateValue: 870000 * f,
+            netEstateValue: 850000 * f,
+        },
+    ];
+}
+
 vi.mock('../../engine/projection', async importOriginal => ({
     ...(await importOriginal<typeof import('../../engine/projection')>()),
     runSimulation: vi.fn(
-        (): SimulationResult[] => [
-            {
-                year: 2026,
-                age: 60,
-                totalAssets: 900000,
-                grossIncome: 60000,
-                cppIncome: 0,
-                oasIncome: 0,
-                netIncome: 55000,
-                spending: 55000,
-                taxPaid: 8000,
-                personTaxPaid: 8000,
-                spouseTaxPaid: 0,
-                oasClawbackPaid: 0,
-                capGainsTaxPaid: 500,
-                terminalRealizedGains: 0,
-                dividendTaxPaid: 0,
-                interestTaxPaid: 0,
-                accounts: { rrsp: 400000, tfsa: 200000, nonRegistered: 300000, nonRegisteredACB: 150000 },
-                netEmploymentIncome: 0,
-                netCPPIncome: 0,
-                netOASIncome: 0,
-                netInvestmentIncome: 10000,
-                personNetCPP: 0,
-                spouseNetCPP: 0,
-                personNetOAS: 0,
-                spouseNetOAS: 0,
-                netRRSPWithdrawal: 30000,
-                netTFSAWithdrawal: 10000,
-                netNonRegWithdrawal: 15000,
-                reinvestedTFSA: 0,
-                reinvestedRRSP: 0,
-                reinvestedNonReg: 0,
-                personNetRRSP: 30000,
-                spouseNetRRSP: 0,
-                personNetTFSA: 10000,
-                spouseNetTFSA: 0,
-                personNetNonReg: 15000,
-                spouseNetNonReg: 0,
-                totalTFSAWithdrawal: 10000,
-                totalNonRegWithdrawal: 15000,
-                totalRRSPWithdrawal: 30000,
-                employmentIncome: 0,
-                investmentIncome: 10000,
-                totalRealizedCapGains: 5000,
-                inflationFactor: 1.0,
-                householdSurplus: 0,
-                shortfall: 0,
-            },
-            {
-                year: 2027,
-                age: 61,
-                totalAssets: 870000,
-                grossIncome: 58000,
-                cppIncome: 0,
-                oasIncome: 0,
-                netIncome: 54000,
-                spending: 55000,
-                taxPaid: 7800,
-                personTaxPaid: 7800,
-                spouseTaxPaid: 0,
-                oasClawbackPaid: 0,
-                capGainsTaxPaid: 450,
-                terminalRealizedGains: 147000, // death year: gross non-reg gains (nonRegistered - ACB)
-                dividendTaxPaid: 0,
-                interestTaxPaid: 0,
-                accounts: { rrsp: 380000, tfsa: 195000, nonRegistered: 295000, nonRegisteredACB: 148000 },
-                netEmploymentIncome: 0,
-                netCPPIncome: 0,
-                netOASIncome: 0,
-                netInvestmentIncome: 9800,
-                personNetCPP: 0,
-                spouseNetCPP: 0,
-                personNetOAS: 0,
-                spouseNetOAS: 0,
-                netRRSPWithdrawal: 29000,
-                netTFSAWithdrawal: 9500,
-                netNonRegWithdrawal: 14500,
-                reinvestedTFSA: 0,
-                reinvestedRRSP: 0,
-                reinvestedNonReg: 0,
-                personNetRRSP: 29000,
-                spouseNetRRSP: 0,
-                personNetTFSA: 9500,
-                spouseNetTFSA: 0,
-                personNetNonReg: 14500,
-                spouseNetNonReg: 0,
-                totalTFSAWithdrawal: 9500,
-                totalNonRegWithdrawal: 14500,
-                totalRRSPWithdrawal: 29000,
-                employmentIncome: 0,
-                investmentIncome: 9800,
-                totalRealizedCapGains: 4800,
-                inflationFactor: 1.025,
-                householdSurplus: 0,
-                shortfall: 0,
-                isDeathYear: true,
-                totalTerminalTax: 20000,
-                grossEstateValue: 870000,
-                netEstateValue: 850000,
-            },
-        ],
+        (inputs: { preRetirementSpend?: number }): SimulationResult[] =>
+            makeRows((inputs?.preRetirementSpend ?? 60000) / 60000),
     ),
     runMonteCarlo: vi.fn(() => ({
         percentiles: [
@@ -232,7 +241,8 @@ describe('ComparisonView', () => {
             });
 
             const successCells = screen.getAllByText('87%');
-            expect(successCells).toHaveLength(2); // Active Plan + Other Plan
+            // 2 in the table success row + 2 in the "Monte Carlo success" summary card.
+            expect(successCells).toHaveLength(4);
         } finally {
             vi.useRealTimers();
         }
@@ -252,5 +262,61 @@ describe('ComparisonView', () => {
         await user.click(screen.getByRole('button', { name: 'Back to Dashboard' }));
 
         expect(onExit).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders a signed, direction-coloured delta column when exactly two plans are compared', () => {
+        // Base is the more recently edited plan (→ slot 0 / the "vs." reference);
+        // Rich raises preRetirementSpend so its tax/estate figures scale up 2x.
+        const base = makePlan({ name: 'Base', lastSaved: '2026-06-01T00:00:00.000Z' });
+        const rich = makePlan({
+            name: 'Rich',
+            lastSaved: '2026-01-01T00:00:00.000Z',
+            inputs: { ...INITIAL_INPUTS, preRetirementSpend: 120000 },
+        });
+        renderView([base, rich], null);
+
+        // Delta column header references the first (slot 0) plan.
+        expect(screen.getByText(/^vs\. Base/)).toBeInTheDocument();
+
+        // Net estate: higher is better; plan2 (Rich) is higher → positive & green.
+        const netEstateDelta = screen.getByText('+$850,000');
+        expect(netEstateDelta).toHaveClass('text-emerald-600');
+
+        // Lifetime tax paid: lower is better; plan2 (Rich) pays more → positive & red.
+        const lifetimeTaxDelta = screen.getByText('+$35,800');
+        expect(lifetimeTaxDelta).toHaveClass('text-rose-600');
+    });
+
+    it('omits the delta column when three plans are compared', async () => {
+        const user = userEvent.setup();
+        const active = makePlan({ name: 'Plan A', lastSaved: '2026-03-01T00:00:00.000Z' });
+        const newest = makePlan({ name: 'Plan B', lastSaved: '2026-06-01T00:00:00.000Z' });
+        const oldest = makePlan({ name: 'Plan C', lastSaved: '2026-01-01T00:00:00.000Z' });
+        // Default selection: Plan A (active) + Plan B (most recent). Add Plan C → 3.
+        renderView([active, newest, oldest], active.id);
+        expect(screen.getByText(/^vs\./)).toBeInTheDocument(); // 2 selected → delta present
+
+        await user.click(chipButton('Plan C'));
+
+        expect(screen.queryByText(/^vs\./)).toBeNull(); // 3 selected → no delta column
+        expect(screen.getByRole('table')).toBeInTheDocument();
+    });
+
+    it('renders one value per plan in each summary card', () => {
+        const a = makePlan({ name: 'Plan A' });
+        const b = makePlan({ name: 'Plan B' });
+        renderView([a, b], null);
+
+        // The summary-cards grid holds the three headline cards. "Net estate" and
+        // "Monte Carlo success" are card-only labels; scope the grid for the rest
+        // ("Money runs out" is also a table row label).
+        const netEstateLabel = screen.getByText('Net estate');
+        const card = netEstateLabel.closest('div') as HTMLElement;
+        const grid = card.parentElement as HTMLElement;
+        expect(within(grid).getByText('Monte Carlo success')).toBeInTheDocument();
+        expect(within(grid).getByText('Money runs out')).toBeInTheDocument();
+
+        // The Net estate card lists one value per selected plan (2 plans → 2 values).
+        expect(within(card).getAllByText('$850,000')).toHaveLength(2);
     });
 });

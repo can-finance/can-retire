@@ -251,7 +251,7 @@ export function HowItWorks() {
                     </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Rebalancing vs. drift</h3>
                     <p>
-                        The <strong>Rebalance annually</strong> toggle controls each account's mix over time: <strong>on</strong> pulls it back to your chosen weights every year; <strong>off</strong> lets the equity share drift up while yield income stays flat in dollars. The separate Fund Turnover input models the annual tax drag of funds that realize gains internally — it applies every year, whether or not rebalancing is on.
+                        The <strong>Rebalance Annually</strong> toggle controls each account's mix over time: <strong>on</strong> pulls it back to your chosen weights every year; <strong>off</strong> lets the equity share drift up while yield income stays flat in dollars. The separate Fund Turnover input models the annual tax drag of funds that realize gains internally — it applies every year, whether or not rebalancing is on.
                     </p>
                 </div>
             </details>

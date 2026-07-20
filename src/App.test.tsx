@@ -125,7 +125,7 @@ describe('App activation state machine', () => {
         expect(await screen.findByRole('dialog')).toBeInTheDocument();
         const before = mountState.count;
 
-        await user.click(screen.getByRole('button', { name: /Start quick/ }));
+        await user.click(screen.getByRole('button', { name: /Quick start/ }));
         await user.click(screen.getByRole('button', { name: 'Next' }));
         await user.click(screen.getByRole('button', { name: 'Save' }));
         await user.click(screen.getByRole('button', { name: 'Go to my dashboard' }));

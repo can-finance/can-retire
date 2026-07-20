@@ -75,7 +75,7 @@ describe('OnboardingFlow', () => {
         const onDone = vi.fn();
         render(<OnboardingFlow seed={freshSeed()} onDone={onDone} onOpenPrivacy={vi.fn()} />);
 
-        await user.click(screen.getByRole('button', { name: /Start quick/ }));
+        await user.click(screen.getByRole('button', { name: /Quick start/ }));
         await user.click(screen.getByRole('button', { name: 'Next' }));
         await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -130,7 +130,7 @@ describe('OnboardingFlow', () => {
 
         render(<OnboardingFlow seed={seed} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-        await user.click(screen.getByRole('button', { name: /Start quick/ }));
+        await user.click(screen.getByRole('button', { name: /Quick start/ }));
         await user.click(screen.getByRole('button', { name: 'Next' }));
         await user.click(screen.getByRole('button', { name: 'Save' }));
 
@@ -168,8 +168,8 @@ describe('OnboardingFlow', () => {
         const user = userEvent.setup();
         render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-        await user.click(screen.getByRole('button', { name: /Start quick/ }));
-        const quickAgeInput = fieldFor('Your current age') as HTMLInputElement;
+        await user.click(screen.getByRole('button', { name: /Quick start/ }));
+        const quickAgeInput = fieldFor('Current age') as HTMLInputElement;
         await setFinancialInput(user, quickAgeInput, '33');
         expect(quickAgeInput.value).toBe('33');
 
@@ -185,15 +185,15 @@ describe('OnboardingFlow', () => {
         const user = userEvent.setup();
         render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-        await user.click(screen.getByRole('button', { name: /Start quick/ }));
+        await user.click(screen.getByRole('button', { name: /Quick start/ }));
 
-        const ageInput = fieldFor('Your current age') as HTMLInputElement;
+        const ageInput = fieldFor('Current age') as HTMLInputElement;
         await setFinancialInput(user, ageInput, '60');
 
         const retirementInput = fieldFor('Retirement age') as HTMLInputElement;
         await setFinancialInput(user, retirementInput, '55');
 
-        expect(await screen.findByText('Retirement age must be ≥ current age')).toBeInTheDocument();
+        expect(await screen.findByText("Retirement age can't be earlier than current age")).toBeInTheDocument();
         expect(retirementInput.value).toBe('55');
     });
 
@@ -213,7 +213,7 @@ describe('OnboardingFlow', () => {
         window.localStorage.clear();
         const onDoneClosing = vi.fn();
         render(<OnboardingFlow seed={freshSeed()} onDone={onDoneClosing} onOpenPrivacy={vi.fn()} />);
-        await user.click(screen.getByRole('button', { name: /Start quick/ }));
+        await user.click(screen.getByRole('button', { name: /Quick start/ }));
         await user.click(screen.getByRole('button', { name: 'Next' }));
         await user.click(screen.getByRole('button', { name: 'Save' }));
         expect(await screen.findByRole('heading', { name: "You're set." })).toBeInTheDocument();
@@ -233,7 +233,7 @@ describe('OnboardingFlow', () => {
 
     it('exposes dialog semantics on the root element', () => {
         render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
-        const dialog = screen.getByRole('dialog', { name: 'Retirement plan setup' });
+        const dialog = screen.getByRole('dialog', { name: 'Guided Setup' });
         expect(dialog).toHaveAttribute('aria-modal', 'true');
     });
 });

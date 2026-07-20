@@ -111,7 +111,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                 </div>
             </div>
             <Toggle
-                label="Rebalance annually"
+                label="Rebalance Annually"
                 checked={rebalanceAnnually}
                 onChange={onRebalanceChange}
                 tooltip={'ON = the account is rebalanced to these weights each year, so income grows with the account.\nOFF = only the Equity slice compounds — income stays flat in dollars and equity drifts up.'}

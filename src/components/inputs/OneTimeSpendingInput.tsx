@@ -69,7 +69,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
             {/* Add New Form */}
             <div className="grid grid-cols-12 gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <div className="col-span-3">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Type</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Type</label>
                     <select
                         className="w-full rounded border-slate-300 text-sm px-1 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
                         value={newType}
@@ -80,7 +80,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                     </select>
                 </div>
                 <div className="col-span-3">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Description</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Description</label>
                     <input
                         type="text"
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
@@ -90,7 +90,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                     />
                 </div>
                 <div className="col-span-2">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Age</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Age</label>
                     <input
                         type="number"
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
@@ -99,7 +99,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                     />
                 </div>
                 <div className="col-span-2">
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Amount</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-1">Amount</label>
                     <input
                         type="number"
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"

@@ -24,7 +24,7 @@ export const ComparisonChart = React.memo(function ComparisonChart({ data, runs,
         <div className="h-[350px] lg:h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="mb-6 text-xl font-bold text-slate-900">
                 Net Worth Comparison
-                <span className="ml-2 text-sm font-normal text-slate-400">{inflationAdjusted ? '(Real $)' : '(Nominal $)'}</span>
+                <span className="ml-2 text-sm font-normal text-slate-400">{inflationAdjusted ? '(real $)' : '(nominal $)'}</span>
             </h3>
             <ResponsiveContainer width="100%" height="90%">
                 <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>

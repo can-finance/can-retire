@@ -15,15 +15,15 @@ interface SpendingChartProps {
 }
 
 const LABEL_MAP: Record<string, string> = {
-    Salary: 'Employment Income',
+    Salary: 'Salary',
     CPP: 'CPP',
     OAS: 'OAS',
-    Yield: 'Investment Income',
-    RRSP: 'RRSP/RRIF',
+    Yield: 'Yield',
+    RRSP: 'RRSP',
     TFSA: 'TFSA',
     NonReg: 'Non-Reg',
-    Taxes: 'Income Tax',
-    TargetSpend: 'Target Spending',
+    Taxes: 'Taxes Paid',
+    TargetSpend: 'Target Spend',
 };
 
 const LEGEND_ORDER = [

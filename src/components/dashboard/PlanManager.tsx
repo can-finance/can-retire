@@ -4,6 +4,22 @@ import type { SavedPlan } from '../../hooks/usePlans';
 import type { SimulationInputs } from '../../engine/types';
 import { SectionCard } from '../ui/SectionCard';
 import { HelpTooltip } from '../ui/HelpTooltip';
+import { Dialog } from '../ui/Dialog';
+
+// null = closed. 'copied'/'manual' carry the share URL; 'error' is the
+// generation-failure state.
+type ShareState =
+    | null
+    | { kind: 'copied'; url: string }
+    | { kind: 'manual'; url: string }
+    | { kind: 'error' };
+
+const dialogPrimaryBtn =
+    'px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors';
+const dialogSecondaryBtn =
+    'px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors';
+const dialogDestructiveBtn =
+    'px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors';
 
 interface PlanManagerProps {
     plans: SavedPlan[];
@@ -12,9 +28,9 @@ interface PlanManagerProps {
     activeLastSaved: string | null;
     currentInputs: SimulationInputs;
     onRenameActive: (name: string) => void;
-    onNewPlan: () => void;
+    onDuplicateActive: () => void;
+    onNewPlanGuided: () => void;
     onActivate: (id: string) => void;
-    onDuplicate: (id: string) => void;
     onDelete: (id: string) => void;
     onCompare: () => void;
 }
@@ -26,14 +42,18 @@ export function PlanManager({
     activeLastSaved,
     currentInputs,
     onRenameActive,
-    onNewPlan,
+    onDuplicateActive,
+    onNewPlanGuided,
     onActivate,
-    onDuplicate,
     onDelete,
     onCompare,
 }: PlanManagerProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
+    const [share, setShare] = useState<ShareState>(null);
+    const [copied, setCopied] = useState(false);
+    // The plan awaiting delete confirmation (null when no confirm is open).
+    const [pendingDelete, setPendingDelete] = useState<SavedPlan | null>(null);
     // Set by Enter/Escape so the blur that fires when the input unmounts doesn't
     // re-run commit (which would double-fire rename, or commit an Escape-cancel).
     const skipBlur = useRef(false);
@@ -52,6 +72,7 @@ export function PlanManager({
 
     // --- Sharing Logic ---
     const handleSharePlan = () => {
+        setCopied(false);
         try {
             // Compress the inputs
             const json = JSON.stringify(currentInputs);
@@ -60,27 +81,47 @@ export function PlanManager({
             // Construct full URL
             const url = `${window.location.origin}${window.location.pathname}#start=${compressed}`;
 
-            // Check if clipboard API is available (Secure context / localhost)
+            // Check if clipboard API is available (Secure context / localhost).
+            // Either way we show the dialog with a selectable URL as the fallback.
             if (navigator.clipboard && window.isSecureContext) {
                 navigator.clipboard.writeText(url)
-                    .then(() => alert("Shareable URL copied to clipboard!"))
-                    .catch(() => {
-                        prompt("Copy this URL:", url);
-                    });
+                    .then(() => setShare({ kind: 'copied', url }))
+                    .catch(() => setShare({ kind: 'manual', url }));
             } else {
-                prompt("Copy this URL:", url);
+                setShare({ kind: 'manual', url });
             }
         } catch (e) {
             console.error("Failed to share", e);
-            alert("Failed to generate share link.");
+            setShare({ kind: 'error' });
         }
+    };
+
+    // Re-copy from inside the share dialog. May fail silently in insecure
+    // contexts — selecting the field text is the fallback there.
+    const recopyShareUrl = (url: string) => {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(url)
+                .then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                })
+                .catch(() => { /* selecting the text is the fallback */ });
+        }
+    };
+
+    const shareOpen = share?.kind === 'copied' || share?.kind === 'manual';
+    const shareUrl = share && 'url' in share ? share.url : '';
+
+    const confirmDelete = () => {
+        if (pendingDelete) onDelete(pendingDelete.id);
+        setPendingDelete(null);
     };
 
     const titleClass = 'text-xl font-bold text-slate-900 line-clamp-1';
 
     return (
-        <SectionCard accent="indigo" className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
+        <SectionCard accent="rose" className="space-y-4">
+            <div className="space-y-2 border-b pb-2">
                 <div className="flex flex-col min-w-0">
                     <div className="flex items-center gap-1.5">
                         {editing ? (
@@ -109,20 +150,20 @@ export function PlanManager({
                                 {activePlanName}
                             </button>
                         )}
-                        <HelpTooltip text="A plan holds everything you've entered — ages, incomes, accounts, spending, and assumptions. Plans are saved locally in your browser on this PC — nothing is uploaded to any server. Clearing browser data removes them; use Share to create a backup link that contains all of a plan's data.">
+                        <HelpTooltip text="A plan holds everything you've entered — ages, incomes, accounts, spending, and assumptions. Plans are saved locally in your browser on this device — nothing is uploaded to any server. Clearing browser data removes them; use Share to create a backup link that contains all of a plan's data.">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-300 hover:text-slate-500 transition-colors cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                         </HelpTooltip>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">
                         {activeLastSaved
                             ? `edited ${new Date(activeLastSaved).toLocaleDateString()}`
                             : 'Not saved yet — edits save automatically'}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <HelpTooltip text="Copies a shareable backup link containing ALL of this plan's data — every input and assumption is encoded in the link itself, nothing is stored on any server. Opening it restores the full plan. Anyone with the link can see the numbers in it.">
+                <div className="flex items-center flex-wrap gap-2">
+                    <HelpTooltip text="Copies a shareable backup link containing all of this plan's data — every input and assumption is encoded in the link itself, nothing is stored on any server. Opening it restores the full plan. Anyone with the link can see the numbers in it.">
                     <button
                         onClick={handleSharePlan}
                         className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors font-medium border border-indigo-100"
@@ -134,7 +175,15 @@ export function PlanManager({
                     </button>
                     </HelpTooltip>
                     <button
-                        onClick={onNewPlan}
+                        onClick={onDuplicateActive}
+                        title="Copy the current plan as a starting point for changes"
+                        className="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
+                    >
+                        Duplicate Plan
+                    </button>
+                    <button
+                        onClick={onNewPlanGuided}
+                        title="Create a new plan from scratch via guided setup"
                         className="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
                     >
                         New Plan
@@ -153,10 +202,10 @@ export function PlanManager({
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V9m6 10V5m6 14v-7M3 19h18" />
                     </svg>
-                    Compare plans
+                    Compare Plans
                 </button>
                 {plans.length < 2 && (
-                    <p className="text-[10px] text-slate-400 text-center mt-1">Create a second plan to compare</p>
+                    <p className="text-xs text-slate-400 text-center mt-1">Create a second plan to compare</p>
                 )}
             </div>
 
@@ -166,7 +215,7 @@ export function PlanManager({
                     <div className="flex items-center justify-between p-2 rounded-lg bg-brand-50 border border-brand-100">
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate text-brand-900">{activePlanName}</p>
-                            <p className="text-[10px] text-slate-400">Not saved yet</p>
+                            <p className="text-xs text-slate-400">Not saved yet</p>
                         </div>
                     </div>
                 ) : (
@@ -183,26 +232,13 @@ export function PlanManager({
                                 <p className={`text-sm font-medium truncate ${activePlanId === p.id ? 'text-brand-900' : 'text-slate-700'}`}>
                                     {p.name}
                                 </p>
-                                <p className="text-[10px] text-slate-400">edited {new Date(p.lastSaved).toLocaleDateString()}</p>
+                                <p className="text-xs text-slate-400">edited {new Date(p.lastSaved).toLocaleDateString()}</p>
                             </div>
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        onDuplicate(p.id);
-                                    }}
-                                    aria-label="Duplicate plan"
-                                    title="Duplicate"
-                                    className="text-slate-300 hover:text-brand-600 transition-colors p-1"
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                </button>
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDelete(p.id);
+                                        setPendingDelete(p);
                                     }}
                                     disabled={plans.length === 1}
                                     aria-label="Delete plan"
@@ -218,6 +254,73 @@ export function PlanManager({
                     ))
                 )}
             </div>
+
+            {/* Share dialog — success (link copied) or manual-copy fallback. */}
+            <Dialog
+                open={shareOpen}
+                onClose={() => setShare(null)}
+                title={share?.kind === 'copied' ? 'Share link copied' : 'Copy this share link'}
+                footer={
+                    <button type="button" onClick={() => setShare(null)} className={dialogPrimaryBtn}>
+                        Done
+                    </button>
+                }
+            >
+                <p>Anyone with this link can see all of this plan's numbers.</p>
+                <div className="mt-3 flex items-center gap-2">
+                    <input
+                        type="text"
+                        readOnly
+                        value={shareUrl}
+                        data-autofocus
+                        onFocus={(e) => e.target.select()}
+                        aria-label="Share link"
+                        className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 outline-none focus:border-brand-400"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => recopyShareUrl(shareUrl)}
+                        className="shrink-0 px-3 py-2 rounded-xl text-sm font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                    >
+                        {copied ? 'Copied' : 'Copy'}
+                    </button>
+                </div>
+            </Dialog>
+
+            {/* Share dialog — link generation failed. */}
+            <Dialog
+                open={share?.kind === 'error'}
+                onClose={() => setShare(null)}
+                title="Couldn't create share link"
+                maxWidth="max-w-sm"
+                footer={
+                    <button type="button" data-autofocus onClick={() => setShare(null)} className={dialogPrimaryBtn}>
+                        Close
+                    </button>
+                }
+            >
+                <p>Something went wrong generating the link. Try again.</p>
+            </Dialog>
+
+            {/* Delete confirmation. */}
+            <Dialog
+                open={!!pendingDelete}
+                onClose={() => setPendingDelete(null)}
+                title="Delete plan?"
+                maxWidth="max-w-sm"
+                footer={
+                    <>
+                        <button type="button" data-autofocus onClick={() => setPendingDelete(null)} className={dialogSecondaryBtn}>
+                            Cancel
+                        </button>
+                        <button type="button" onClick={confirmDelete} className={dialogDestructiveBtn}>
+                            Delete
+                        </button>
+                    </>
+                }
+            >
+                <p>Delete "{pendingDelete?.name}"? This can't be undone.</p>
+            </Dialog>
 
         </SectionCard>
     );
