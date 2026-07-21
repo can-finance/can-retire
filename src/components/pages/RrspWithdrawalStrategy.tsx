@@ -44,8 +44,8 @@ export function RrspWithdrawalStrategy() {
                         bill on the way out.
                     </p>
                     <p>
-                        You must convert your RRSP to a RRIF by the end of the year you turn 71, and starting the
-                        year you turn 72 a rising minimum percentage must be withdrawn and taxed as income every
+                        You must convert your RRSP to a RRIF by the end of the year you turn 71, and, starting the
+                        year you turn 72, a rising minimum percentage must be withdrawn and taxed as income every
                         year — whether you need the money or not. Those <strong>RRIF minimum withdrawals</strong> land
                         on top of CPP and OAS, which by then are usually flowing too. Three income streams stacking
                         at once can push a retiree into a higher tax bracket than they ever paid while working.
@@ -94,7 +94,7 @@ export function RrspWithdrawalStrategy() {
                 <h2 className="text-2xl font-bold text-slate-900">How the optimizer works</h2>
                 <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
                     <p>
-                        The calculator does not hand-wave. It runs a full <strong>year-by-year simulation</strong> of
+                        The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
                         your retirement using real Canadian tax rules, then searches for the schedule that maximizes
                         what is left after tax. Under the hood it:
                     </p>
@@ -139,7 +139,7 @@ export function RrspWithdrawalStrategy() {
                     <div className="space-y-1">
                         <h3 className="font-bold text-amber-900">Caution for lower-income retirees</h3>
                         <p className="text-sm text-amber-900/80 leading-relaxed">
-                            If you may qualify for the Guaranteed Income Supplement (GIS), be careful: GIS is
+                            If you could qualify for the Guaranteed Income Supplement (GIS), be careful: GIS is
                             income-tested, and extra RRSP withdrawals can reduce it. This tool does <strong>not</strong> model
                             GIS, so if you are near GIS eligibility, talk to a qualified advisor before melting down
                             your RRSP.

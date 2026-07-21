@@ -152,7 +152,7 @@ export function PersonSection({
                             onClick={onOpenOptimizer}
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
                         >
-                            Not sure what to melt? Try the Meltdown Optimizer →
+                            Not sure how much or when to melt? Try the optimizer →
                         </button>
                     </HelpTooltip>
                 )}

@@ -29,7 +29,7 @@ export const RRSP_STRATEGY_FAQ_ITEMS: FaqItem[] = [
     {
         question: 'How much tax is withheld on RRSP withdrawals?',
         answer:
-            'Financial institutions apply withholding tax on RRSP withdrawals: outside Quebec it is 10% on amounts up to $5,000, 20% on $5,001 to $15,000, and 30% above $15,000. Quebec rates are lower federally but add provincial withholding on top. Important: withholding is not your final tax bill. The withdrawal is added to your income for the year and taxed at your actual marginal rate — you may owe more at tax time, or get some back as a refund.',
+            'Financial institutions apply withholding tax on RRSP withdrawals: outside Quebec it is 10% on amounts up to $5,000, 20% on $5,001 to $15,000, and 30% above $15,000. Quebec\'s federal withholding rates are lower, but provincial withholding is added on top. Important: withholding is not your final tax bill. The withdrawal is added to your income for the year and taxed at your actual marginal rate — you may owe more at tax time, or get some back as a refund.',
     },
     {
         question: 'Does an RRSP meltdown avoid OAS clawback?',

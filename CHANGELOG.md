@@ -18,14 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   melt amount and CPP/OAS start ages change — everything else stays as-is) or
   save it as a new plan. Suggestions never allow a plan that runs out of
   money, and the winner is validated against Monte Carlo success rates before
-  being recommended. A "Not sure what to melt?" link next to the RRSP melt
-  fields jumps straight to the optimizer.
+  being recommended. A "Not sure how much or when to melt?" link next to the
+  RRSP melt fields jumps straight to the optimizer. If you haven't entered
+  your own numbers yet, the optimizer says so and points you to Guided Setup
+  instead of silently optimizing the sample data.
 - **RRSP Withdrawal Strategy page.** A new standalone page at
   /rrsp-withdrawal-strategy/ explains the RRSP meltdown strategy — why
   maximum deferral often backfires (RRIF minimums, OAS clawback, terminal
   tax), when melting down helps and when it doesn't (including the GIS
   caution), plus an FAQ — with links straight into the optimizer. Added to
   the site navigation on all pages.
+- **CPP Calculator FAQ.** The CPP Calculator page now ends with an FAQ
+  covering how much CPP pays, start-age trade-offs, how the calculation
+  works, the child-rearing provision, taxability, and how the estimate
+  relates to your Service Canada statement.
 
 ## [0.7.0] - 2026-07-19
 

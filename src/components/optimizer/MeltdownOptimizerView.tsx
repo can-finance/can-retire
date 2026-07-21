@@ -14,6 +14,7 @@ import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
 
 interface MeltdownOptimizerViewProps {
     liveInputs: SimulationInputs;
+    hasRealPlan: boolean;
     isInflationAdjusted: boolean;
     onToggleInflation: (v: boolean) => void;
     onExit: () => void;
@@ -40,6 +41,7 @@ const primaryBtn =
 
 export function MeltdownOptimizerView({
     liveInputs,
+    hasRealPlan,
     isInflationAdjusted,
     onToggleInflation,
     onExit,
@@ -93,20 +95,19 @@ export function MeltdownOptimizerView({
         setPhase({ kind: 'setup' });
     }, []);
 
+    // Visitors without a saved plan typically arrived from the landing page, not
+    // the dashboard — "Back" would claim a place they've never been.
+    const exitLabel = hasRealPlan ? 'Back to Dashboard' : 'Go to Dashboard';
+
     const header = (
-        <div className="flex flex-wrap items-center gap-4">
-            <h2 className="text-2xl font-bold text-slate-900 mr-auto">RRSP Meltdown Optimizer</h2>
-            <button onClick={onExit} className={secondaryBtn}>
-                Back to Dashboard
-            </button>
-        </div>
+        <h2 className="text-2xl font-bold text-slate-900 text-center">RRSP Meltdown Optimizer</h2>
     );
 
     if (phase.kind === 'setup') {
         return (
             <div className="flex flex-col gap-6">
                 {header}
-                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl">
+                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
                     <h3 className="text-lg font-bold text-slate-900">What is an RRSP meltdown?</h3>
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
                         An RRSP "meltdown" means voluntarily drawing down your RRSP in your
@@ -139,9 +140,34 @@ export function MeltdownOptimizerView({
                         />
                     </div>
 
-                    <button onClick={runSearch} className={`${primaryBtn} mt-6`}>
-                        Find my best meltdown
-                    </button>
+                    {!hasRealPlan && (
+                        <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+                            <svg className="w-5 h-5 text-amber-500 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            <div>
+                                <p className="text-sm font-bold text-amber-900">These are sample numbers</p>
+                                <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                                    You haven't set up your own plan yet, so the optimizer would run
+                                    on the sample data you see on the dashboard. For a recommendation
+                                    about your retirement, run the Guided Setup first — it takes a few
+                                    minutes and asks for your ages, balances, and spending.
+                                </p>
+                                <a href="/?setup=1" className={`${primaryBtn} mt-3 inline-block`}>
+                                    Run Guided Setup
+                                </a>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                        <button onClick={runSearch} className={hasRealPlan ? primaryBtn : secondaryBtn}>
+                            {hasRealPlan ? 'Find my best meltdown' : 'Continue with sample numbers'}
+                        </button>
+                        <button onClick={onExit} className={secondaryBtn}>
+                            {exitLabel}
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -152,7 +178,7 @@ export function MeltdownOptimizerView({
         return (
             <div className="flex flex-col gap-6">
                 {header}
-                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl">
+                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
                     <p className="text-sm font-medium text-slate-700">Searching for your best meltdown…</p>
                     <div className="mt-4 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
                         <div
@@ -173,13 +199,18 @@ export function MeltdownOptimizerView({
         return (
             <div className="flex flex-col gap-6">
                 {header}
-                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl">
+                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
                     <p className="text-sm text-rose-600">
                         Something went wrong running the optimizer. Please try again.
                     </p>
-                    <button onClick={backToSetup} className={`${primaryBtn} mt-6`}>
-                        Try again
-                    </button>
+                    <div className="mt-6 flex flex-wrap items-center gap-3">
+                        <button onClick={backToSetup} className={primaryBtn}>
+                            Try again
+                        </button>
+                        <button onClick={onExit} className={secondaryBtn}>
+                            {exitLabel}
+                        </button>
+                    </div>
                 </div>
             </div>
         );
@@ -204,6 +235,7 @@ export function MeltdownOptimizerView({
             }}
             onRunAgain={backToSetup}
             onExit={onExit}
+            exitLabel={exitLabel}
         />
     );
 }
@@ -222,6 +254,7 @@ interface ResultsViewProps {
     onApply: () => void;
     onRunAgain: () => void;
     onExit: () => void;
+    exitLabel: string;
 }
 
 function ResultsView({
@@ -236,6 +269,7 @@ function ResultsView({
     onApply,
     onRunAgain,
     onExit,
+    exitLabel,
 }: ResultsViewProps) {
     // Two ephemeral comparison runs: current plan vs. suggested meltdown. Metrics
     // honour the inflation toggle (recomputed from results, like ComparisonView).
@@ -294,10 +328,6 @@ function ResultsView({
                         label="Show Today's Dollars (Inflation-Adjusted)"
                     />
                 </div>
-
-                <button onClick={onExit} className={secondary}>
-                    Back to Dashboard
-                </button>
             </div>
 
             {result.improved ? (
@@ -358,7 +388,7 @@ function ResultsView({
                     Run again
                 </button>
                 <button onClick={onExit} className={secondary}>
-                    Back to Dashboard
+                    {exitLabel}
                 </button>
             </div>
         </div>

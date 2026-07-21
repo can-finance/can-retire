@@ -16,7 +16,7 @@ import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { runSimulation, runMonteCarlo, blendedNonRegMix } from '../../engine/projection';
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
 import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
-import { SIM_KEY } from '../../utils/onboarding';
+import { SIM_KEY, hasSavedPlan } from '../../utils/onboarding';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { computeSummaryMetrics } from '../../utils/summaryMetrics';
 import { SummaryHeader } from './SummaryHeader';
@@ -59,6 +59,14 @@ export function Dashboard() {
         }
         return requested;
     });
+
+    // Whether a real (user-saved) plan exists, re-checked each time the optimizer
+    // opens — a visitor who never edited anything is running on sample data, which
+    // MeltdownOptimizerView warns about in its setup phase. hasSavedPlan() reads
+    // localStorage directly (no reactive deps ESLint can see), so isOptimizing is
+    // listed purely to force re-evaluation on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const optimizerHasRealPlan = useMemo(() => hasSavedPlan(), [isOptimizing]);
 
     // Every EDIT writes through to the active plan. Plan activation/loading uses
     // setInputsRaw directly — activating is not an edit and must not bump lastSaved.
@@ -286,6 +294,7 @@ export function Dashboard() {
             ) : isOptimizing ? (
                 <MeltdownOptimizerView
                     liveInputs={inputs}
+                    hasRealPlan={optimizerHasRealPlan}
                     isInflationAdjusted={isInflationAdjusted}
                     onToggleInflation={setIsInflationAdjusted}
                     onExit={() => setIsOptimizing(false)}

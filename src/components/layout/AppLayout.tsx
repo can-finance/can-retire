@@ -10,7 +10,7 @@ export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-wit
 const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
     { id: 'dashboard', label: 'Dashboard', href: '/' },
     { id: 'cpp-calculator', label: 'CPP Calculator', href: '/cpp-calculator/' },
-    { id: 'rrsp-withdrawal-strategy', label: 'RRSP Meltdown', href: '/rrsp-withdrawal-strategy/' },
+    { id: 'rrsp-withdrawal-strategy', label: 'RRSP Withdrawal Strategy', href: '/rrsp-withdrawal-strategy/' },
     { id: 'how-it-works', label: 'How does this work?', href: '/how-it-works/' },
 ];
 
@@ -112,11 +112,6 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                         </h1>
                     </BrandLockup>
 
-                    <div className="hidden xl:flex items-center gap-2 whitespace-nowrap text-xs font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                        Runs Entirely in Your Browser • Your Data Never Leaves Your Device
-                    </div>
-
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                         <nav className="flex items-center gap-5">
                             {NAV_ITEMS.map(({ id, label, href }) => (
@@ -171,6 +166,13 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
             </main>
             <footer className="border-t border-slate-200/70 mt-4">
                 <div className="container mx-auto px-4 py-6 text-center space-y-1.5">
+                    {/* Privacy badge — lived in the header until the nav outgrew the
+                        space (and `hidden xl:` meant most visitors never saw it).
+                        Here it shows at every viewport width, on every page. */}
+                    <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100 mb-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                        Runs Entirely in Your Browser • Your Data Never Leaves Your Device
+                    </div>
                     <p className="text-sm text-slate-400">
                         For planning and educational purposes only — not financial, tax, or investment advice.
                         Projections are estimates based on simplified assumptions.{' '}
