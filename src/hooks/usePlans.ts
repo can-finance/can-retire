@@ -155,14 +155,18 @@ export function usePlans() {
 
     // Mutators compute from the current render's `store` so create/duplicate/delete
     // can return the affected plan synchronously (before the commit re-render).
-    const createPlan = (name: string, inputs: SimulationInputs): SavedPlan => {
+    // `activate` defaults true (every existing caller wants the new plan loaded
+    // into the editor). Pass false to add a plan in the background without
+    // touching the active plan — used by "Save as new plan" so saving a
+    // suggestion never hijacks the plan the user is editing.
+    const createPlan = (name: string, inputs: SimulationInputs, activate = true): SavedPlan => {
         const plan: SavedPlan = {
             id: crypto.randomUUID(),
             name,
             inputs: clone(inputs),
             lastSaved: new Date().toISOString()
         };
-        commit({ plans: [...store.plans, plan], activeId: plan.id });
+        commit({ plans: [...store.plans, plan], activeId: activate ? plan.id : store.activeId });
         return plan;
     };
 

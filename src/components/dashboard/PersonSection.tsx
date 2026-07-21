@@ -25,6 +25,8 @@ interface PersonSectionProps {
     onRemove?: () => void;
     colorTheme?: 'blue' | 'indigo' | 'slate' | 'purple';
     defaultOpen?: boolean;
+    /** When provided, renders an upsell link under the meltdown fields that opens the optimizer. */
+    onOpenOptimizer?: () => void;
 }
 
 // Person avatar dot colors — distinct from all chart account colors.
@@ -47,6 +49,7 @@ export function PersonSection({
     onRemove,
     colorTheme = 'slate',
     defaultOpen = true,
+    onOpenOptimizer,
 }: PersonSectionProps) {
     const validationErrors = getValidationErrors(person);
     const isSpouse = colorTheme === 'purple';
@@ -141,6 +144,18 @@ export function PersonSection({
 
                 <MeltdownFields person={person} isSpouse={isSpouse} onPatch={onPatch}
                     labels={MELTDOWN_LABELS} />
+
+                {onOpenOptimizer && (
+                    <HelpTooltip text="Searches annual RRSP withdrawal amounts — and optionally CPP/OAS timing — for the combination that leaves the largest after-tax estate, then lets you apply it to this plan.">
+                        <button
+                            type="button"
+                            onClick={onOpenOptimizer}
+                            className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
+                        >
+                            Not sure what to melt? Try the Meltdown Optimizer →
+                        </button>
+                    </HelpTooltip>
+                )}
             </div>
         </CollapsibleSection>
     );

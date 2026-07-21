@@ -89,7 +89,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
 
     // A row is either a data row (label + one cell per run) or a group header.
     type MetricRow =
-        | { kind: 'group'; label: string }
+        | { kind: 'group'; label: string; note?: string }
         | {
               kind: 'data';
               label: string;
@@ -121,9 +121,10 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             cell: run => fmtPct1(run.metrics.initialWithdrawalRate),
             delta: { kind: 'pct', dir: 'neutral', decimals: 1, value: r => r.metrics.initialWithdrawalRate },
         },
+        { kind: 'group', label: 'Monte Carlo', note: '(range of outcomes under random market returns)' },
         {
             kind: 'data',
-            label: 'Monte Carlo success rate',
+            label: 'Success rate',
             cell: run =>
                 run.monteCarlo ? (
                     `${run.monteCarlo.successRate.toFixed(0)}%`
@@ -136,7 +137,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         },
         {
             kind: 'data',
-            label: 'Median end-of-plan assets (Monte Carlo)',
+            label: 'Median end-of-plan assets',
             cell: run => {
                 const v = medianEndAssets(run);
                 return v === null ? <span className="text-slate-300">…</span> : formatCurrencyCAD(v);
@@ -276,6 +277,11 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
                                         className="pt-5 pb-1 text-sm font-semibold uppercase tracking-wider text-slate-700"
                                     >
                                         {row.label}
+                                        {row.note && (
+                                            <span className="ml-2 normal-case font-normal tracking-normal text-slate-400">
+                                                {row.note}
+                                            </span>
+                                        )}
                                     </td>
                                 </tr>
                             ) : (

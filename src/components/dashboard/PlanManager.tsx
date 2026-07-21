@@ -33,6 +33,7 @@ interface PlanManagerProps {
     onActivate: (id: string) => void;
     onDelete: (id: string) => void;
     onCompare: () => void;
+    onOptimize: () => void;
 }
 
 export function PlanManager({
@@ -47,6 +48,7 @@ export function PlanManager({
     onActivate,
     onDelete,
     onCompare,
+    onOptimize,
 }: PlanManagerProps) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState('');
@@ -207,6 +209,19 @@ export function PlanManager({
                 {plans.length < 2 && (
                     <p className="text-xs text-slate-400 text-center mt-1">Create a second plan to compare</p>
                 )}
+
+                {/* Optimizer: searches the active plan for a better RRSP-meltdown
+                    schedule. Always available (works on a single plan). */}
+                <button
+                    onClick={onOptimize}
+                    title="Search for the RRSP-meltdown schedule that leaves the largest estate"
+                    className="mt-2 w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2.5 rounded-lg hover:bg-emerald-100 transition-colors font-medium border border-emerald-100 text-sm"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Optimize Meltdown
+                </button>
             </div>
 
             <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar pt-2 border-t">

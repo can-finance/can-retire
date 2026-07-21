@@ -23,6 +23,8 @@ import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
 import { PlanManager } from './PlanManager';
 import { ComparisonView } from '../comparison/ComparisonView';
+import { MeltdownOptimizerView } from '../optimizer/MeltdownOptimizerView';
+import { applyMeltdownRecommendation } from '../../utils/meltdownOptimizer';
 
 // Smallest 'Plan N' (N >= 2) whose name isn't already taken.
 function nextPlanName(plans: SavedPlan[]): string {
@@ -38,6 +40,7 @@ export function Dashboard() {
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
     const [isMonteCarlo, setIsMonteCarlo] = useState(false);
     const [isComparing, setIsComparing] = useState(false);
+    const [isOptimizing, setIsOptimizing] = useState(false);
 
     // Every EDIT writes through to the active plan. Plan activation/loading uses
     // setInputsRaw directly — activating is not an edit and must not bump lastSaved.
@@ -262,6 +265,15 @@ export function Dashboard() {
                     onToggleInflation={setIsInflationAdjusted}
                     onExit={() => setIsComparing(false)}
                 />
+            ) : isOptimizing ? (
+                <MeltdownOptimizerView
+                    liveInputs={inputs}
+                    isInflationAdjusted={isInflationAdjusted}
+                    onToggleInflation={setIsInflationAdjusted}
+                    onExit={() => setIsOptimizing(false)}
+                    onSavePlan={(name, planInputs) => createPlan(name, planInputs, false)}
+                    onApply={(rec) => updateInputs(applyMeltdownRecommendation(inputs, rec))}
+                />
             ) : (
                 <>
             <SummaryHeader metrics={metrics} monteCarlo={displayedMonteCarloResults} />
@@ -279,6 +291,7 @@ export function Dashboard() {
                         onNonRegChange={(accounts) => updateNonRegAccounts('person', accounts)}
                         nonRegDriftSummary={driftSummaries.person}
                         colorTheme="blue"
+                        onOpenOptimizer={() => setIsOptimizing(true)}
                     />
 
                     {/* Spouse Toggle & Profile */}
@@ -293,6 +306,7 @@ export function Dashboard() {
                             showRemove
                             onRemove={toggleSpouse}
                             colorTheme="purple"
+                            onOpenOptimizer={() => setIsOptimizing(true)}
                         />
                     ) : (
                         <button
@@ -401,6 +415,7 @@ export function Dashboard() {
                         onActivate={handleActivate}
                         onDelete={handleDelete}
                         onCompare={() => setIsComparing(true)}
+                        onOptimize={() => setIsOptimizing(true)}
                     />
                 </div>
 

@@ -23,6 +23,7 @@ type Handlers = {
     onActivate: ReturnType<typeof vi.fn<(id: string) => void>>;
     onDelete: ReturnType<typeof vi.fn<(id: string) => void>>;
     onCompare: ReturnType<typeof vi.fn<() => void>>;
+    onOptimize: ReturnType<typeof vi.fn<() => void>>;
 };
 
 function renderManager(opts: {
@@ -40,6 +41,7 @@ function renderManager(opts: {
         onActivate: vi.fn<(id: string) => void>(),
         onDelete: vi.fn<(id: string) => void>(),
         onCompare: vi.fn<() => void>(),
+        onOptimize: vi.fn<() => void>(),
     };
     render(
         <PlanManager

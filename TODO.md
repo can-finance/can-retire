@@ -3,9 +3,10 @@
 ## Feature ideas
 
 Build order (decided 2026-07-18): named scenario storage -> scenario comparison
-page -> meltdown optimizer. The optimizer's results view is just a comparison with
-a machine-generated scenario, and hand-tweaked comparisons are the ground truth for
-validating the optimizer's recommendations before trusting the search.
+page -> meltdown optimizer. All three now exist (optimizer v1 2026-07-21). The
+optimizer's results view is just a comparison with a machine-generated scenario,
+and hand-tweaked comparisons are the ground truth for validating the optimizer's
+recommendations before trusting the search.
 
 ### Scenario comparison page
 Side-by-side comparison of two or more saved scenarios: success rate, ending/estate
@@ -17,38 +18,76 @@ overlaid net-worth / Monte Carlo fan charts.
 ### RRSP meltdown optimizer
 Recommend when to retire and how much RRSP/RRIF to decumulate in which years,
 rather than the user hand-tuning `rrspMeltStartAge`/`rrspMeltAmount` by eye.
-Fleshed out 2026-07-18; mostly a search loop over existing engine inputs.
+Fleshed out 2026-07-18.
 
-**Decision variables** (per person): melt start age, melt end (or until exhausted),
-melt size; household-level and opt-in: retirement age, CPP/OAS start ages (CPP
-timing interacts strongly — delaying CPP to 70 creates the cheap-melt window).
+**v1 implemented 2026-07-21** (`src/utils/meltdownOptimizer.ts` +
+`MeltdownOptimizerView`): pure search loop over EXISTING engine inputs, no engine
+changes. Decision variables per person: fixed-dollar annual melt amount (grid
+scaled to RRSP balance and window, coarse pass + refinement; melt start fixed at
+retirement age) and — on by default, with an opt-out toggle — CPP start age
+{60, 65, 70} and OAS start age {65, 70}, filtered to ages the person hasn't
+already passed. Couples use coordinate descent (sweep one person's sub-grid
+holding the other fixed, ≤3 sweeps). Objective: maximize `netEstateValue`;
+constraint: `totalShortfall` ≤ $1k; MC-validate winner + top runners-up only,
+demote a winner whose success rate drops >1pt below baseline. Results render
+through the comparison components as ephemeral runs (baseline vs "Suggested
+meltdown") with a plain-language recommendation card and Save-as-plan. Search
+runs chunked on the main thread with progress + AbortSignal.
 
-**Parameterize melt as bracket top-up, not dollars**: "withdraw enough to bring
-taxable income up to threshold T," T from a small natural set (top of fed bracket 1,
-bracket 2, OAS clawback floor ~$91k). Tiny discrete grid (~5 thresholds x ~15 start
-ages x 2 people = a few thousand engine runs, few ms each — web worker), the answer
-is explainable ("fill the 20.5% bracket from 60-70"), and it self-adjusts as
-CPP/RRIF minimums ramp in. Requires adding a top-up melt mode to the engine
-alongside the fixed-amount one — the main new engine work.
+**v2 — melt-to-threshold (the big one).** Parameterize melt as bracket top-up, not
+dollars: "withdraw enough to bring taxable income up to threshold T," T from a
+small natural set (top of fed bracket 1, bracket 2, OAS clawback floor ~$93k).
+Requires a top-up melt mode in `simulatePersonBaseYear` alongside the fixed-amount
+one — the main new engine work (`solveGrossWithdrawal` already does the
+marginal-tax/clawback gross-up math). Why it beats fixed dollars: self-adjusting
+(melt shrinks automatically when CPP/OAS start, goes to zero when RRIF minimums
+cover the threshold — no hard stop at CPP start, which fixed-dollar v1 can't
+express), collapses the search space (~5 thresholds instead of a dollar grid),
+and the answer is explainable ("fill the 20.5% bracket from 60-70"). Move the
+search into a web worker at the same time — the v1 chunked-main-thread pattern
+won't scale to threshold × start-age × 2-person grids with MC validation.
 
-**Objective** (user picks; default = maximize net estate value after terminal tax —
-it naturally penalizes both under-melting (46%+ terminal hit) and over-melting
-(paying 30% now to dodge 25% later)). Alternatives: maximize sustainable spending
-(outer bisection on `postRetirementSpend`); lifetime tax + clawback is a *display
-metric only* — optimizing it is degenerate (broke people pay no tax).
+**v3 — more knobs and objectives.**
+- Objective picker: default stays net estate after terminal tax (naturally
+  penalizes both under-melting (46%+ terminal hit) and over-melting (paying 30%
+  now to dodge 25% later)); alternative = maximize sustainable spending (outer
+  bisection on `postRetirementSpend`). Lifetime tax + clawback stays a *display
+  metric only* — optimizing it is degenerate (broke people pay no tax).
+- "Never trigger OAS clawback" income-ceiling constraint checkbox — eating some
+  clawback is often mathematically optimal but users viscerally hate it; the
+  knob is cheap and builds trust.
+- Retirement-age bounds as an opt-in decision variable (lifestyle choice, don't
+  search it by default).
 
-**Constraints.** Free from the engine: RRIF minimums 71+, balance caps, TFSA room,
-terminal full inclusion, spousal rollover. Optimizer must enforce: no shortfall
-(deterministic, same $1k tolerance as `runMonteCarlo`); MC-validate only the winner
-+ runners-up rather than every candidate (200 iters x thousands of candidates is too
-slow). Optional user knobs: income ceiling ("never trigger OAS clawback"),
-retirement-age bounds (opt-in — it's a lifestyle choice), co-optimize CPP toggle.
-Melt destination = TFSA-first then non-reg as a fixed rule (surplus-sweep machinery
-already exists via `receivesSurplus`).
+**Modeling gap that biases recommendations (decide before trusting post-65
+advice):** only RRIF minimums (72+) count as eligible pension income today — the
+voluntary melt gets neither the $2,000 pension income credit nor pension income
+splitting. Real-world meltdown practice partially converts RRSP→RRIF at 65
+precisely to unlock both; for couples with lopsided RRSPs, splitting melt income
+at 65-71 is a significant win the engine can't see, so the optimizer currently
+over-favors pre-65 melting. Fix = model early RRIF conversion (treat post-65 melt
+as RRIF income in `eligiblePensionIncome` and the splitting optimizer), likely
+behind an explicit "convert to RRIF at 65" flag.
 
-**New UI**: objective picker, the optional constraint knobs, and a results view
-showing recommendation vs baseline (estate delta, lifetime tax delta, year-by-year
-melt schedule). Overlaps with the scenario comparison page — design together.
+**SEO landing page (proposed 2026-07-21, not yet approved):** a prerendered MPA
+route like `/rrsp-meltdown/` in the CPP-calculator mold (vite.config.ssr.ts +
+scripts/prerender.mjs already support this). "RRSP meltdown" is a high-intent,
+advice-shaped Canadian query where competitors are mostly advisor blog posts,
+not interactive tools; the SPA dashboard itself can't rank for it (the
+optimizer is view state, not a URL). Title should lead with "RRSP Meltdown
+Calculator" ("calculator" is what people search; "optimizer" isn't). Content:
+what a meltdown is, when it helps/hurts, OAS-clawback and GIS caveats, then a
+CTA deep-linking into the app's optimizer — needs a `?optimize=1` query param
+handled like the wizard's `?setup=1`.
+
+**Known blind spot to disclose in the UI:** GIS is not modeled. For low-income
+households, pre-65 meltdown is often about protecting GIS eligibility — the
+optimizer's recommendations can't capture that. A footnote near the results is
+probably enough; silence is not.
+
+**Free from the engine** (for reference): RRIF minimums 71+, balance caps, TFSA
+room, terminal full inclusion, spousal rollover, melt destination TFSA-first then
+non-reg surplus sweep via `receivesSurplus`.
 
 ### Monte Carlo realism (from 2026-07-18 discussion)
 Current model: single `volatility`, one normal shock added identically to
