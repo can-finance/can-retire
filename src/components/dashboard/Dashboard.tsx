@@ -40,7 +40,25 @@ export function Dashboard() {
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
     const [isMonteCarlo, setIsMonteCarlo] = useState(false);
     const [isComparing, setIsComparing] = useState(false);
-    const [isOptimizing, setIsOptimizing] = useState(false);
+
+    // Capture a deep-linked "open the meltdown optimizer" request via `?optimize=1`
+    // ONCE, synchronously, at mount — mirroring the `setupRequested` capture in
+    // App.tsx. This is how the /rrsp-withdrawal-strategy/ landing page's CTA
+    // (`<a href="/?optimize=1">`) lands the visitor straight in the optimizer.
+    // A #start= share link always wins: if the hash is a shared scenario we do
+    // NOT open the optimizer (the mount effect below still needs to import it).
+    // Either way the param is stripped immediately (preserving the hash) so that
+    // a refresh — or the epoch-bump remount App performs after onboarding commits
+    // — doesn't keep re-opening the optimizer.
+    const [isOptimizing, setIsOptimizing] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        const hadOptimizeParam = params.has('optimize');
+        const requested = params.get('optimize') === '1' && !window.location.hash.startsWith('#start=');
+        if (hadOptimizeParam) {
+            window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+        }
+        return requested;
+    });
 
     // Every EDIT writes through to the active plan. Plan activation/loading uses
     // setInputsRaw directly — activating is not an edit and must not bump lastSaved.

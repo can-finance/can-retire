@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en-CA">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RRSP Withdrawal Strategy Calculator — RRSP Meltdown Planner | craptool.ca</title>
+    <meta name="description" content="Free RRSP withdrawal strategy calculator that models the RRSP meltdown — the decumulation plan that leaves the largest after-tax estate. Simulates RRIF minimum withdrawals, CPP/OAS timing, income tax and OAS clawback year by year, all in your browser." />
+    <link rel="canonical" href="https://craptool.ca/rrsp-withdrawal-strategy/" />
+
+    <!-- Open Graph / social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://craptool.ca/rrsp-withdrawal-strategy/" />
+    <meta property="og:title" content="RRSP Withdrawal Strategy Calculator — RRSP Meltdown Planner" />
+    <meta property="og:description" content="Model the RRSP meltdown strategy: find the decumulation schedule that leaves the largest after-tax estate. RRIF minimums, CPP/OAS timing, tax and OAS clawback — free and private." />
+    <meta property="og:site_name" content="C.R.A.P. tool — craptool.ca" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="RRSP Withdrawal Strategy Calculator — RRSP Meltdown Planner" />
+    <meta name="twitter:description" content="Model the RRSP meltdown strategy: find the decumulation schedule that leaves the largest after-tax estate. RRIF minimums, CPP/OAS timing, tax and OAS clawback — free and private." />
+
+    <!-- Structured data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "RRSP Withdrawal Strategy Calculator — RRSP Meltdown Planner",
+      "url": "https://craptool.ca/rrsp-withdrawal-strategy/",
+      "description": "Free RRSP withdrawal strategy calculator that models the RRSP meltdown — the decumulation plan that leaves the largest after-tax estate. Simulates RRIF minimum withdrawals, CPP/OAS timing, income tax and OAS clawback year by year, all in your browser.",
+      "isPartOf": { "@type": "WebSite", "name": "Canadian Retirement Asset Planning tool", "url": "https://craptool.ca/" }
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <h1>RRSP Withdrawal Strategy Calculator</h1>
+      <p>
+        A free calculator for planning RRSP withdrawals in retirement — the RRSP meltdown
+        strategy. Deferring an RRSP as long as possible often backfires: mandatory RRIF minimum
+        withdrawals (starting the year you turn 72, after converting your RRSP to a RRIF by the
+        end of the year you turn 71) stack on top of CPP and OAS, push you into higher tax
+        brackets, trigger the OAS clawback, and leave whatever remains fully taxable as income at
+        death. A meltdown deliberately draws the RRSP down in low-income years at low tax rates.
+        This tool simulates your retirement year by year — real federal and provincial tax, OAS
+        clawback, and RRIF minimums — and searches for the decumulation schedule that leaves the
+        largest after-tax estate without running you short. Everything runs locally in your
+        browser; your data never leaves your device. This is educational information, not
+        financial advice. JavaScript is required to use the calculator.
+      </p>
+    </noscript>
+    <script type="module" src="/src/rrsp-withdrawal-strategy-standalone.tsx"></script>
+    <!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b608680cdb8f4f90b75a97d9f2d140a9"}'></script><!-- End Cloudflare Web Analytics -->
+  </body>
+</html>

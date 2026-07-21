@@ -69,16 +69,15 @@ over-favors pre-65 melting. Fix = model early RRIF conversion (treat post-65 mel
 as RRIF income in `eligiblePensionIncome` and the splitting optimizer), likely
 behind an explicit "convert to RRIF at 65" flag.
 
-**SEO landing page (proposed 2026-07-21, not yet approved):** a prerendered MPA
-route like `/rrsp-meltdown/` in the CPP-calculator mold (vite.config.ssr.ts +
-scripts/prerender.mjs already support this). "RRSP meltdown" is a high-intent,
-advice-shaped Canadian query where competitors are mostly advisor blog posts,
-not interactive tools; the SPA dashboard itself can't rank for it (the
-optimizer is view state, not a URL). Title should lead with "RRSP Meltdown
-Calculator" ("calculator" is what people search; "optimizer" isn't). Content:
-what a meltdown is, when it helps/hurts, OAS-clawback and GIS caveats, then a
-CTA deep-linking into the app's optimizer — needs a `?optimize=1` query param
-handled like the wizard's `?setup=1`.
+**SEO landing page — shipped 2026-07-21** at `/rrsp-withdrawal-strategy/`
+(prerendered MPA route in the how-it-works mold; vite.config.ssr.ts and
+scripts/prerender.mjs were generalized to N pages). Leads with "RRSP
+Withdrawal Strategy Calculator" (broader head term than "meltdown"), with
+meltdown/decumulation as prominent secondary terms; FAQPage JSON-LD; CTA
+deep-links into the optimizer via `?optimize=1` (captured/stripped in
+Dashboard like the wizard's `?setup=1`; `#start=` share links win). Future
+SEO follow-ups: watch Search Console for whether "meltdown"-flavoured queries
+justify a second, meltdown-titled page or an H1 tweak.
 
 **Known blind spot to disclose in the UI:** GIS is not modeled. For low-income
 households, pre-65 meltdown is often about protecting GIS eligibility — the

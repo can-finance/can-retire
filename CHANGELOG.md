@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   money, and the winner is validated against Monte Carlo success rates before
   being recommended. A "Not sure what to melt?" link next to the RRSP melt
   fields jumps straight to the optimizer.
+- **RRSP Withdrawal Strategy page.** A new standalone page at
+  /rrsp-withdrawal-strategy/ explains the RRSP meltdown strategy — why
+  maximum deferral often backfires (RRIF minimums, OAS clawback, terminal
+  tax), when melting down helps and when it doesn't (including the GIS
+  caution), plus an FAQ — with links straight into the optimizer. Added to
+  the site navigation on all pages.
 
 ## [0.7.0] - 2026-07-19
 

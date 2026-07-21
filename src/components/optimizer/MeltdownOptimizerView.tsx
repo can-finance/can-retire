@@ -121,6 +121,14 @@ export function MeltdownOptimizerView({
                         amounts (and, optionally, CPP/OAS start ages) and finds the one that
                         leaves the largest estate without running you short.
                     </p>
+                    <p className="mt-3 text-sm">
+                        <a
+                            href="/rrsp-withdrawal-strategy/"
+                            className="font-medium text-brand-600 hover:text-brand-700 hover:underline"
+                        >
+                            Learn more about the RRSP meltdown strategy →
+                        </a>
+                    </p>
 
                     <div className="mt-6 max-w-md">
                         <Toggle

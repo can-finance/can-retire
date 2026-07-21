@@ -1,7 +1,7 @@
 import React from 'react';
 import { HelpTooltip } from '../ui/HelpTooltip';
 
-export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works';
+export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy';
 
 // Single source for the nav pill order/labels/targets. The three pages are now
 // real MPA routes, so each item is a plain <a href> to the page's path — the
@@ -10,6 +10,7 @@ export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works';
 const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
     { id: 'dashboard', label: 'Dashboard', href: '/' },
     { id: 'cpp-calculator', label: 'CPP Calculator', href: '/cpp-calculator/' },
+    { id: 'rrsp-withdrawal-strategy', label: 'RRSP Meltdown', href: '/rrsp-withdrawal-strategy/' },
     { id: 'how-it-works', label: 'How does this work?', href: '/how-it-works/' },
 ];
 
