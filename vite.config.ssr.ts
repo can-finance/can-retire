@@ -6,7 +6,10 @@ import react from '@vitejs/plugin-react'
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
 // Dedicated SSR build for build-time prerendering of the standalone MPA pages
-// (/how-it-works/ and /rrsp-withdrawal-strategy/). Kept separate from
+// (/how-it-works/, /rrsp-withdrawal-strategy/, and /cpp-calculator/). The first
+// two emit both prerendered HTML and FAQ JSON-LD; cpp-calculator is JSON-LD-only
+// (its entry exports no `render`, since the page reads window.localStorage and
+// can't be server-rendered — see src/prerender/cpp-calculator-ssr.tsx). Kept separate from
 // vite.config.ts so it doesn't inherit the multi-page client `rollupOptions.input`
 // or the `manualChunks` vendor split (neither applies to these SSR entries, and
 // manualChunks conflicts with SSR's inlined output).
@@ -32,6 +35,7 @@ export default defineConfig({
       input: {
         'how-it-works': fileURLToPath(new URL('./src/prerender/how-it-works-ssr.tsx', import.meta.url)),
         'rrsp-withdrawal-strategy': fileURLToPath(new URL('./src/prerender/rrsp-withdrawal-strategy-ssr.tsx', import.meta.url)),
+        'cpp-calculator': fileURLToPath(new URL('./src/prerender/cpp-calculator-ssr.tsx', import.meta.url)),
       },
       output: {
         // Deterministic filenames so the prerender script can import each directly:

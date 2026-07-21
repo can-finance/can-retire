@@ -17,6 +17,7 @@ import {
 import { sanitizeSimulationInputs, INITIAL_INPUTS } from '../../utils/inputSanitizer';
 import { SIM_KEY } from '../../utils/onboarding';
 import type { SimulationInputs } from '../../engine/types';
+import { CPP_CALCULATOR_FAQ_ITEMS } from './cpp-calculator-faq';
 
 // ---------------------------------------------------------------------------
 // State
@@ -825,6 +826,19 @@ export function CppCalculator() {
                     </div>
                 </div>
             </div>
+
+            {/* FAQ */}
+            <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
+                <h2 className="text-2xl font-bold text-slate-900">Frequently asked questions</h2>
+                <div className="space-y-6">
+                    {CPP_CALCULATOR_FAQ_ITEMS.map(({ question, answer }) => (
+                        <div key={question} className="space-y-2">
+                            <h3 className="font-bold text-slate-900">{question}</h3>
+                            <p className="text-slate-600 leading-relaxed">{answer}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
         </div>
     );
 }
