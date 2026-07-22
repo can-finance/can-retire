@@ -31,7 +31,8 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                         <span className="text-xs font-medium text-slate-400">~2 min</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
-                        A handful of questions. We'll use sensible defaults for everything else.
+                        A handful of questions. We'll use sensible defaults for everything else — you
+                        can fully edit any value later.
                     </p>
                     <span className="inline-block mt-4 text-sm font-medium text-brand-600 group-hover:text-brand-700">
                         Quick start →

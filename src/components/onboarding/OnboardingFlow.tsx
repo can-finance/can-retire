@@ -317,7 +317,7 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
 
 function SectionForStep({ title, blurb, children }: { title: string; blurb: string; children: ReactNode }) {
     return (
-        <SectionCard accent="brand" className="space-y-5">
+        <SectionCard className="space-y-5">
             <div>
                 <h2 className="text-xl font-bold text-slate-900">{title}</h2>
                 <p className="text-sm text-slate-500 mt-1">{blurb}</p>

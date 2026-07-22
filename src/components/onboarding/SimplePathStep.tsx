@@ -21,7 +21,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
 
     if (step === 0) {
         return (
-            <SectionCard accent="sky" className="space-y-5">
+            <SectionCard className="space-y-5">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">About your household</h2>
                     <p className="text-sm text-slate-500 mt-1">
@@ -92,7 +92,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
 
     // step === 1
     return (
-        <SectionCard accent="emerald" className="space-y-5">
+        <SectionCard className="space-y-5">
             <div>
                 <h2 className="text-xl font-bold text-slate-900">Savings and spending</h2>
                 <p className="text-sm text-slate-500 mt-1">
