@@ -29,9 +29,9 @@ const LABEL_MAP: Record<string, string> = {
 const LEGEND_ORDER = [
     'Target Spend',
     'Non-Reg',
+    'Yield',
     'TFSA',
     'RRSP',
-    'Yield',
     'OAS',
     'CPP',
     'Salary',
@@ -106,10 +106,10 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                     <Bar dataKey="Salary" name="Salary" stackId="a" fill="#94a3b8" />
                     <Bar dataKey="CPP" name="CPP" stackId="a" fill="#8b5cf6" />
                     <Bar dataKey="OAS" name="OAS" stackId="a" fill="#c4b5fd" />
-                    <Bar dataKey="Yield" name="Yield" stackId="a" fill="#a78bfa" />
                     <Bar dataKey="RRSP" name="RRSP" stackId="a" fill={CHART_COLORS.rrsp} />
                     <Bar dataKey="TFSA" name="TFSA" stackId="a" fill={CHART_COLORS.tfsa} />
                     <Bar dataKey="NonReg" name="Non-Reg" stackId="a" fill={CHART_COLORS.nonReg} />
+                    <Bar dataKey="Yield" name="Yield" stackId="a" fill="#ec4899" />
                     <Bar dataKey="Taxes" name="Taxes Paid" stackId="a" fill="#ef4444" />
                 </ComposedChart>
             </ResponsiveContainer>

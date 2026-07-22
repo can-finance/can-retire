@@ -89,29 +89,6 @@ export function RrspWithdrawalStrategy() {
                 </div>
             </section>
 
-            {/* How the optimizer works */}
-            <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
-                <h2 className="text-2xl font-bold text-slate-900">How the optimizer works</h2>
-                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
-                    <p>
-                        The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
-                        your retirement using real Canadian tax rules, then searches for the schedule that maximizes
-                        what is left after tax. Under the hood it:
-                    </p>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>Simulates each year from now to life expectancy, applying federal and provincial income tax brackets for all provinces and territories, the OAS clawback, and mandatory RRIF minimums.</li>
-                        <li>Searches across many annual RRSP withdrawal amounts — and, if you let it, across CPP and OAS start ages from 60 to 70 — to see which combination performs best.</li>
-                        <li>Maximizes the <strong>net estate</strong>: the after-tax value left over at the end, after the final return's terminal tax on any remaining registered assets.</li>
-                        <li>Never proposes a plan that runs you out of money — schedules that leave you short are discarded, not recommended.</li>
-                        <li>Validates the winner against Monte Carlo market scenarios, so you can see whether a plan that looks great on average still holds up when markets misbehave.</li>
-                    </ul>
-                    <p>
-                        The output is a comparison, not a prediction. It shows your current plan beside the suggested
-                        meltdown so you can see the direction and size of the difference, then decide for yourself.
-                    </p>
-                </div>
-            </section>
-
             {/* When it helps / doesn't */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
                 <h2 className="text-2xl font-bold text-slate-900">When a meltdown helps — and when it doesn't</h2>
@@ -145,6 +122,57 @@ export function RrspWithdrawalStrategy() {
                             your RRSP.
                         </p>
                     </div>
+                </div>
+            </section>
+
+            {/* How the optimizer works */}
+            <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
+                <h2 className="text-2xl font-bold text-slate-900">How the optimizer works</h2>
+                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
+                    <p>
+                        The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
+                        your retirement using real Canadian tax rules, then searches for the schedule that maximizes
+                        what is left after tax. Under the hood it:
+                    </p>
+                    <ul className="list-disc pl-6 space-y-2">
+                        <li>Simulates each year from now to life expectancy, applying federal and provincial income tax brackets for all provinces and territories, the OAS clawback, and mandatory RRIF minimums.</li>
+                        <li>Searches across many annual RRSP withdrawal amounts — and, if you let it, across CPP and OAS start ages from 60 to 70 — to see which combination performs best.</li>
+                        <li>Maximizes the <strong>net estate</strong>: the after-tax value left over at the end, after the final return's terminal tax on any remaining registered assets.</li>
+                        <li>Never proposes a plan that runs you out of money — schedules that leave you short are discarded, not recommended.</li>
+                        <li>Validates the winner against Monte Carlo market scenarios, so you can see whether a plan that looks great on average still holds up when markets misbehave.</li>
+                    </ul>
+                    <p>
+                        The output is a comparison, not a prediction. It shows your current plan beside the suggested
+                        meltdown so you can see the direction and size of the difference, then decide for yourself.
+                    </p>
+                </div>
+            </section>
+
+            {/* Accuracy */}
+            <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
+                <h2 className="text-2xl font-bold text-slate-900">How accurate is this calculation?</h2>
+                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
+                    <p>
+                        Exactly as accurate as its inputs — which are a mix of things you know and things nobody
+                        knows. Your ages, current account balances, and today's tax rules are known precisely, and
+                        the arithmetic built on them — brackets, OAS clawback, RRIF minimums — is exact. Future
+                        investment returns are the opposite: they vary widely from year to year and will almost
+                        certainly not follow the smooth path any simulation assumes. Spending, tax rules, and
+                        government benefits drift over the decades too.
+                    </p>
+                    <p>
+                        That is why the results are best read as a <strong>comparison between strategies</strong>,
+                        not a forecast of your actual balance decades from now. The direction of the recommendation —
+                        melting down beats deferring, and by roughly this much — is far more durable than any single
+                        dollar figure attached to it.
+                    </p>
+                    <p>
+                        A plan is a snapshot, so keep it fresh: <strong>revisit your retirement plan every year or
+                        two</strong> — update balances, spending, and start-age decisions as real returns and real
+                        life diverge from the projection, and re-run the optimizer on the new numbers. The advice
+                        that matters is always the one computed from your current situation, not the one from three
+                        years ago.
+                    </p>
                 </div>
             </section>
 

@@ -221,6 +221,13 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                         >
                             CPP Calculator
                         </a>
+                        {' '}·{' '}
+                        <a
+                            href="/rrsp-withdrawal-strategy/"
+                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                        >
+                            RRSP Withdrawal Strategy
+                        </a>
                     </p>
                 </div>
             </footer>

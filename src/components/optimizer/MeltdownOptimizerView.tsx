@@ -400,11 +400,15 @@ function RecommendationCard({ result }: { result: MeltdownResult }) {
         <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="text-lg font-bold text-slate-900">Suggested meltdown</h3>
 
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 space-y-6">
                 {result.decisions.map(d => (
-                    <DecisionLine key={d.who} decision={d} />
+                    <DecisionTable key={d.who} decision={d} showLabel={result.decisions.length > 1} />
                 ))}
             </div>
+
+            <p className="mt-3 text-xs text-slate-400">
+                The melt runs each year until age 71 (RRIF conversion) or until the RRSP is empty.
+            </p>
 
             {/* Headline deltas */}
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -445,26 +449,88 @@ function RecommendationCard({ result }: { result: MeltdownResult }) {
     );
 }
 
-function DecisionLine({ decision: d }: { decision: PersonMeltdownDecision }) {
-    const meltSentence = !d.hasRrsp || d.meltAmount <= 0
-        ? `No RRSP meltdown — leave the RRSP untouched by voluntary withdrawals.`
-        : `Withdraw about ${formatCurrencyCAD(d.meltAmount)}/year from the RRSP starting at age ${d.meltStartAge} (until age ${d.meltEndAge} or the account is empty).`;
+// Suggested-column cell: highlighted (emerald, semibold) when it differs from
+// the current-plan cell, plain slate otherwise.
+function SuggestedCell({ value, changed }: { value: string; changed: boolean }) {
+    return (
+        <td
+            className={`text-right py-1.5 pl-4 tabular-nums whitespace-nowrap ${
+                changed ? 'font-semibold text-emerald-600' : 'text-slate-700'
+            }`}
+        >
+            {value}
+        </td>
+    );
+}
 
-    const changes: string[] = [];
-    if (d.cppChanged) changes.push(d.cppStartAge > d.originalCppStartAge
-        ? `Delay CPP to age ${d.cppStartAge} (was ${d.originalCppStartAge}).`
-        : `Take CPP earlier, at age ${d.cppStartAge} (was ${d.originalCppStartAge}).`);
-    if (d.oasChanged) changes.push(d.oasStartAge > d.originalOasStartAge
-        ? `Delay OAS to age ${d.oasStartAge} (was ${d.originalOasStartAge}).`
-        : `Take OAS earlier, at age ${d.oasStartAge} (was ${d.originalOasStartAge}).`);
+function meltCell(amount: number): string {
+    return amount <= 0 ? 'None' : `${formatCurrencyCAD(amount)}/yr`;
+}
+
+function meltStartCell(amount: number, startAge: number): string {
+    return amount <= 0 ? '—' : String(startAge);
+}
+
+function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDecision; showLabel: boolean }) {
+    const currentMeltStart = meltStartCell(d.originalMeltAmount, d.originalMeltStartAge);
+    const suggestedMeltStart = meltStartCell(d.meltAmount, d.meltStartAge);
+
+    const rows: { label: string; current: string; suggested: string; changed: boolean }[] = [
+        {
+            label: 'RRSP melt',
+            current: meltCell(d.originalMeltAmount),
+            suggested: meltCell(d.meltAmount),
+            changed: d.originalMeltAmount !== d.meltAmount,
+        },
+        {
+            label: 'Melt start age',
+            current: currentMeltStart,
+            suggested: suggestedMeltStart,
+            changed: currentMeltStart !== suggestedMeltStart,
+        },
+        {
+            label: 'CPP start age',
+            current: String(d.originalCppStartAge),
+            suggested: String(d.cppStartAge),
+            changed: d.cppChanged,
+        },
+        {
+            label: 'OAS start age',
+            current: String(d.originalOasStartAge),
+            suggested: String(d.oasStartAge),
+            changed: d.oasChanged,
+        },
+    ];
 
     return (
-        <div className="border-l-2 border-brand-200 pl-4">
-            <p className="text-sm font-semibold text-slate-800">{d.label}</p>
-            <p className="mt-0.5 text-sm text-slate-600">{meltSentence}</p>
-            {changes.map((c, i) => (
-                <p key={i} className="mt-0.5 text-sm text-slate-600">{c}</p>
-            ))}
+        <div>
+            {showLabel && <p className="mb-2 text-sm font-semibold text-slate-800">{d.label}</p>}
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                    <thead>
+                        <tr className="border-b border-slate-200">
+                            <th className="text-left font-medium text-slate-500 py-1.5 pr-4" />
+                            <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
+                                Current plan
+                            </th>
+                            <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
+                                Suggested
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(row => (
+                            <tr key={row.label} className="border-b border-slate-100 last:border-0">
+                                <td className="text-left text-slate-500 py-1.5 pr-4">{row.label}</td>
+                                <td className="text-right py-1.5 pl-4 tabular-nums whitespace-nowrap text-slate-700">
+                                    {row.current}
+                                </td>
+                                <SuggestedCell value={row.suggested} changed={row.changed} />
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }

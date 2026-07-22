@@ -92,6 +92,9 @@ export function HowItWorks() {
                     <p>
                         The simulation also assumes today's rules stay in place. Future changes to tax rates and brackets, government programs like CPP and OAS, and other laws will affect real-world results in ways no projection can anticipate.
                     </p>
+                    <p>
+                        A plan is a snapshot of one moment, so keep it fresh: revisit your retirement plan every year or two to update account balances, spending, and start-age decisions as actual returns and life events diverge from the assumptions. The comparisons stay useful precisely because you keep feeding them current facts.
+                    </p>
                 </div>
             </section>
 

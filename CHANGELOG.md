@@ -5,14 +5,15 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-07-21
 
 ### Added
 - **RRSP meltdown suggestions.** A new optimizer searches for the annual RRSP
   withdrawal amount (per person) that maximizes your net estate after terminal
   tax, and by default also considers delaying CPP and OAS — deferral is what
-  opens the low-tax window that makes melting worthwhile. Results show a
-  plain-language recommendation next to a side-by-side comparison of your
+  opens the low-tax window that makes melting worthwhile. Results lead with a
+  before/after table (melt amount, melt start age, CPP/OAS start ages —
+  changes highlighted) next to a side-by-side comparison of your
   current plan vs the suggestion (projections, success rates, tax and estate
   deltas). Apply the suggestion directly to the plan you're editing (only the
   melt amount and CPP/OAS start ages change — everything else stays as-is) or

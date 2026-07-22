@@ -38,6 +38,8 @@ export interface PersonMeltdownDecision {
     meltAmount: number;         // recommended rrspMeltAmount
     meltStartAge: number;       // first year the melt actually runs
     meltEndAge: number;         // always 71 (last year before mandatory RRIF)
+    originalMeltAmount: number;    // the plan's existing rrspMeltAmount, before this recommendation
+    originalMeltStartAge: number;  // the plan's existing effective melt start age
     cppStartAge: number;
     cppChanged: boolean;
     originalCppStartAge: number;
@@ -502,6 +504,8 @@ function buildDecision(
         meltAmount: choice.melt,
         meltStartAge: Math.max(base.retirementAge, base.age),
         meltEndAge: 71,
+        originalMeltAmount: base.rrspMeltAmount ?? 0,
+        originalMeltStartAge: Math.max(base.rrspMeltStartAge || base.retirementAge, base.age),
         cppStartAge: choice.cpp,
         cppChanged: choice.cpp !== base.cppStartAge,
         originalCppStartAge: base.cppStartAge,

@@ -59,6 +59,24 @@ won't scale to threshold × start-age × 2-person grids with MC validation.
 - Retirement-age bounds as an opt-in decision variable (lifestyle choice, don't
   search it by default).
 
+**"When can I retire?" mode (specced 2026-07-21).** The third member of the
+objective family — all three are duals of the same feasibility check: fix two
+of {retirement age, spending, estate}, solve for the third. This one: minimize
+retirement age subject to the plan staying funded. Implementation is small on
+top of the existing optimizer: outer bisection over `retirementAge`
+(feasibility is essentially monotone in it; ~4-6 evals — the engine already
+extends earnings/accumulation years automatically when the age moves), inner
+check = "does ANY feasible strategy exist at this age" (reuse the meltdown
+search, since delaying CPP/optimal melt can make an age feasible that naive
+withdrawals can't). The key design decision is the success bar: deterministic
+no-shortfall is a weak answer (assumes average returns every year) — the
+honest version is a Monte Carlo threshold, user-pickable (e.g. 75/85/95% =
+aggressive/balanced/conservative), and it moves the answer by years. Couples:
+v1 shifts both retirement ages together; staggered retirement is a later
+refinement. SEO note: "when can I retire calculator" is a far bigger query
+than anything meltdown-related — when this ships it deserves its own
+prerendered landing page in the /rrsp-withdrawal-strategy/ mold.
+
 **Modeling gap that biases recommendations (decide before trusting post-65
 advice):** only RRIF minimums (72+) count as eligible pension income today — the
 voluntary melt gets neither the $2,000 pension income credit nor pension income

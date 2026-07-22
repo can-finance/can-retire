@@ -60,6 +60,10 @@ describe('optimizeMeltdown', () => {
         expect(res.decisions[0].meltAmount).toBeGreaterThan(0);
         expect(res.recommendedMetrics.netEstateValue).toBeGreaterThan(res.baselineMetrics.netEstateValue);
         expect(res.netEstateDelta).toBeGreaterThan(0);
+        // bigRrspInputs doesn't set rrspMeltAmount, so the "original" (current
+        // plan) melt fields should reflect the engine's zero/default fixture.
+        expect(res.decisions[0].originalMeltAmount).toBe(0);
+        expect(res.decisions[0].originalMeltStartAge).toBe(60); // retirementAge === age === 60
     }, 30_000);
 
     it('(b) recommends melt 0 for a person with no RRSP', async () => {
