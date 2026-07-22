@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
-import { usePlans, DEFAULT_PLAN_NAME, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY } from '../../hooks/usePlans';
+import { usePlans, uniquePlanName, DEFAULT_PLAN_NAME, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY } from '../../hooks/usePlans';
 import type { SavedPlan } from '../../hooks/usePlans';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { OneTimeSpendingInput } from '../inputs/OneTimeSpendingInput';
@@ -295,11 +295,16 @@ export function Dashboard() {
                 <MeltdownOptimizerView
                     liveInputs={inputs}
                     hasRealPlan={optimizerHasRealPlan}
+                    activePlanName={activePlan?.name ?? DEFAULT_PLAN_NAME}
                     isInflationAdjusted={isInflationAdjusted}
                     onToggleInflation={setIsInflationAdjusted}
                     onExit={() => setIsOptimizing(false)}
-                    onSavePlan={(name, planInputs) => createPlan(name, planInputs, false)}
-                    onApply={(rec) => updateInputs(applyMeltdownRecommendation(inputs, rec))}
+                    onSavePlan={(name, planInputs) => {
+                        const uniqueName = uniquePlanName(name, plans.map(p => p.name));
+                        createPlan(uniqueName, planInputs, false);
+                        return uniqueName;
+                    }}
+                    onApply={(rec, objective) => updateInputs(applyMeltdownRecommendation(inputs, rec, objective))}
                 />
             ) : (
                 <>
@@ -308,6 +313,22 @@ export function Dashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Sidebar / Inputs */}
                 <div className="lg:col-span-4 space-y-6">
+
+                    {/* Plans — the context for every input below, so it leads the column */}
+                    <PlanManager
+                        plans={plans}
+                        activePlanId={activePlanId}
+                        activePlanName={activePlan?.name ?? DEFAULT_PLAN_NAME}
+                        activeLastSaved={activePlan?.lastSaved ?? null}
+                        currentInputs={inputs}
+                        onRenameActive={handleRenameActive}
+                        onDuplicateActive={handleDuplicateActive}
+                        onNewPlanGuided={handleNewPlanGuided}
+                        onActivate={handleActivate}
+                        onDelete={handleDelete}
+                        onCompare={() => setIsComparing(true)}
+                        onOptimize={() => setIsOptimizing(true)}
+                    />
 
                     {/* Person 1 Profile */}
                     <PersonSection
@@ -428,22 +449,6 @@ export function Dashboard() {
                             )}
                         </div>
                     </CollapsibleSection>
-
-                    {/* Plans */}
-                    <PlanManager
-                        plans={plans}
-                        activePlanId={activePlanId}
-                        activePlanName={activePlan?.name ?? DEFAULT_PLAN_NAME}
-                        activeLastSaved={activePlan?.lastSaved ?? null}
-                        currentInputs={inputs}
-                        onRenameActive={handleRenameActive}
-                        onDuplicateActive={handleDuplicateActive}
-                        onNewPlanGuided={handleNewPlanGuided}
-                        onActivate={handleActivate}
-                        onDelete={handleDelete}
-                        onCompare={() => setIsComparing(true)}
-                        onOptimize={() => setIsOptimizing(true)}
-                    />
                 </div>
 
                 {/* Main Content / Charts */}

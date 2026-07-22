@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { StrictMode, act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { usePlans, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY, type SavedPlan } from './usePlans';
+import { usePlans, uniquePlanName, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY, type SavedPlan } from './usePlans';
 import { INITIAL_INPUTS, sanitizeSimulationInputs } from '../utils/inputSanitizer';
 import { SIM_KEY } from '../utils/onboarding';
 import type { SimulationInputs } from '../engine/types';
@@ -54,6 +54,22 @@ function newHandleRef(): { current: PlansApi | null } {
 function plan(id: string, name: string, lastSaved: string, inputs: SimulationInputs = SANITIZED): SavedPlan {
     return { id, name, inputs, lastSaved };
 }
+
+describe('uniquePlanName', () => {
+    it('returns the base name unchanged when it is not already taken', () => {
+        expect(uniquePlanName('Suggested plan', ['Alpha', 'Beta'])).toBe('Suggested plan');
+    });
+
+    it('appends " 2" when the base name is taken', () => {
+        expect(uniquePlanName('Suggested plan', ['Suggested plan'])).toBe('Suggested plan 2');
+    });
+
+    it('finds the first free numeric suffix, skipping already-taken ones', () => {
+        expect(
+            uniquePlanName('Suggested plan', ['Suggested plan', 'Suggested plan 2', 'Suggested plan 3'])
+        ).toBe('Suggested plan 4');
+    });
+});
 
 describe('usePlans', () => {
     let setItemSpy: ReturnType<typeof vi.spyOn>;

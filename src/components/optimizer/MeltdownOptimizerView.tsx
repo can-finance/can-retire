@@ -8,6 +8,7 @@ import type { MeltdownResult, PersonMeltdownDecision } from '../../utils/meltdow
 import { PLAN_COLORS } from '../../constants/chartColors';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { Toggle } from '../ui/Toggle';
+import { Dialog } from '../ui/Dialog';
 import { ComparisonChart } from '../charts/ComparisonChart';
 import { ComparisonSummaryCards } from '../comparison/ComparisonSummaryCards';
 import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
@@ -15,12 +16,27 @@ import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
 interface MeltdownOptimizerViewProps {
     liveInputs: SimulationInputs;
     hasRealPlan: boolean;
+    /** Name of the active plan the optimizer will run on (shown on the setup screen). */
+    activePlanName: string;
     isInflationAdjusted: boolean;
     onToggleInflation: (v: boolean) => void;
     onExit: () => void;
-    onSavePlan: (name: string, inputs: SimulationInputs) => void;
-    onApply: (recommended: SimulationInputs) => void;
+    onSavePlan: (name: string, inputs: SimulationInputs) => string;
+    onApply: (recommended: SimulationInputs, objective: 'estate' | 'max-spend') => void;
 }
+
+type Objective = 'estate' | 'max-spend';
+
+// Human labels for the household withdrawal strategy (mirrors the app's relabel).
+function strategyLabel(s: 'tax-efficient' | 'rrsp-first' | undefined): string {
+    return s === 'rrsp-first' ? 'RRSP first (early melt)' : 'RRSP last (defer taxes)';
+}
+
+const SUCCESS_TARGETS: { value: number; label: string; blurb: string }[] = [
+    { value: 75, label: 'Aggressive', blurb: 'Spend more, accept more risk of falling short.' },
+    { value: 85, label: 'Balanced', blurb: 'A sensible middle ground (recommended).' },
+    { value: 95, label: 'Conservative', blurb: 'Spend less, stay funded in almost every scenario.' },
+];
 
 type Phase =
     | { kind: 'setup' }
@@ -42,6 +58,7 @@ const primaryBtn =
 export function MeltdownOptimizerView({
     liveInputs,
     hasRealPlan,
+    activePlanName,
     isInflationAdjusted,
     onToggleInflation,
     onExit,
@@ -49,9 +66,12 @@ export function MeltdownOptimizerView({
     onApply,
 }: MeltdownOptimizerViewProps) {
     const [phase, setPhase] = useState<Phase>({ kind: 'setup' });
+    const [objective, setObjective] = useState<Objective>('estate');
+    const [mcSuccessTarget, setMcSuccessTarget] = useState(85);
     const [considerCppOas, setConsiderCppOas] = useState(true);
     const [bandMode, setBandMode] = useState<BandMode>('p25p75');
-    const [saved, setSaved] = useState(false);
+    const [savedName, setSavedName] = useState<string | null>(null);
+    const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [applied, setApplied] = useState(false);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -62,13 +82,16 @@ export function MeltdownOptimizerView({
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
-        setSaved(false);
+        setSavedName(null);
+        setSaveDialogOpen(false);
         setApplied(false);
         setPhase({ kind: 'running', done: 0, total: 1 });
 
         optimizeMeltdown(liveInputs, {
+            objective,
             considerCppOas,
             mcIterations: 200,
+            mcSuccessTarget,
             signal: controller.signal,
             onProgress: (done, total) => {
                 if (controller.signal.aborted) return;
@@ -84,13 +107,14 @@ export function MeltdownOptimizerView({
                 console.error('Meltdown optimization failed', err);
                 setPhase({ kind: 'error' });
             });
-    }, [liveInputs, considerCppOas]);
+    }, [liveInputs, objective, considerCppOas, mcSuccessTarget]);
 
     // Back to the setup screen (also cancels a running search).
     const backToSetup = useCallback(() => {
         abortRef.current?.abort();
         abortRef.current = null;
-        setSaved(false);
+        setSavedName(null);
+        setSaveDialogOpen(false);
         setApplied(false);
         setPhase({ kind: 'setup' });
     }, []);
@@ -100,7 +124,10 @@ export function MeltdownOptimizerView({
     const exitLabel = hasRealPlan ? 'Back to Dashboard' : 'Go to Dashboard';
 
     const header = (
-        <h2 className="text-2xl font-bold text-slate-900 text-center">RRSP Meltdown Optimizer</h2>
+        <h2 className="text-2xl font-bold text-slate-900 text-center">
+            RRSP Meltdown Optimizer
+            <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded font-bold align-middle">BETA</span>
+        </h2>
     );
 
     if (phase.kind === 'setup') {
@@ -112,16 +139,26 @@ export function MeltdownOptimizerView({
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
                         An RRSP "meltdown" means voluntarily drawing down your RRSP in your
                         lower-income early-retirement years — before age 72, when mandatory
-                        RRIF minimums, CPP and OAS all start stacking on top of each other.
-                        Withdrawing at today's lower tax rates can shrink the large tax bill
-                        that would otherwise land on your RRSP at death, leaving more for your
-                        estate.
+                        RRIF minimum withdrawals begin and stack on top of CPP, OAS and any
+                        other income. Withdrawing at today's lower tax rates can shrink the
+                        large tax bill that would otherwise land on your RRSP at death,
+                        leaving more for your estate.
                     </p>
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-                        This tool searches hundreds of combinations of annual withdrawal
-                        amounts (and, optionally, CPP/OAS start ages) and finds the one that
-                        leaves the largest estate without running you short.
+                        This tool searches hundreds of strategy combinations and can
+                        optimize for different goals:
                     </p>
+                    <ul className="mt-2 text-sm text-slate-600 leading-relaxed list-disc pl-5 space-y-1">
+                        <li>
+                            <span className="font-medium text-slate-700">Leave the largest estate</span> — the
+                            withdrawal schedule that passes the most to your heirs after tax, without
+                            running you short.
+                        </li>
+                        <li>
+                            <span className="font-medium text-slate-700">Spend the most in retirement</span> — the
+                            highest annual spending your savings can sustain at a confidence level you choose.
+                        </li>
+                    </ul>
                     <p className="mt-3 text-sm">
                         <a
                             href="/rrsp-withdrawal-strategy/"
@@ -131,13 +168,78 @@ export function MeltdownOptimizerView({
                         </a>
                     </p>
 
+                    {hasRealPlan && (
+                        <div className="mt-6 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                            <p className="text-sm text-slate-600">
+                                Optimizing plan: <span className="font-semibold text-slate-900">{activePlanName}</span>
+                            </p>
+                            <p className="mt-0.5 text-xs text-slate-400">
+                                To optimize a different plan, select it in the plan list on the dashboard first.
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="mt-6">
+                        <p className="text-sm font-semibold text-slate-800">What should the optimizer aim for?</p>
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <ObjectiveCard
+                                selected={objective === 'estate'}
+                                onSelect={() => setObjective('estate')}
+                                title="Leave the largest estate"
+                                sub="Shrinks the terminal tax bill so more passes to your heirs."
+                                detail="Adjusts RRSP melt and CPP/OAS timing — your spending stays as planned."
+                            />
+                            <ObjectiveCard
+                                selected={objective === 'max-spend'}
+                                onSelect={() => setObjective('max-spend')}
+                                title="Spend the most in retirement"
+                                sub="Finds the highest annual spending your savings can sustain."
+                                detail="Adjusts RRSP melt, CPP/OAS timing and withdrawal order — and solves for your spending."
+                            />
+                        </div>
+                    </div>
+
+                    {objective === 'max-spend' && (
+                        <div className="mt-5">
+                            <p className="text-sm font-semibold text-slate-800">How safe should that spending be?</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                                The Monte Carlo success rate the sustainable spending must clear — the
+                                portion of simulations in which you don't run out of money.
+                            </p>
+                            <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                                {SUCCESS_TARGETS.map(t => (
+                                    <button
+                                        key={t.value}
+                                        onClick={() => setMcSuccessTarget(t.value)}
+                                        aria-pressed={mcSuccessTarget === t.value}
+                                        className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                                            mcSuccessTarget === t.value
+                                                ? 'bg-brand-600 text-white shadow-sm'
+                                                : 'text-slate-600 hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        {t.label} ({t.value}%)
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="mt-2 text-xs text-slate-500">
+                                {SUCCESS_TARGETS.find(t => t.value === mcSuccessTarget)?.blurb}
+                            </p>
+                        </div>
+                    )}
+
                     <div className="mt-6 max-w-md">
                         <Toggle
                             checked={considerCppOas}
                             onChange={setConsiderCppOas}
-                            label="Also consider delaying CPP/OAS (recommended)"
-                            tooltip="Delaying CPP and OAS raises the guaranteed lifetime benefit and often pairs well with an RRSP meltdown. Turn off to keep your current start ages fixed."
+                            label="Optimize CPP/OAS timing (recommended)"
+                            tooltip="Lets the optimizer test different CPP (60–70) and OAS (65–70) start ages alongside the melt. Delaying usually raises the guaranteed lifetime benefit and pairs well with a meltdown, but earlier starts are tested too. Turn off to keep your current start ages fixed."
                         />
+                        <p className="mt-1 text-xs text-slate-500">
+                            {liveInputs.spouse
+                                ? `Currently — You: CPP at ${liveInputs.person.cppStartAge}, OAS at ${liveInputs.person.oasStartAge} · Spouse: CPP at ${liveInputs.spouse.cppStartAge}, OAS at ${liveInputs.spouse.oasStartAge}`
+                                : `Currently CPP at ${liveInputs.person.cppStartAge}, OAS at ${liveInputs.person.oasStartAge}`}
+                        </p>
                     </div>
 
                     {!hasRealPlan && (
@@ -162,7 +264,9 @@ export function MeltdownOptimizerView({
 
                     <div className="mt-6 flex flex-wrap items-center gap-3">
                         <button onClick={runSearch} className={hasRealPlan ? primaryBtn : secondaryBtn}>
-                            {hasRealPlan ? 'Find my best meltdown' : 'Continue with sample numbers'}
+                            {hasRealPlan
+                                ? (objective === 'max-spend' ? 'Find my max spending' : 'Find my best meltdown')
+                                : 'Continue with sample numbers'}
                         </button>
                         <button onClick={onExit} className={secondaryBtn}>
                             {exitLabel}
@@ -179,7 +283,11 @@ export function MeltdownOptimizerView({
             <div className="flex flex-col gap-6">
                 {header}
                 <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
-                    <p className="text-sm font-medium text-slate-700">Searching for your best meltdown…</p>
+                    <p className="text-sm font-medium text-slate-700">
+                        {objective === 'max-spend'
+                            ? 'Searching for your highest sustainable spending…'
+                            : 'Searching for your best meltdown…'}
+                    </p>
                     <div className="mt-4 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
                         <div
                             className="h-full rounded-full bg-brand-500 transition-all duration-150"
@@ -223,14 +331,17 @@ export function MeltdownOptimizerView({
             onToggleInflation={onToggleInflation}
             bandMode={bandMode}
             onBandMode={setBandMode}
-            saved={saved}
+            savedName={savedName}
+            saveDialogOpen={saveDialogOpen}
             onSave={() => {
-                onSavePlan('Suggested meltdown', phase.result.recommendedInputs);
-                setSaved(true);
+                const baseName = phase.result.objective === 'max-spend' ? 'Suggested plan' : 'Suggested meltdown';
+                setSavedName(onSavePlan(baseName, phase.result.recommendedInputs));
+                setSaveDialogOpen(true);
             }}
+            onCloseSaveDialog={() => setSaveDialogOpen(false)}
             applied={applied}
             onApply={() => {
-                onApply(phase.result.recommendedInputs);
+                onApply(phase.result.recommendedInputs, phase.result.objective);
                 setApplied(true);
             }}
             onRunAgain={backToSetup}
@@ -248,8 +359,10 @@ interface ResultsViewProps {
     onToggleInflation: (v: boolean) => void;
     bandMode: BandMode;
     onBandMode: (m: BandMode) => void;
-    saved: boolean;
+    savedName: string | null;
+    saveDialogOpen: boolean;
     onSave: () => void;
+    onCloseSaveDialog: () => void;
     applied: boolean;
     onApply: () => void;
     onRunAgain: () => void;
@@ -263,8 +376,10 @@ function ResultsView({
     onToggleInflation,
     bandMode,
     onBandMode,
-    saved,
+    savedName,
+    saveDialogOpen,
     onSave,
+    onCloseSaveDialog,
     applied,
     onApply,
     onRunAgain,
@@ -283,7 +398,11 @@ function ResultsView({
                 monteCarlo: result.baselineMonteCarlo,
             },
             {
-                comparand: { id: 'suggested', name: 'Suggested meltdown', inputs: result.recommendedInputs },
+                comparand: {
+                    id: 'suggested',
+                    name: result.objective === 'max-spend' ? 'Suggested plan' : 'Suggested meltdown',
+                    inputs: result.recommendedInputs,
+                },
                 color: PLAN_COLORS[1],
                 results: result.recommendedResults,
                 metrics: computeSummaryMetrics(result.recommendedResults, result.recommendedInputs, isInflationAdjusted),
@@ -301,9 +420,39 @@ function ResultsView({
 
     return (
         <div className="flex flex-col gap-6">
-            <div className="flex flex-wrap items-center gap-4">
-                <h2 className="text-2xl font-bold text-slate-900 mr-auto">RRSP Meltdown Optimizer</h2>
+            <h2 className="text-2xl font-bold text-slate-900">
+                RRSP Meltdown Optimizer
+                <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded font-bold align-middle">BETA</span>
+            </h2>
 
+            {result.objective === 'max-spend' ? (
+                result.improved ? (
+                    <MaxSpendCard result={result} />
+                ) : (
+                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
+                        <p className="text-base font-bold text-emerald-900">Your planned spending is about right</p>
+                        <p className="mt-1.5 text-sm text-emerald-800">
+                            Your current spending is about the most your savings can sustainably
+                            support at the {result.maxSpend?.mcSuccessTarget}% success level — we
+                            couldn't find a meaningfully higher figure without pushing the plan past
+                            that bar. The comparison below shows the numbers.
+                        </p>
+                    </div>
+                )
+            ) : result.improved ? (
+                <RecommendationCard result={result} />
+            ) : (
+                <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
+                    <p className="text-base font-bold text-emerald-900">Your current plan already looks good</p>
+                    <p className="mt-1.5 text-sm text-emerald-800">
+                        We couldn't find a meltdown schedule that meaningfully beats what you've
+                        already got — your RRSP drawdown, CPP and OAS timing are close to optimal
+                        for leaving the largest estate. The comparison below shows the numbers.
+                    </p>
+                </div>
+            )}
+
+            <div className="flex flex-wrap items-center justify-end gap-4 -mb-3">
                 <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                     {BAND_OPTIONS.map(opt => (
                         <button
@@ -330,19 +479,6 @@ function ResultsView({
                 </div>
             </div>
 
-            {result.improved ? (
-                <RecommendationCard result={result} />
-            ) : (
-                <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
-                    <p className="text-base font-bold text-emerald-900">Your current plan already looks good</p>
-                    <p className="mt-1.5 text-sm text-emerald-800">
-                        We couldn't find a meltdown schedule that meaningfully beats what you've
-                        already got — your RRSP drawdown, CPP and OAS timing are close to optimal
-                        for leaving the largest estate. The comparison below shows the numbers.
-                    </p>
-                </div>
-            )}
-
             <ComparisonChart
                 data={chartData}
                 runs={runs}
@@ -354,10 +490,9 @@ function ResultsView({
 
             {result.improved && (
                 <p className="text-xs text-slate-500">
-                    Applying overwrites the RRSP melt amount and CPP/OAS start ages on the
-                    plan you're currently editing — everything else (balances, spending,
-                    other edits) is left as-is. Prefer to keep both versions? Save this as a
-                    new plan instead.
+                    {result.objective === 'max-spend'
+                        ? 'Applying overwrites your annual spending, RRSP melt amount, CPP/OAS start ages and withdrawal order on the plan you’re currently editing — everything else (balances, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'
+                        : 'Applying overwrites the RRSP melt amount and CPP/OAS start ages on the plan you’re currently editing — everything else (balances, spending, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'}
                 </p>
             )}
 
@@ -376,12 +511,12 @@ function ResultsView({
                 {result.improved && (
                     <button
                         onClick={onSave}
-                        disabled={saved}
-                        className={saved
+                        disabled={savedName !== null}
+                        className={savedName !== null
                             ? 'text-sm bg-emerald-50 text-emerald-700 px-5 py-2.5 rounded-lg border border-emerald-200 font-semibold whitespace-nowrap cursor-default'
                             : secondary}
                     >
-                        {saved ? 'Saved ✓' : 'Save as new plan'}
+                        {savedName !== null ? 'Saved ✓' : 'Save as new plan'}
                     </button>
                 )}
                 <button onClick={onRunAgain} className={secondary}>
@@ -391,6 +526,22 @@ function ResultsView({
                     {exitLabel}
                 </button>
             </div>
+
+            <Dialog
+                open={saveDialogOpen}
+                onClose={onCloseSaveDialog}
+                title="Plan saved"
+                footer={
+                    <button onClick={onCloseSaveDialog} data-autofocus className={primaryBtn}>
+                        Done
+                    </button>
+                }
+            >
+                <p>
+                    Saved as "{savedName}". You'll find it in your plan list on the
+                    dashboard, and your current plan is untouched.
+                </p>
+            </Dialog>
         </div>
     );
 }
@@ -541,6 +692,147 @@ function Headline({ label, value, tone }: { label: string; value: string; tone: 
         <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
             <p className={`mt-1.5 text-lg font-bold tabular-nums ${color}`}>{value}</p>
+        </div>
+    );
+}
+
+// Selectable objective card for the setup screen. `detail` is the tiny
+// "what it adjusts / what it solves for" line — the per-objective search space.
+function ObjectiveCard({
+    selected, onSelect, title, sub, detail,
+}: { selected: boolean; onSelect: () => void; title: string; sub: string; detail?: string }) {
+    return (
+        <button
+            type="button"
+            onClick={onSelect}
+            aria-pressed={selected}
+            className={`text-left rounded-xl border p-4 transition-colors ${
+                selected
+                    ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-600'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+            }`}
+        >
+            <p className={`text-base font-semibold ${selected ? 'text-brand-700' : 'text-slate-800'}`}>{title}</p>
+            <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">{sub}</p>
+            {detail && <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">{detail}</p>}
+        </button>
+    );
+}
+
+// Generic current-vs-suggested table (household spending/strategy rows).
+function SimpleChangeTable({
+    title, rows,
+}: { title?: string; rows: { label: string; current: string; suggested: string; changed: boolean }[] }) {
+    return (
+        <div>
+            {title && <p className="mb-2 text-sm font-semibold text-slate-800">{title}</p>}
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                    <thead>
+                        <tr className="border-b border-slate-200">
+                            <th className="text-left font-medium text-slate-500 py-1.5 pr-4" />
+                            <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
+                                Current plan
+                            </th>
+                            <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
+                                Suggested
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map(row => (
+                            <tr key={row.label} className="border-b border-slate-100 last:border-0">
+                                <td className="text-left text-slate-500 py-1.5 pr-4">{row.label}</td>
+                                <td className="text-right py-1.5 pl-4 tabular-nums whitespace-nowrap text-slate-700">
+                                    {row.current}
+                                </td>
+                                <SuggestedCell value={row.suggested} changed={row.changed} />
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function MaxSpendCard({ result }: { result: MeltdownResult }) {
+    const ms = result.maxSpend!;
+    // The figure only deserves good-news framing when it actually cleared the
+    // user's success bar — a cap-hit spend is an optimistic upper bound, not a
+    // sustainable level, regardless of how it compares to planned spending.
+    const metTarget = !ms.stepDownCapHit;
+    const good = ms.spendDelta > 0 && metTarget;
+    const deltaAbs = formatCurrencyCAD(Math.abs(ms.spendDelta));
+    const sustainable = formatCurrencyCAD(ms.sustainableSpend);
+
+    const householdRows = [
+        {
+            label: 'Annual spending',
+            current: `${formatCurrencyCAD(ms.currentSpend)}/yr`,
+            suggested: `${sustainable}/yr`,
+            changed: ms.sustainableSpend !== ms.currentSpend,
+        },
+        {
+            label: 'Withdrawal order',
+            current: strategyLabel(result.baselineInputs.withdrawalStrategy),
+            suggested: strategyLabel(ms.withdrawalStrategy),
+            changed: ms.strategyChanged,
+        },
+    ];
+
+    return (
+        <div className="flex flex-col gap-6">
+            <div
+                className={`rounded-2xl border p-6 ${
+                    good
+                        ? 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50'
+                        : 'border-amber-200 bg-amber-50'
+                }`}
+            >
+                <p className={`text-base font-bold ${good ? 'text-emerald-900' : 'text-amber-900'}`}>
+                    {!metTarget
+                        ? `We couldn’t confirm a spending level that clears your ${ms.mcSuccessTarget}% success bar`
+                        : good
+                            ? `You could sustainably spend ${sustainable}/yr — ${deltaAbs}/yr more than planned`
+                            : `Your plan supports about ${sustainable}/yr — ${deltaAbs}/yr less than you’ve planned`}
+                </p>
+                <p className={`mt-1.5 text-sm ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
+                    {!metTarget
+                        ? `The lowest spending our search tested, ${sustainable}/yr, only reached ${ms.achievedSuccessRate.toFixed(0)}% Monte Carlo success. Treat it as an optimistic upper bound — the spending that truly clears ${ms.mcSuccessTarget}% is lower. Rerunning with a lower success bar can give a confirmed answer.`
+                        : good
+                            ? `That’s the highest flat annual spending your savings can support while still clearing a ${ms.mcSuccessTarget}% Monte Carlo success rate.`
+                            : `At the ${ms.mcSuccessTarget}% Monte Carlo success bar, your savings can’t sustain what you’ve planned to spend. Applying lowers your plan’s spending to the sustainable level.`}
+                </p>
+                <p className={`mt-2 text-sm font-medium ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
+                    Monte Carlo success at this spending: {ms.achievedSuccessRate.toFixed(0)}%{' '}
+                    {metTarget ? `(target ${ms.mcSuccessTarget}%)` : `— short of the ${ms.mcSuccessTarget}% target`}
+                </p>
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+                <h3 className="text-lg font-bold text-slate-900">Suggested plan</h3>
+
+                <div className="mt-4">
+                    <SimpleChangeTable title="Household" rows={householdRows} />
+                </div>
+
+                <div className="mt-6 space-y-6">
+                    {result.decisions.map(d => (
+                        <DecisionTable key={d.who} decision={d} showLabel />
+                    ))}
+                </div>
+
+                <p className="mt-3 text-xs text-slate-400">
+                    The melt runs each year until age 71 (RRIF conversion) or until the RRSP is empty.
+                </p>
+
+                <p className="mt-4 text-xs text-slate-500 leading-relaxed">
+                    This model assumes the same inflation-adjusted spending every year. Real
+                    retirement spending is usually front-loaded — higher in the early “go-go” years —
+                    so a flat sustainable figure tends to be conservative early on and generous later.
+                </p>
+            </div>
         </div>
     );
 }

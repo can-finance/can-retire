@@ -11,18 +11,27 @@ interface ComparisonSummaryCardsProps {
 // The best plan's value is emphasized; the rest are muted.
 function StatCard({
     label,
+    note,
     runs,
     best,
     value,
 }: {
     label: string;
+    note?: string;
     runs: ComparisonRun[];
     best: number | null;
     value: (run: ComparisonRun, isBest: boolean) => ReactNode;
 }) {
     return (
         <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-100">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {label}
+                {note && (
+                    <span className="ml-1 normal-case font-normal tracking-normal text-slate-400">
+                        {note}
+                    </span>
+                )}
+            </p>
             <div className="mt-3 flex flex-col gap-1.5">
                 {runs.map((run, i) => (
                     <div key={run.comparand.id} className="flex items-center gap-1.5 text-sm">
@@ -83,6 +92,7 @@ export function ComparisonSummaryCards({ runs }: ComparisonSummaryCardsProps) {
             />
             <StatCard
                 label="Money runs out"
+                note="(baseline scenario, not Monte Carlo)"
                 runs={runs}
                 best={bestMoneyRunsOut}
                 value={(run, isBest) =>

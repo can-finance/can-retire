@@ -21,6 +21,7 @@ describe('computeSummaryMetrics', () => {
             initialWithdrawalRate: 0,
             outOfMoneyAge: null,
             totalShortfall: 0,
+            totalSpending: 0,
             lifetimeTaxPaid: 0,
             lifetimeNetCPP: 0,
             lifetimeNetOAS: 0,

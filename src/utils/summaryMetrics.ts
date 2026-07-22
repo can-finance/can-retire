@@ -16,6 +16,7 @@ export interface SummaryMetrics {
     initialWithdrawalRate: number;
     outOfMoneyAge: number | null;
     totalShortfall: number;
+    totalSpending: number; // Lifetime spending actually funded (desired minus shortfall)
     lifetimeTaxPaid: number;
     lifetimeNetCPP: number;
     lifetimeNetOAS: number;
@@ -43,6 +44,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
             initialWithdrawalRate: 0,
             outOfMoneyAge: null as number | null,
             totalShortfall: 0,
+            totalSpending: 0,
             lifetimeTaxPaid: 0,
             lifetimeNetCPP: 0,
             lifetimeNetOAS: 0,
@@ -79,6 +81,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
     const firstShortfallYear = results.find(r => r.shortfall > 1);
     const outOfMoneyAge = firstShortfallYear ? firstShortfallYear.age : null;
     const totalShortfall = results.reduce((acc, curr) => acc + adj(curr.shortfall, curr.inflationFactor), 0);
+    const totalSpending = results.reduce((acc, curr) => acc + adj(curr.spending - curr.shortfall, curr.inflationFactor), 0);
 
     const effectiveTaxRateEstate = estateValue > 0 ? (adjustedEstateTax / estateValue) * 100 : 0;
     const totalEffectiveTaxRate = (totalRetirementIncome + estateValue) > 0 ? (totalTaxPlusEstate / (totalRetirementIncome + estateValue)) * 100 : 0;
@@ -143,6 +146,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
         outOfMoneyAge,
         initialWithdrawalRate,
         totalShortfall,
+        totalSpending,
         lifetimeTaxPaid,
         lifetimeNetCPP,
         lifetimeNetOAS,

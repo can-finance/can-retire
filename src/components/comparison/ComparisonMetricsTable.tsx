@@ -102,10 +102,18 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         { kind: 'group', label: 'Outcomes' },
         {
             kind: 'data',
-            label: 'Money runs out',
+            label: 'Money runs out (baseline scenario, not Monte Carlo)',
             cell: run => outOfMoneyCell(run),
             // Later depletion is better; "Never" (null age) has no numeric delta → "—".
             delta: { kind: 'age', dir: 'higher', value: r => r.metrics.outOfMoneyAge },
+        },
+        {
+            // Lifetime spending actually funded (desired minus shortfall), from the
+            // deterministic run — the quantity the max-spend objective maximizes.
+            kind: 'data',
+            label: 'Total spending (funded)',
+            cell: run => formatCurrencyCAD(run.metrics.totalSpending),
+            delta: { kind: 'currency', dir: 'higher', value: r => r.metrics.totalSpending },
         },
         {
             kind: 'data',

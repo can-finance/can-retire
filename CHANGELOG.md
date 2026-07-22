@@ -5,6 +5,44 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-22
+
+### Added
+- **Maximum sustainable spending mode.** The optimizer can now answer "what
+  lifestyle can I afford?" as well as "how do I leave the largest estate?" Pick
+  the "Spend the most in retirement" objective and it solves for the highest
+  flat annual spending your savings can sustain — searching RRSP melt amounts,
+  CPP/OAS start ages, and withdrawal order. Because a spend-to-the-limit number
+  is dangerously optimistic, you choose how safe it has to be (a 75%, 85% or
+  95% Monte Carlo success bar; 85% by default) and the suggestion is reliably
+  held to that bar — the safety check adapts its search so the recommended
+  spend actually clears the bar even when it sits far below the theoretical
+  maximum, rather than stopping short and reporting a spend that doesn't.
+  Results lead with the sustainable figure and how it compares to
+  what you've planned — including an honest amber warning when your plan can't
+  sustain what you'd hoped — and can be applied to the plan you're editing
+  (which also updates your annual spending and withdrawal order) or saved as a
+  new plan.
+- **"Total spending (funded)" row** in the plan comparison table's Outcomes
+  section — the lifetime spending each plan actually funds in the baseline
+  scenario, so max-spend comparisons show the quantity being maximized.
+- **Save confirmation from the optimizer.** Saving a suggestion as a new plan
+  now confirms in a dialog showing the name it was saved under, and names are
+  always unique ("Suggested plan 2", …) instead of duplicating.
+
+### Changed
+- **Plan manager moved to the top of the dashboard** input column with a
+  compact collapsible header — which plan you're editing, and the Compare /
+  Optimize entry points, no longer hide below the input sections.
+- **Optimizer setup is clearer about what it does**: it shows which plan will
+  be optimized, each objective card states what it adjusts and what it solves
+  for, and the CPP/OAS toggle is now "Optimize CPP/OAS timing" (the search can
+  suggest earlier starts too, not only delays). The optimizer is labeled BETA
+  on the page and everywhere it's linked.
+- **Comparison results polish**: the chart display controls (percentile bands,
+  today's-dollars toggle) sit next to the chart they affect, and "Money runs
+  out" is labeled as the baseline scenario, not Monte Carlo.
+
 ## [0.8.0] - 2026-07-21
 
 ### Added

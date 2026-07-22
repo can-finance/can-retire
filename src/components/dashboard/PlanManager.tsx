@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import LZString from 'lz-string';
 import type { SavedPlan } from '../../hooks/usePlans';
 import type { SimulationInputs } from '../../engine/types';
-import { SectionCard } from '../ui/SectionCard';
+import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { Dialog } from '../ui/Dialog';
 
@@ -122,7 +122,16 @@ export function PlanManager({
     const titleClass = 'text-xl font-bold text-slate-900 line-clamp-1';
 
     return (
-        <SectionCard accent="rose" className="space-y-4">
+        <CollapsibleSection
+            title="Plan Manager"
+            accent="rose"
+            headerContent={
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Plan Manager
+                </h2>
+            }
+        >
+            <div className="space-y-4">
             <div className="space-y-2 border-b pb-2">
                 <div className="flex flex-col min-w-0">
                     <div className="flex items-center gap-1.5">
@@ -221,6 +230,7 @@ export function PlanManager({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                     Optimize Meltdown
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
                 </button>
             </div>
 
@@ -337,6 +347,7 @@ export function PlanManager({
                 <p>Delete "{pendingDelete?.name}"? This can't be undone.</p>
             </Dialog>
 
-        </SectionCard>
+            </div>
+        </CollapsibleSection>
     );
 }

@@ -25,6 +25,16 @@ interface PlanStore {
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
 
+// Smallest available name starting from `base`: the base itself if unused,
+// else `base 2`, `base 3`, … (first free suffix). Case-sensitive exact match.
+export function uniquePlanName(base: string, existingNames: string[]): string {
+    const taken = new Set(existingNames);
+    if (!taken.has(base)) return base;
+    let n = 2;
+    while (taken.has(`${base} ${n}`)) n++;
+    return `${base} ${n}`;
+}
+
 // Value-equality of two input trees via their SANITIZED serialization. The
 // sanitizer builds its object graph in a fixed key order (see onboarding.ts:63-66),
 // so JSON.stringify is a stable canonical form and string equality is a true
