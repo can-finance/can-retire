@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { FinancialInput } from './FinancialInput';
 import { NonRegAccountsInput } from './NonRegAccountsInput';
+import { Toggle } from '../ui/Toggle';
 import { CHART_COLORS } from '../../constants/chartColors';
-import type { Person, NonRegisteredAccount } from '../../engine/types';
+import type { Person, NonRegisteredAccount, DBPension } from '../../engine/types';
 
 // Shared per-person field groups, consumed by both the dashboard's PersonSection
 // (src/components/dashboard/PersonSection.tsx) and the onboarding wizard's
@@ -142,6 +144,85 @@ export function MeltdownFields({
                 value={person.rrspMeltAmount || 0}
                 onChange={(e) => onPatch({ rrspMeltAmount: Number(e.target.value) })}
                 tooltip="Annual amount to withdraw from RRSP from the start age until age 71." />
+        </div>
+    );
+}
+
+export function PensionFields({
+    person,
+    onPatch,
+}: {
+    person: Person;
+    onPatch: (patch: Partial<Person>) => void;
+}) {
+    const [expanded, setExpanded] = useState(false);
+    const pension = person.pension;
+    const hasBridge = (pension?.bridgeAmount ?? 0) > 0;
+
+    // Mirrors rrspMeltAmount/cppAnnualOverride: the merge callback patches the
+    // whole person, so a pension edit reads the current (possibly absent)
+    // pension, applies the patch, and writes the whole object back — except
+    // zeroing the amount clears the field entirely rather than leaving a
+    // zero-value object around (see sanitizePension in inputSanitizer.ts).
+    const patchPension = (patch: Partial<DBPension>) => {
+        const base: DBPension = pension ?? { annualAmount: 0, startAge: person.retirementAge, indexedToInflation: true };
+        const next: DBPension = { ...base, ...patch };
+        if (!(next.annualAmount > 0)) {
+            onPatch({ pension: undefined });
+            return;
+        }
+        // Bridge fields are only meaningful alongside a positive bridge amount —
+        // drop both rather than leaving a stale bridgeAmount: 0 in the object.
+        if (!((next.bridgeAmount ?? 0) > 0)) {
+            delete next.bridgeAmount;
+            delete next.bridgeEndAge;
+        }
+        onPatch({ pension: next });
+    };
+
+    // Collapsed-state summary, mirroring the asset-mix toggle's terse readout
+    const summary = pension
+        ? `$${pension.annualAmount.toLocaleString('en-CA')}/yr from ${pension.startAge}`
+            + `${pension.indexedToInflation ? ' · indexed' : ''}`
+            + `${hasBridge ? ` · bridge to ${pension.bridgeEndAge ?? 65}` : ''}`
+        : 'None';
+
+    return (
+        <div className="space-y-3">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="w-full flex items-center justify-between transition-colors"
+            >
+                <span className="text-sm font-medium text-brand-600 hover:text-brand-700">{expanded ? '▾' : '▸'} Workplace Pension (DB)</span>
+                {!expanded && <span className="text-xs text-slate-400 truncate ml-2">{summary}</span>}
+            </button>
+
+            {expanded && (
+                <>
+                    <div className="grid grid-cols-2 gap-3">
+                        <FinancialInput label="Annual Amount" value={pension?.annualAmount ?? 0}
+                            onChange={(e) => patchPension({ annualAmount: Number(e.target.value) })}
+                            tooltip="Gross annual defined-benefit pension from a former employer, in today's dollars. Indexed pensions keep pace with inflation; non-indexed pensions pay a fixed dollar amount that loses purchasing power over time." />
+                        <FinancialInput label="Start Age" prefix="" value={pension?.startAge ?? person.retirementAge}
+                            onChange={(e) => patchPension({ startAge: Number(e.target.value) })} />
+                    </div>
+
+                    <Toggle
+                        checked={pension?.indexedToInflation ?? true}
+                        onChange={(val) => patchPension({ indexedToInflation: val })}
+                        label="Indexed to Inflation"
+                    />
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <FinancialInput label="Bridge Benefit" value={pension?.bridgeAmount ?? 0}
+                            onChange={(e) => patchPension({ bridgeAmount: Number(e.target.value) })}
+                            tooltip="Extra annual amount on top of the pension, paid from the start age until the bridge end age. Many DB plans stop this at 65, when CPP/OAS eligibility begins." />
+                        <FinancialInput label="Bridge End Age" prefix="" value={pension?.bridgeEndAge ?? 65}
+                            onChange={(e) => patchPension({ bridgeEndAge: Number(e.target.value) })}
+                            disabled={!hasBridge} />
+                    </div>
+                </>
+            )}
         </div>
     );
 }

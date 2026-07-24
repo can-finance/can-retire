@@ -25,6 +25,7 @@ describe('computeSummaryMetrics', () => {
             lifetimeTaxPaid: 0,
             lifetimeNetCPP: 0,
             lifetimeNetOAS: 0,
+            lifetimeNetPension: 0,
             lifetimeNetInvestment: 0,
             lifetimeNetEmployment: 0,
             lifetimeRealizedGainsNet: 0,
@@ -61,6 +62,20 @@ describe('computeSummaryMetrics', () => {
         it('lifetimeNetCPP and lifetimeNetOAS are positive (default inputs collect CPP/OAS)', () => {
             expect(metrics.lifetimeNetCPP).toBeGreaterThan(0);
             expect(metrics.lifetimeNetOAS).toBeGreaterThan(0);
+        });
+
+        it('lifetimeNetPension is 0 when the person has no pension', () => {
+            expect(metrics.lifetimeNetPension).toBe(0);
+        });
+
+        it('lifetimeNetPension is positive when the person has a pension', () => {
+            const inputs = {
+                ...INITIAL_INPUTS,
+                person: { ...INITIAL_INPUTS.person, pension: { annualAmount: 20_000, startAge: INITIAL_INPUTS.person.retirementAge, indexedToInflation: true } }
+            };
+            const res = runSimulation(inputs);
+            const m = computeSummaryMetrics(res, inputs, false);
+            expect(m.lifetimeNetPension).toBeGreaterThan(0);
         });
 
         it('realized-gains metrics are finite and non-negative', () => {

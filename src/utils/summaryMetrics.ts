@@ -20,6 +20,7 @@ export interface SummaryMetrics {
     lifetimeTaxPaid: number;
     lifetimeNetCPP: number;
     lifetimeNetOAS: number;
+    lifetimeNetPension: number;
     lifetimeNetInvestment: number;
     lifetimeNetEmployment: number;
     lifetimeRealizedGainsNet: number; // Living non-reg gains realized minus their cap-gains tax
@@ -48,6 +49,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
             lifetimeTaxPaid: 0,
             lifetimeNetCPP: 0,
             lifetimeNetOAS: 0,
+            lifetimeNetPension: 0,
             lifetimeNetInvestment: 0,
             lifetimeNetEmployment: 0,
             lifetimeRealizedGainsNet: 0,
@@ -122,6 +124,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
     const lifetimeTaxPaid = results.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0) + adjustedEstateTax;
     const lifetimeNetCPP = results.reduce((acc, curr) => acc + adj(curr.netCPPIncome, curr.inflationFactor), 0);
     const lifetimeNetOAS = results.reduce((acc, curr) => acc + adj(curr.netOASIncome, curr.inflationFactor), 0);
+    const lifetimeNetPension = results.reduce((acc, curr) => acc + adj(curr.netPensionIncome, curr.inflationFactor), 0);
     const lifetimeNetInvestment = results.reduce((acc, curr) => acc + adj(curr.netInvestmentIncome, curr.inflationFactor), 0);
     const lifetimeNetEmployment = results.reduce((acc, curr) => acc + adj(curr.netEmploymentIncome, curr.inflationFactor), 0);
     // Living realized gains net of the cap-gains tax attributed to them. capGainsTaxPaid
@@ -150,6 +153,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
         lifetimeTaxPaid,
         lifetimeNetCPP,
         lifetimeNetOAS,
+        lifetimeNetPension,
         lifetimeNetInvestment,
         lifetimeNetEmployment,
         lifetimeRealizedGainsNet,

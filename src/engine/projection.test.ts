@@ -684,6 +684,80 @@ describe('realized capital gains reporting', () => {
     });
 });
 
+describe('DB pension income', () => {
+    it('pays from its start age, nothing before', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                age: 65, retirementAge: 65, lifeExpectancy: 75,
+                pension: { annualAmount: 40_000, startAge: 67, indexedToInflation: true }
+            }),
+            postRetirementSpend: 0
+        }));
+        expect(res.find(r => r.age === 65)!.pensionIncome).toBe(0);
+        expect(res.find(r => r.age === 66)!.pensionIncome).toBe(0);
+        expect(res.find(r => r.age === 67)!.pensionIncome).toBeCloseTo(40_000, 0);
+        expect(res.find(r => r.age === 68)!.pensionIncome).toBeCloseTo(40_000, 0);
+    });
+
+    it('indexed pension grows with inflation; non-indexed stays flat nominal', () => {
+        const mk = (indexed: boolean) => runSimulation(inputs({
+            person: person({
+                age: 65, retirementAge: 65, lifeExpectancy: 75,
+                pension: { annualAmount: 40_000, startAge: 65, indexedToInflation: indexed }
+            }),
+            inflationRate: 0.02,
+            postRetirementSpend: 0
+        }));
+        const idx = mk(true);
+        const flat = mk(false);
+        // startAge == person.age → factorAtStart = 1, so both pay 40k in year 0
+        expect(idx.find(r => r.age === 65)!.pensionIncome).toBeCloseTo(40_000, 0);
+        expect(flat.find(r => r.age === 65)!.pensionIncome).toBeCloseTo(40_000, 0);
+        // Five years on: indexed rises with the inflation factor, non-indexed is unchanged
+        expect(idx.find(r => r.age === 70)!.pensionIncome).toBeCloseTo(40_000 * Math.pow(1.02, 5), 0);
+        expect(flat.find(r => r.age === 70)!.pensionIncome).toBeCloseTo(40_000, 0);
+    });
+
+    it('bridge benefit stops at bridgeEndAge', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                age: 60, retirementAge: 60, lifeExpectancy: 75, cppStartAge: 99, oasStartAge: 99,
+                pension: { annualAmount: 30_000, startAge: 60, indexedToInflation: true, bridgeAmount: 12_000, bridgeEndAge: 65 }
+            }),
+            postRetirementSpend: 0
+        }));
+        // Bridge pays 60–64; drops off at 65
+        expect(res.find(r => r.age === 64)!.pensionIncome).toBeCloseTo(42_000, 0);
+        expect(res.find(r => r.age === 65)!.pensionIncome).toBeCloseTo(30_000, 0);
+    });
+
+    it('pension income reduces the RRSP withdrawals needed to fund spending', () => {
+        const run = (withPension: boolean) => runSimulation(inputs({
+            person: person({
+                age: 65, retirementAge: 65, lifeExpectancy: 75,
+                rrsp: { type: 'RRSP', balance: 1_000_000 },
+                ...(withPension ? { pension: { annualAmount: 40_000, startAge: 65, indexedToInflation: true } } : {})
+            }),
+            postRetirementSpend: 60_000
+        }));
+        const withP = run(true);
+        const without = run(false);
+        expect(withP[0].pensionIncome).toBeCloseTo(40_000, 0);
+        expect(withP[0].totalRRSPWithdrawal).toBeLessThan(without[0].totalRRSPWithdrawal);
+    });
+
+    it('a person with no pension has zero pension income and produces no NaN', () => {
+        const res = runSimulation(inputs({ person: person({ rrsp: { type: 'RRSP', balance: 500_000 } }) }));
+        for (const r of res) {
+            expect(r.pensionIncome).toBe(0);
+            expect(r.netPensionIncome).toBe(0);
+            expect(r.personNetPension).toBe(0);
+            expect(Number.isNaN(r.netIncome)).toBe(false);
+            expect(Number.isNaN(r.taxPaid)).toBe(false);
+        }
+    });
+});
+
 describe('runMonteCarlo', () => {
     it('returns an empty result for invalid inputs instead of crashing', () => {
         const result = runMonteCarlo(inputs({ person: person({ age: 90, lifeExpectancy: 70 }) }), 10);

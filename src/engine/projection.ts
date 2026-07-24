@@ -84,6 +84,7 @@ interface PersonAnnualBase {
     tax: number;
     cppIncome: number;
     oasIncome: number;
+    pensionIncome: number; // DB lifetime pension incl. bridge (qualifying pension income at any age)
     rrifWithdrawal: number;
     voluntaryRRSPWithdrawal: number;
     interestIncome: number;
@@ -152,6 +153,43 @@ function solveGrossWithdrawal(
     return { gross, tax: marginalTax };
 }
 
+// --- DB Pension Income ---
+// `annualAmount` is the pension's purchasing-power value at its START age. To turn
+// that into nominal dollars we escalate by inflation over the years between the
+// simulation start age and the pension start age:
+//     factorAtStart = (1 + inflationRate)^max(0, startAge - person.age)
+// `person.age` on the deep-copied Person is the simulation start age and is never
+// mutated; the loop passes the current `age` separately. If the pension is already
+// in pay at simulation start (startAge <= person.age), factorAtStart = 1 and
+// `annualAmount` is treated as today's-dollar value at that point.
+//   - indexedToInflation true  → pays annualAmount * inflationFactor (current year's
+//     factor — fully indexed, same treatment as CPP; constant real value).
+//   - indexedToInflation false → pays annualAmount * factorAtStart, frozen nominal
+//     thereafter (loses real value each year — the point of modeling non-indexed pensions).
+// The bridge benefit gets the same indexation treatment and is paid for
+// startAge <= age < (bridgeEndAge ?? 65).
+function calculatePensionIncome(
+    person: Person,
+    age: number,
+    inflationRate: number,
+    inflationFactor: number
+): number {
+    const pension = person.pension;
+    if (!pension || age < pension.startAge) return 0;
+
+    const factorAtStart = Math.pow(1 + inflationRate, Math.max(0, pension.startAge - person.age));
+    const escalation = pension.indexedToInflation ? inflationFactor : factorAtStart;
+
+    let amount = pension.annualAmount * escalation;
+
+    const bridgeEnd = pension.bridgeEndAge ?? 65;
+    if (pension.bridgeAmount && pension.bridgeAmount > 0 && age < bridgeEnd) {
+        amount += pension.bridgeAmount * escalation;
+    }
+
+    return amount;
+}
+
 // --- Simulation Logic ---
 
 /**
@@ -167,7 +205,8 @@ function simulatePersonBaseYear(
     age: number,
     province: string,
     returnRates: { bondReturn: number; cashInterest: number; dividend: number; foreignYield?: number; capitalGrowth: number },
-    inflationFactor: number
+    inflationFactor: number,
+    inflationRate: number
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
     const cppIncome = (age >= person.cppStartAge)
@@ -177,6 +216,9 @@ function simulatePersonBaseYear(
         : 0;
 
     const oasIncome = calculateOAS(age, person.oasStartAge, inflationFactor);
+
+    // DB lifetime pension (incl. bridge). Qualifying pension income at any age.
+    const pensionIncome = calculatePensionIncome(person, age, inflationRate, inflationFactor);
 
     // RRIF Minimums
     // RRSP must convert to RRIF by Dec 31 of the year you turn 71.
@@ -230,10 +272,11 @@ function simulatePersonBaseYear(
     const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
 
     // Calculate Base Tax
-    // Eligible pension income for pension credit: RRIF only.
-    // The voluntary RRSP melt is an ordinary RRSP withdrawal and does NOT qualify.
-    const eligiblePensionIncome = rrifWithdrawal;
-    const baseTaxable = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp + foreignDivIncome;
+    // Qualifying pension income for the $2,000 credit: DB pension at any age, plus RRIF
+    // withdrawals only at 65+. The voluntary RRSP melt is an ordinary RRSP withdrawal and
+    // does NOT qualify. (calculateIncomeTax no longer age-gates; the caller applies the rules.)
+    const eligiblePensionIncome = pensionIncome + (age >= 65 ? rrifWithdrawal : 0);
+    const baseTaxable = employmentIncome + cppIncome + oasIncome + pensionIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp + foreignDivIncome;
     // Turnover gains are taxed in the base year (so the deficit funds their tax) but
     // kept OUT of the returned taxableIncome — downstream withdrawal solvers add
     // calculateTaxableCapitalGains(realizedGains) themselves, seeded with these gains.
@@ -242,9 +285,9 @@ function simulatePersonBaseYear(
     const totalTax = calculateIncomeTax(baseTaxableWithTurnover, province, inflationFactor, undefined, age, eligiblePensionIncome, divGrossUp) + oasRecovery;
 
     // Net Cash Calculation
-    // Total Cash In = Emp + CPP + OAS + RRIF + Melt + Int + Div
+    // Total Cash In = Emp + CPP + OAS + Pension + RRIF + Melt + Int + Div
     // Note: Div is actual cash, not gross up. Turnover distributions are reinvested (no cash).
-    const totalCashIn = employmentIncome + cppIncome + oasIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome + foreignDivIncome;
+    const totalCashIn = employmentIncome + cppIncome + oasIncome + pensionIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome + foreignDivIncome;
     const baseNetCash = totalCashIn - totalTax;
 
     return {
@@ -252,6 +295,7 @@ function simulatePersonBaseYear(
         tax: totalTax,
         cppIncome,
         oasIncome,
+        pensionIncome,
         rrifWithdrawal,
         voluntaryRRSPWithdrawal,
         interestIncome,
@@ -340,8 +384,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         }
 
         // --- Step 1: Base Income & Mandatory Flows ---
-        const pBase = pAlive ? simulatePersonBaseYear(p, pAge, province, currentYearRates, inflationFactor) : null;
-        const sBase = sAlive && s ? simulatePersonBaseYear(s, sAge!, province, currentYearRates, inflationFactor) : null;
+        const pBase = pAlive ? simulatePersonBaseYear(p, pAge, province, currentYearRates, inflationFactor, inflationRate) : null;
+        const sBase = sAlive && s ? simulatePersonBaseYear(s, sAge!, province, currentYearRates, inflationFactor, inflationRate) : null;
 
         const householdBaseNet = (pBase?.baseNetCash || 0) + (sBase?.baseNetCash || 0) + annualOneTimeInflows;
 
@@ -657,16 +701,21 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number) => {
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
-            // Only RRIF withdrawals are qualifying pension income; the voluntary melt and
-            // extra RRSP draws are ordinary RRSP withdrawals — no pension credit, no splitting.
-            const eligiblePension = base.rrifWithdrawal;
+            // Qualifying pension income for the $2,000 credit AND for income splitting:
+            // DB pension qualifies at any age; RRIF withdrawals qualify only at 65+. The
+            // voluntary melt and extra RRSP draws are ordinary withdrawals — never qualifying.
+            // dbPensionIncome / rrifIncome are surfaced separately so Step 5.5 can build the
+            // SplitPerson buckets (DB splittable at any age, RRIF only at 65+).
+            const dbPensionIncome = base.pensionIncome;
+            const rrifIncome = base.rrifWithdrawal;
+            const qualifiedPension = dbPensionIncome + (age >= 65 ? rrifIncome : 0);
             const taxableGains = calculateTaxableCapitalGains(realizedGains);
             const grossedUpDivs = base.divIncome * 1.38;
-            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + totalRRSP + base.interestIncome + grossedUpDivs + base.foreignDivIncome + taxableGains;
+            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + base.pensionIncome + totalRRSP + base.interestIncome + grossedUpDivs + base.foreignDivIncome + taxableGains;
 
             const oasRecovery = calculateOASClawback(finalTaxable, base.oasIncome, inflationFactor);
-            // Pass eligiblePension (RRIF only) as eligible pension income, grossedUpDivs for dividend tax credit
-            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, eligiblePension, grossedUpDivs) + oasRecovery;
+            // Pass qualifiedPension (age rules already applied) and grossedUpDivs for the dividend tax credit
+            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, qualifiedPension, grossedUpDivs) + oasRecovery;
 
             // Marginal attribution of investment tax by source: the extra tax each
             // source adds on top of all other income (tax with it minus tax without
@@ -675,7 +724,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             const taxWithout = (excludedTaxable: number, excludeDivCredit = false) => {
                 const taxable = finalTaxable - excludedTaxable;
                 const oas = calculateOASClawback(taxable, base.oasIncome, inflationFactor);
-                return calculateIncomeTax(taxable, province, inflationFactor, undefined, age, eligiblePension, excludeDivCredit ? 0 : grossedUpDivs) + oas;
+                return calculateIncomeTax(taxable, province, inflationFactor, undefined, age, qualifiedPension, excludeDivCredit ? 0 : grossedUpDivs) + oas;
             };
             const capGainsTax = taxableGains > 0 ? Math.max(0, finalTax - taxWithout(taxableGains)) : 0;
             const dividendTax = grossedUpDivs > 0 ? finalTax - taxWithout(grossedUpDivs, true) : 0;
@@ -688,7 +737,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 finalTaxable,
                 finalTax,
                 totalRRSP,
-                eligiblePension,
+                dbPensionIncome,
+                rrifIncome,
+                qualifiedPension,
                 taxableGains,
                 oasRecovery,
                 capGainsTax,
@@ -712,14 +763,16 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         if (inputs.useIncomeSplitting && pAlive && sAlive && pFinal && sFinal && pBase && sBase) {
             const pSplitInfo: SplitPerson = {
                 taxableIncome: pFinal.finalTaxable,
-                eligiblePensionIncome: pFinal.eligiblePension,
+                dbPensionIncome: pFinal.dbPensionIncome,
+                rrifIncome: pFinal.rrifIncome,
                 oasIncome: pBase.oasIncome,
                 grossedUpDividends: pBase.divIncome * 1.38,
                 age: pAge
             };
             const sSplitInfo: SplitPerson = {
                 taxableIncome: sFinal.finalTaxable,
-                eligiblePensionIncome: sFinal.eligiblePension,
+                dbPensionIncome: sFinal.dbPensionIncome,
+                rrifIncome: sFinal.rrifIncome,
                 oasIncome: sBase.oasIncome,
                 grossedUpDividends: sBase.divIncome * 1.38,
                 age: sAge!
@@ -793,6 +846,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const pNetEmp = calcNet(pBase?.employmentIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
         const pNetCPP = calcNet(pBase?.cppIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
         const pNetOAS = calcNet(pBase?.oasIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
+        const pNetPension = calcNet(pBase?.pensionIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
         const pNetRRSP = calcNet(pFinal?.totalRRSP || 0, pGrossTotal, pFinal?.finalTax || 0);
         // Investment income (Interest + Divs) counts as taxable for tax allocation
         // But actual cash was purely Int + Div. We subtract the allocated tax from the CASH amount.
@@ -804,6 +858,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const sNetEmp = calcNet(sBase?.employmentIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
         const sNetCPP = calcNet(sBase?.cppIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
         const sNetOAS = calcNet(sBase?.oasIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const sNetPension = calcNet(sBase?.pensionIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
         const sNetRRSP = calcNet(sFinal?.totalRRSP || 0, sGrossTotal, sFinal?.finalTax || 0);
         // Spouse Inv
         const sInvTax = (sGrossTotal > 0) ? (((sBase?.interestIncome || 0) + (sBase?.divIncome || 0) * 1.38 + (sBase?.foreignDivIncome || 0)) / sGrossTotal) * (sFinal?.finalTax || 0) : 0;
@@ -937,8 +992,10 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // includes the 38% dividend gross-up and the taxable share of realized gains
         // (the gains cash arrives via the gross Non-Reg sale added below).
         const pCashGross = (pBase?.employmentIncome || 0) + (pBase?.cppIncome || 0) + (pBase?.oasIncome || 0) +
+            (pBase?.pensionIncome || 0) +
             (pFinal?.totalRRSP || 0) + (pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (pBase?.foreignDivIncome || 0);
         const sCashGross = (sBase?.employmentIncome || 0) + (sBase?.cppIncome || 0) + (sBase?.oasIncome || 0) +
+            (sBase?.pensionIncome || 0) +
             (sFinal?.totalRRSP || 0) + (sBase?.interestIncome || 0) + (sBase?.divIncome || 0) + (sBase?.foreignDivIncome || 0);
 
         results.push({
@@ -950,6 +1007,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             grossIncome: pGrossTotal + sGrossTotal,
             cppIncome: (pBase?.cppIncome || 0) + (sBase?.cppIncome || 0),
             oasIncome: (pBase?.oasIncome || 0) + (sBase?.oasIncome || 0),
+            pensionIncome: (pBase?.pensionIncome || 0) + (sBase?.pensionIncome || 0),
+            netPensionIncome: pNetPension + sNetPension,
             // Actual spending funded this year: after-tax cash minus the surplus that was
             // reinvested rather than spent (RRIF minimums / CPP can force income past the
             // target). Equals targetSpend when funded, targetSpend - shortfall when not.
@@ -995,6 +1054,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             spouseNetCPP: sNetCPP,
             personNetOAS: pNetOAS,
             spouseNetOAS: sNetOAS,
+            personNetPension: pNetPension,
+            spouseNetPension: sNetPension,
             netInvestmentIncome: pNetInvCash + sNetInvCash,
 
             // Reinvestments

@@ -5,6 +5,24 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Workplace pension (DB) income.** Each person can now have a defined-benefit
+  pension: annual amount (in today's dollars), start age, an indexed-to-inflation
+  toggle (non-indexed pensions stay fixed in dollars and lose purchasing power
+  over the projection), and an optional bridge benefit paid until a chosen age
+  (default 65). Pension income flows through taxes, OAS clawback, withdrawal
+  needs, and the optimizer, and appears as its own series in the cash-flow chart
+  and a Net Pension column in the year-by-year table.
+
+### Changed
+- **Pension income credit and pension splitting follow the real age rules.**
+  DB pension income qualifies for the $2,000 pension income credit and for
+  spousal income splitting at any age — so early retirees with a workplace
+  pension get both before 65. RRIF income continues to qualify only from 65.
+  Existing plans are unaffected: without a DB pension the tax math is unchanged.
+
 ## [0.9.0] - 2026-07-22
 
 ### Added

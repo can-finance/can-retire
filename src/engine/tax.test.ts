@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateIncomeTax, calculateOASClawback, calculateOptimalSplit, TAX_CONSTANTS } from './tax';
+import type { SplitPerson } from './tax';
 
 describe('calculateIncomeTax — golden values (2025, no age/pension/dividend credits)', () => {
     it('ON, $50,000: matches hand calculation', () => {
@@ -75,11 +76,12 @@ describe('calculateIncomeTax — golden values (2025, no age/pension/dividend cr
         expect(noPension - bigPension).toBeCloseTo(2_000 * 0.20, 1);
     });
 
-    it('gives no pension income credit under age 65', () => {
-        // RRIF/annuity income qualifies for the credit only from 65+.
-        const withPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 64, 50_000);
-        const noPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 64, 0);
-        expect(withPension).toBeCloseTo(noPension, 6);
+    it('applies the pension credit under 65 (caller is responsible for age-qualifying)', () => {
+        // The internal age gate was removed: DB lifetime-pension income qualifies at any
+        // age, so a caller passing eligible pension income for a 60-year-old gets the credit.
+        const noPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 60, 0);
+        const withPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 60, 2_000);
+        expect(noPension - withPension).toBeCloseTo(2_000 * 0.20, 1);
     });
 });
 
@@ -105,34 +107,57 @@ describe('calculateOASClawback', () => {
 });
 
 describe('calculateOptimalSplit', () => {
-    const person = (taxableIncome: number, eligiblePensionIncome: number, age = 66) => ({
-        taxableIncome, eligiblePensionIncome, oasIncome: 0, grossedUpDividends: 0, age
+    // db = DB lifetime pension (splittable/creditable at any age),
+    // rrif = RRIF income (splittable/creditable only at 65+)
+    const splitP = (
+        taxableIncome: number,
+        { db = 0, rrif = 0 }: { db?: number; rrif?: number } = {},
+        age = 66
+    ): SplitPerson => ({
+        taxableIncome, dbPensionIncome: db, rrifIncome: rrif, oasIncome: 0, grossedUpDividends: 0, age
     });
 
     it('splits from the high-income spouse and saves tax', () => {
-        const result = calculateOptimalSplit(person(120_000, 100_000), person(10_000, 0), 'ON', 1.0);
+        const result = calculateOptimalSplit(splitP(120_000, { rrif: 100_000 }), splitP(10_000), 'ON', 1.0);
         expect(result.fromPerson).toBe(1);
         expect(result.taxSavings).toBeGreaterThan(0);
         expect(result.splitAmount).toBeGreaterThan(0);
         expect(result.splitAmount).toBeLessThanOrEqual(50_000 + 1); // max 50% of eligible income
     });
 
-    it('does not split when transferor is under 65', () => {
-        const result = calculateOptimalSplit(person(120_000, 100_000, 64), person(10_000, 0), 'ON', 1.0);
+    it('does not split RRIF-only income when the transferor is under 65', () => {
+        const result = calculateOptimalSplit(splitP(120_000, { rrif: 100_000 }, 64), splitP(10_000), 'ON', 1.0);
         expect(result.splitAmount).toBe(0);
         expect(result.taxSavings).toBe(0);
     });
 
-    it('splits to an under-65 recipient without giving them the pension credit', () => {
-        // 66yo transferor benefits from splitting; the 60yo recipient gets the income
-        // but not the pension credit (age-gated at 65+). Code path must stay intact.
-        const result = calculateOptimalSplit(person(120_000, 100_000, 66), person(10_000, 0, 60), 'ON', 1.0);
+    it('a sub-65 transferor CAN split DB pension income (the main feature win)', () => {
+        const result = calculateOptimalSplit(splitP(120_000, { db: 60_000 }, 58), splitP(10_000, {}, 58), 'ON', 1.0);
+        expect(result.fromPerson).toBe(1);
         expect(result.splitAmount).toBeGreaterThan(0);
         expect(result.taxSavings).toBeGreaterThan(0);
+        expect(result.splitAmount).toBeLessThanOrEqual(30_000 + 1); // max 50% of DB pension
+    });
+
+    it('a sub-65 transferor with only RRIF income still cannot split', () => {
+        const result = calculateOptimalSplit(splitP(120_000, { rrif: 60_000 }, 58), splitP(10_000, {}, 58), 'ON', 1.0);
+        expect(result.splitAmount).toBe(0);
+        expect(result.taxSavings).toBe(0);
+    });
+
+    it('under-65 recipient gets the pension credit on split DB income but not on split RRIF income', () => {
+        // Same household shape either way; only the transferor's income TYPE differs.
+        // DB stays creditable in the 60-year-old recipient's hands → extra ~$400 saved;
+        // RRIF does not qualify under 65, so that saving is absent.
+        const dbCase = calculateOptimalSplit(splitP(120_000, { db: 60_000 }, 66), splitP(10_000, {}, 60), 'ON', 1.0);
+        const rrifCase = calculateOptimalSplit(splitP(120_000, { rrif: 60_000 }, 66), splitP(10_000, {}, 60), 'ON', 1.0);
+        expect(dbCase.splitAmount).toBeGreaterThan(0);
+        expect(rrifCase.splitAmount).toBeGreaterThan(0);
+        expect(dbCase.taxSavings).toBeGreaterThan(rrifCase.taxSavings);
     });
 
     it('never reports savings when incomes are already equal', () => {
-        const result = calculateOptimalSplit(person(60_000, 30_000), person(60_000, 30_000), 'ON', 1.0);
+        const result = calculateOptimalSplit(splitP(60_000, { rrif: 30_000 }), splitP(60_000, { rrif: 30_000 }), 'ON', 1.0);
         // Symmetric household: any split moves income the wrong way; savings ~0
         expect(result.taxSavings).toBeLessThan(50);
     });

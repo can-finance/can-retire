@@ -18,6 +18,7 @@ const LABEL_MAP: Record<string, string> = {
     Salary: 'Salary',
     CPP: 'CPP',
     OAS: 'OAS',
+    Pension: 'Pension',
     Yield: 'Yield',
     RRSP: 'RRSP',
     TFSA: 'TFSA',
@@ -33,6 +34,7 @@ const LEGEND_ORDER = [
     'TFSA',
     'RRSP',
     'OAS',
+    'Pension',
     'CPP',
     'Salary',
     'Taxes Paid',
@@ -47,6 +49,7 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                 Salary: d.netEmploymentIncome / factor,
                 CPP: d.netCPPIncome / factor,
                 OAS: d.netOASIncome / factor,
+                Pension: d.netPensionIncome / factor,
                 Yield: d.netInvestmentIncome / factor,
                 RRSP: d.netRRSPWithdrawal / factor,
                 TFSA: d.netTFSAWithdrawal / factor,
@@ -106,6 +109,7 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                     <Bar dataKey="Salary" name="Salary" stackId="a" fill="#94a3b8" />
                     <Bar dataKey="CPP" name="CPP" stackId="a" fill="#8b5cf6" />
                     <Bar dataKey="OAS" name="OAS" stackId="a" fill="#c4b5fd" />
+                    <Bar dataKey="Pension" name="Pension" stackId="a" fill={CHART_COLORS.pension} />
                     <Bar dataKey="RRSP" name="RRSP" stackId="a" fill={CHART_COLORS.rrsp} />
                     <Bar dataKey="TFSA" name="TFSA" stackId="a" fill={CHART_COLORS.tfsa} />
                     <Bar dataKey="NonReg" name="Non-Reg" stackId="a" fill={CHART_COLORS.nonReg} />

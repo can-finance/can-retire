@@ -134,7 +134,7 @@ export function calculateIncomeTax(
     inflationFactor: number = 1.0,
     taxRates: TaxRates = TAX_CONSTANTS,
     age: number = 0,
-    eligiblePensionIncome: number = 0, // qualifying pension income (RRIF withdrawals; credit applies at 65+)
+    eligiblePensionIncome: number = 0, // ALREADY-QUALIFIED pension income; the CALLER applies the age rules
     grossedUpDividends: number = 0 // Dividend income after 38% gross-up
 ): number {
     const fedTax = calculateTieredTax(taxableIncome, taxRates.federalBrackets, inflationFactor);
@@ -150,12 +150,13 @@ export function calculateIncomeTax(
     let totalTax = (fedTax - fedCredits) + (provTax - provCredits);
 
     // --- Pension Income Credit (Federal non-refundable) ---
-    // Only applies to qualifying pension income the caller passes in (in this engine: RRIF withdrawals).
-    // NOT ordinary RRSP withdrawals, employment income, CPP, OAS, or investment income.
-    // Gated on age >= 65: RRIF/annuity income qualifies only at 65+. This also correctly denies
-    // the credit to an under-65 spouse receiving split RRIF income via calculateOptimalSplit
-    // (which passes the recipient's own age).
-    if (eligiblePensionIncome > 0 && age >= 65) {
+    // Applies to whatever qualifying pension income the caller passes in. The CALLER is
+    // responsible for the age rules: DB lifetime-pension income (incl. bridge) qualifies at
+    // ANY age; RRIF/annuity income qualifies only at 65+. So this function does NOT re-gate on
+    // age — a caller passing eligiblePensionIncome for a person under 65 is asserting that
+    // amount has already qualified (e.g. DB pension, or split DB income in a recipient's hands).
+    // Never includes ordinary RRSP withdrawals, employment income, CPP, OAS, or investment income.
+    if (eligiblePensionIncome > 0) {
         const maxPensionCredit = 2000 * inflationFactor;
         const eligibleAmount = Math.min(eligiblePensionIncome, maxPensionCredit);
         // Federal: 15% of eligible amount
@@ -271,13 +272,22 @@ export function calculateOASClawback(
 /**
  * Calculate optimal pension income split between two spouses.
  * Under Canadian tax law, up to 50% of eligible pension income can be split to a spouse.
- * Eligible income: RRIF withdrawals, company pension, annuities (NOT CPP/OAS/employment,
- * and NOT ordinary RRSP withdrawals).
- * Requirement: Transferor must be 65+ years old.
+ *
+ * Eligibility depends on the income type AND the transferor's age:
+ *   - DB lifetime-pension income (incl. bridge): splittable at ANY age.
+ *   - RRIF withdrawals / annuities: splittable only when the transferor is 65+.
+ * (Never CPP/OAS/employment, and never ordinary RRSP withdrawals.)
+ *
+ * The same age rules govern the CREDIT qualification of the split income in the
+ * recipient's hands: split DB income stays creditable at any recipient age; split
+ * RRIF income is creditable only if the recipient is 65+. We assume the split is
+ * drawn DB-first (the taxpayer-favorable election — it keeps the transferred amount
+ * creditable regardless of the recipient's age for as long as possible).
  */
 export interface SplitPerson {
     taxableIncome: number;
-    eligiblePensionIncome: number;
+    dbPensionIncome: number; // splittable & creditable at any age
+    rrifIncome: number;      // splittable & creditable only at 65+
     oasIncome: number;
     grossedUpDividends: number;
     age: number;
@@ -297,45 +307,66 @@ export function calculateOptimalSplit(
     province: string,
     inflationFactor: number
 ): SplitResult {
+    // A person's own qualifying pension income: DB at any age, RRIF only at 65+.
+    // This is both the credit-qualifying amount at baseline AND the splittable base.
+    const ownQualified = (per: SplitPerson): number =>
+        per.dbPensionIncome + (per.age >= 65 ? per.rrifIncome : 0);
+
     // Calculate baseline taxes (no splitting)
     const p1BaseTax = calculateIncomeTax(
         person1.taxableIncome, province, inflationFactor, undefined,
-        person1.age, person1.eligiblePensionIncome, person1.grossedUpDividends
+        person1.age, ownQualified(person1), person1.grossedUpDividends
     ) + calculateOASClawback(person1.taxableIncome, person1.oasIncome, inflationFactor);
 
     const p2BaseTax = calculateIncomeTax(
         person2.taxableIncome, province, inflationFactor, undefined,
-        person2.age, person2.eligiblePensionIncome, person2.grossedUpDividends
+        person2.age, ownQualified(person2), person2.grossedUpDividends
     ) + calculateOASClawback(person2.taxableIncome, person2.oasIncome, inflationFactor);
 
     const baselineCombinedTax = p1BaseTax + p2BaseTax;
 
-    // Helper to calculate combined tax after splitting 'amount' from person A to person B
-    const calcTaxWithSplit = (fromPerson: SplitPerson, toPerson: SplitPerson, amount: number): number => {
-        // Transferor: reduces taxable income and eligible pension income by amount
-        const fromNewTaxable = fromPerson.taxableIncome - amount;
-        const fromNewPension = fromPerson.eligiblePensionIncome - amount;
+    // Per-person taxes after splitting `amount` from A to B. The split is drawn
+    // DB-first (taxpayer-favorable), so we track how much of the transferred amount
+    // is DB vs RRIF to qualify each side's credit correctly.
+    const splitTaxes = (fromPerson: SplitPerson, toPerson: SplitPerson, amount: number): { fromTax: number, toTax: number } => {
+        const dbPortion = Math.min(amount, fromPerson.dbPensionIncome);
+        const rrifPortion = amount - dbPortion; // only > 0 once DB is exhausted (needs age 65+ headroom)
 
-        // Recipient: increases taxable income (and gains pension credit eligibility)
+        // Transferor: taxable income and qualifying pension both shrink by the split
+        const fromNewTaxable = fromPerson.taxableIncome - amount;
+        const fromRemainingDb = fromPerson.dbPensionIncome - dbPortion;
+        const fromRemainingRrif = fromPerson.rrifIncome - rrifPortion;
+        const fromNewQualified = fromRemainingDb + (fromPerson.age >= 65 ? fromRemainingRrif : 0);
+
+        // Recipient: taxable income rises; the split's DB portion is creditable at any
+        // recipient age, its RRIF portion only if the recipient is 65+.
         const toNewTaxable = toPerson.taxableIncome + amount;
-        const toNewPension = toPerson.eligiblePensionIncome + amount;
+        const toNewQualified = ownQualified(toPerson) + dbPortion + (toPerson.age >= 65 ? rrifPortion : 0);
 
         const fromTax = calculateIncomeTax(
             fromNewTaxable, province, inflationFactor, undefined,
-            fromPerson.age, fromNewPension, fromPerson.grossedUpDividends
+            fromPerson.age, fromNewQualified, fromPerson.grossedUpDividends
         ) + calculateOASClawback(fromNewTaxable, fromPerson.oasIncome, inflationFactor);
 
         const toTax = calculateIncomeTax(
             toNewTaxable, province, inflationFactor, undefined,
-            toPerson.age, toNewPension, toPerson.grossedUpDividends
+            toPerson.age, toNewQualified, toPerson.grossedUpDividends
         ) + calculateOASClawback(toNewTaxable, toPerson.oasIncome, inflationFactor);
 
+        return { fromTax, toTax };
+    };
+
+    const calcTaxWithSplit = (fromPerson: SplitPerson, toPerson: SplitPerson, amount: number): number => {
+        const { fromTax, toTax } = splitTaxes(fromPerson, toPerson, amount);
         return fromTax + toTax;
     };
 
-    // Determine who can split (must be 65+ and have eligible pension income)
-    const p1CanSplit = person1.age >= 65 && person1.eligiblePensionIncome > 0;
-    const p2CanSplit = person2.age >= 65 && person2.eligiblePensionIncome > 0;
+    // Splittable base = own qualifying pension income. A person UNDER 65 with DB
+    // pension can now split (RRIF-only under-65 still can't — ownQualified excludes it).
+    const p1SplitBase = ownQualified(person1);
+    const p2SplitBase = ownQualified(person2);
+    const p1CanSplit = p1SplitBase > 0;
+    const p2CanSplit = p2SplitBase > 0;
 
     let bestResult: SplitResult = {
         splitAmount: 0,
@@ -347,9 +378,9 @@ export function calculateOptimalSplit(
 
     // Try splitting from Person 1 to Person 2
     if (p1CanSplit) {
-        const maxSplit = person1.eligiblePensionIncome * 0.5;
+        const maxSplit = p1SplitBase * 0.5;
 
-        // Binary search for optimal split amount
+        // Ternary search for optimal split amount
         let low = 0, high = maxSplit;
         for (let i = 0; i < 15; i++) {
             const mid1 = low + (high - low) / 3;
@@ -370,25 +401,20 @@ export function calculateOptimalSplit(
         const savings = baselineCombinedTax - combinedTax;
 
         if (savings > bestResult.taxSavings) {
-            // Calculate individual new taxes
-            const fromNewTaxable = person1.taxableIncome - optimalAmount;
-            const fromNewPension = person1.eligiblePensionIncome - optimalAmount;
-            const toNewTaxable = person2.taxableIncome + optimalAmount;
-            const toNewPension = person2.eligiblePensionIncome + optimalAmount;
-
+            const { fromTax, toTax } = splitTaxes(person1, person2, optimalAmount);
             bestResult = {
                 splitAmount: optimalAmount,
                 fromPerson: 1,
                 taxSavings: savings,
-                person1NewTax: calculateIncomeTax(fromNewTaxable, province, inflationFactor, undefined, person1.age, fromNewPension, person1.grossedUpDividends) + calculateOASClawback(fromNewTaxable, person1.oasIncome, inflationFactor),
-                person2NewTax: calculateIncomeTax(toNewTaxable, province, inflationFactor, undefined, person2.age, toNewPension, person2.grossedUpDividends) + calculateOASClawback(toNewTaxable, person2.oasIncome, inflationFactor)
+                person1NewTax: fromTax,
+                person2NewTax: toTax
             };
         }
     }
 
     // Try splitting from Person 2 to Person 1
     if (p2CanSplit) {
-        const maxSplit = person2.eligiblePensionIncome * 0.5;
+        const maxSplit = p2SplitBase * 0.5;
 
         let low = 0, high = maxSplit;
         for (let i = 0; i < 15; i++) {
@@ -410,17 +436,13 @@ export function calculateOptimalSplit(
         const savings = baselineCombinedTax - combinedTax;
 
         if (savings > bestResult.taxSavings) {
-            const fromNewTaxable = person2.taxableIncome - optimalAmount;
-            const fromNewPension = person2.eligiblePensionIncome - optimalAmount;
-            const toNewTaxable = person1.taxableIncome + optimalAmount;
-            const toNewPension = person1.eligiblePensionIncome + optimalAmount;
-
+            const { fromTax, toTax } = splitTaxes(person2, person1, optimalAmount);
             bestResult = {
                 splitAmount: optimalAmount,
                 fromPerson: 2,
                 taxSavings: savings,
-                person1NewTax: calculateIncomeTax(toNewTaxable, province, inflationFactor, undefined, person1.age, toNewPension, person1.grossedUpDividends) + calculateOASClawback(toNewTaxable, person1.oasIncome, inflationFactor),
-                person2NewTax: calculateIncomeTax(fromNewTaxable, province, inflationFactor, undefined, person2.age, fromNewPension, person2.grossedUpDividends) + calculateOASClawback(fromNewTaxable, person2.oasIncome, inflationFactor)
+                person1NewTax: toTax,   // person1 is the recipient here
+                person2NewTax: fromTax  // person2 is the transferor here
             };
         }
     }

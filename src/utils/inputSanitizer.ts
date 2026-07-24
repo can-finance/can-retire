@@ -1,5 +1,5 @@
 import { AccountTypeVals } from '../engine/types';
-import type { Person, SimulationInputs, NonRegisteredAccount, OneTimeEvent } from '../engine/types';
+import type { Person, SimulationInputs, NonRegisteredAccount, OneTimeEvent, DBPension } from '../engine/types';
 
 // Single source for new non-registered accounts — shared by the default person
 // and the UI's "+ Add account"
@@ -161,14 +161,41 @@ function sanitizeNonRegAccounts(r: Record<string, unknown>, defaults: Person, le
     return normalizeSurplusTarget(accounts);
 }
 
+// Absent/invalid/non-positive amount => omit the field entirely (undefined, not
+// a default object) so old payloads stay byte-identical through
+// sanitize -> JSON.stringify (see usePlans' inputsEqual).
+function sanitizePension(raw: unknown, resolvedRetirementAge: number): DBPension | undefined {
+    if (!isObject(raw)) return undefined;
+
+    const annualAmount = Math.min(1_000_000, Math.max(0, num(raw.annualAmount, 0)));
+    if (annualAmount <= 0) return undefined;
+
+    const startAge = Math.min(80, Math.max(40, num(raw.startAge, resolvedRetirementAge)));
+    const indexedToInflation = typeof raw.indexedToInflation === 'boolean' ? raw.indexedToInflation : true;
+    // Bridge is only meaningful alongside a nonzero amount — omit both bridge
+    // fields (not just default them) when the amount clamps to 0
+    const bridgeAmount = Math.min(500_000, Math.max(0, num(raw.bridgeAmount, 0)));
+
+    return {
+        annualAmount,
+        startAge,
+        indexedToInflation,
+        ...(bridgeAmount > 0 ? {
+            bridgeAmount,
+            bridgeEndAge: Math.min(75, Math.max(55, num(raw.bridgeEndAge, 65)))
+        } : {})
+    };
+}
+
 function sanitizePerson(raw: unknown, defaults: Person, legacyRebalance?: boolean): Person {
     const r = isObject(raw) ? raw : {};
     const rrsp = isObject(r.rrsp) ? r.rrsp : {};
     const tfsa = isObject(r.tfsa) ? r.tfsa : {};
+    const retirementAge = num(r.retirementAge, defaults.retirementAge);
 
     return {
         age: num(r.age, defaults.age),
-        retirementAge: num(r.retirementAge, defaults.retirementAge),
+        retirementAge,
         lifeExpectancy: num(r.lifeExpectancy, defaults.lifeExpectancy),
         currentIncome: num(r.currentIncome, defaults.currentIncome),
         cppStartAge: num(r.cppStartAge, defaults.cppStartAge),
@@ -177,6 +204,7 @@ function sanitizePerson(raw: unknown, defaults: Person, legacyRebalance?: boolea
         oasStartAge: num(r.oasStartAge, defaults.oasStartAge),
         rrspMeltStartAge: optNum(r.rrspMeltStartAge, defaults.rrspMeltStartAge),
         rrspMeltAmount: optNum(r.rrspMeltAmount, defaults.rrspMeltAmount),
+        pension: sanitizePension(r.pension, retirementAge),
         rrsp: { type: AccountTypeVals.RRSP, balance: num(rrsp.balance, defaults.rrsp.balance) },
         tfsa: { type: AccountTypeVals.TFSA, balance: num(tfsa.balance, defaults.tfsa.balance) },
         nonRegisteredAccounts: sanitizeNonRegAccounts(r, defaults, legacyRebalance)
@@ -203,6 +231,33 @@ function sanitizeOneTimeEvents(raw: unknown): OneTimeEvent[] {
  * by merging it field-by-field with defaults. Returns null only if the payload
  * is not even an object with a `person` — anything else degrades gracefully to
  * defaults rather than crashing the render or the engine.
+ *
+ * SCHEMA CHANGES — read before editing the shape of SimulationInputs.
+ *
+ * There is deliberately NO version field in the stored payload. Migrations are
+ * inferred structurally (see `isLegacyMix` and the legacy-household-mix block
+ * below), which is fine for the two cheap kinds of change:
+ *   - ADDING a field      → the defaults merge handles it for free.
+ *   - RENAMING a field    → explicit old-key lookup, e.g.
+ *                           num(rates.cashInterest, num(rates.interest, def)).
+ *
+ * It is NOT fine for the expensive kind: changing the MEANING, UNITS, or
+ * old-vs-new DEFAULT of a field whose name and type stay the same. That is
+ * invisible to structural inspection, and the fallback chains here (foreignYield
+ * → dividend, rrspGrowth/tfsaGrowth → capitalGrowth) already conflate "this
+ * payload predates the field" with "this payload is truncated or broken" —
+ * which share links routinely are.
+ *
+ * So: if you make a change of that kind, add a `schemaVersion` integer IN THE
+ * SAME COMMIT. Deferring until then is free — everything written before that
+ * commit shares one schema, so an absent version unambiguously means "pre-that-
+ * change". What is NOT free is making the change and forgetting: two different
+ * schemas both reading as absent leaves structural sniffing as the only recourse.
+ *
+ * If you do add it, put it in the RETURN VALUE here, not just at write time.
+ * usePlans' inputsEqual compares JSON.stringify(sanitize(a)) against
+ * JSON.stringify(sanitize(b)); a field present on only one side makes every
+ * mount look like a change and churns lastSaved on reconciliation row 5.
  */
 export function sanitizeSimulationInputs(raw: unknown): SimulationInputs | null {
     if (!isObject(raw) || !isObject(raw.person)) return null;

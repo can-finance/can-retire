@@ -70,6 +70,7 @@ const getColumns = (hasSpouse: boolean) => {
         { key: 'total', label: 'Total Assets', tooltip: 'Sum of all account balances (yours + spouse if applicable)', align: 'right' },
         { key: 'netCPP', label: 'Net CPP', tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).', align: 'right', color: 'blue' },
         { key: 'netOAS', label: 'Net OAS', tooltip: 'Combined Old Age Security benefits (Net of Tax).', align: 'right', color: 'blue' },
+        { key: 'netPension', label: 'Net Pension', tooltip: 'Combined workplace defined-benefit pension income, including any bridge benefit (Net of Tax).', align: 'right', color: 'blue' },
         { key: 'netIncome', label: 'Total Spend', tooltip: "What the household actually spent this year. Equals your spending target unless accounts ran short.", align: 'right', color: 'green' },
         { key: 'surplusShortfall', label: 'Surplus / Shortfall', tooltip: 'Green (+): income exceeded the spending target; the excess was reinvested into TFSA/RRSP/Non-Reg. Red (−): spending that could NOT be funded after draining all accounts.', align: 'right' },
         { key: 'taxPaid', label: 'Tax Paid', tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback', align: 'right', color: 'red' },
@@ -154,6 +155,13 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                             <span className="cursor-help border-b border-dashed border-blue-200">{formatCurrencyCAD(row.netOASIncome)}</span>
                                         </HelpTooltip>
                                     ) : formatCurrencyCAD(row.netOASIncome)}
+                                </td>
+                                <td className="px-3 py-2 text-right text-blue-600">
+                                    {hasSpouse && row.netPensionIncome > 1 ? (
+                                        <HelpTooltip text={`You: ${formatCurrencyCAD(row.personNetPension)}\nSpouse: ${formatCurrencyCAD(row.spouseNetPension)}`}>
+                                            <span className="cursor-help border-b border-dashed border-blue-200">{formatCurrencyCAD(row.netPensionIncome)}</span>
+                                        </HelpTooltip>
+                                    ) : formatCurrencyCAD(row.netPensionIncome)}
                                 </td>
                                 <td className="px-3 py-2 text-right text-green-600">{formatCurrencyCAD(row.netIncome)}</td>
                                 <td className={`px-3 py-2 text-right ${row.shortfall > 1 ? 'font-bold text-red-600' : reinvested > 1 ? 'text-emerald-600' : 'text-slate-300'}`}>

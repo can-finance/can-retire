@@ -70,6 +70,16 @@ export interface NonRegMix {
     capitalGain: number;
 }
 
+// Defined-benefit (DB) lifetime pension. `annualAmount` is the gross annual
+// pension in today's (purchasing-power) dollars as of the pension START age.
+export interface DBPension {
+    annualAmount: number;      // gross annual lifetime pension, in today's dollars (as of pension start)
+    startAge: number;
+    indexedToInflation: boolean;
+    bridgeAmount?: number;     // extra annual bridge benefit paid from startAge until bridgeEndAge
+    bridgeEndAge?: number;     // default 65
+}
+
 export interface Person {
     age: number;
     retirementAge: number;
@@ -81,6 +91,7 @@ export interface Person {
     oasStartAge: number; // Usually 65
     rrspMeltStartAge?: number; // When to start voluntary RRSP meltdown (default: retirementAge)
     rrspMeltAmount?: number; // Annual voluntary withdrawal amount
+    pension?: DBPension; // Optional defined-benefit lifetime pension (incl. bridge)
     rrsp: AssetAccount;
     tfsa: AssetAccount;
     nonRegisteredAccounts: NonRegisteredAccount[]; // At least one; sanitizer guarantees it
@@ -94,6 +105,8 @@ export interface SimulationResult {
     grossIncome: number; // Pre-tax total income (household)
     cppIncome: number; // Combined CPP
     oasIncome: number; // Combined OAS
+    pensionIncome: number; // Combined gross DB pension (incl. bridge)
+    netPensionIncome: number; // Combined net DB pension (pro-rata tax allocation)
     netIncome: number;
     spending: number; // Desired spend for the year (household)
     taxPaid: number; // Combined tax
@@ -132,6 +145,8 @@ export interface SimulationResult {
     spouseNetCPP: number;
     personNetOAS: number;
     spouseNetOAS: number;
+    personNetPension: number;
+    spouseNetPension: number;
 
     // Net Withdrawals (After Tax, Actual Cash in Hand)
     netRRSPWithdrawal: number;

@@ -274,7 +274,7 @@ export function Dashboard() {
         if (simulationResults.length === 0) return 0;
         return Math.max(...simulationResults.map(r => {
             const factor = isInflationAdjusted ? r.inflationFactor : 1.0;
-            const inflow = r.netEmploymentIncome + r.netCPPIncome + r.netOASIncome + r.netInvestmentIncome +
+            const inflow = r.netEmploymentIncome + r.netCPPIncome + r.netOASIncome + r.netPensionIncome + r.netInvestmentIncome +
                 r.netRRSPWithdrawal + r.netTFSAWithdrawal + r.netNonRegWithdrawal;
             return inflow / factor;
         }));

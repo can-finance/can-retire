@@ -1,5 +1,5 @@
 import { FinancialInput } from '../inputs/FinancialInput';
-import { AboutFields, BenefitsFields, AccountsFields, MeltdownFields } from '../inputs/PersonFields';
+import { AboutFields, BenefitsFields, AccountsFields, MeltdownFields, PensionFields } from '../inputs/PersonFields';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { ValidationBanner } from '../ui/ValidationBanner';
@@ -16,7 +16,7 @@ const MELTDOWN_LABELS = { meltStartAge: 'RRSP Melt Start Age', meltAmount: 'RRSP
 interface PersonSectionProps {
     title: string;
     person: Person;
-    onChange: (field: string, value: number | undefined) => void;
+    onChange: (field: string, value: number | object | undefined) => void;
     onAccountChange: (account: 'rrsp' | 'tfsa', field: 'balance', value: number) => void;
     onNonRegChange: (accounts: NonRegisteredAccount[]) => void;
     /** One-line drift readout for this person's non-registered accounts */
@@ -65,7 +65,7 @@ export function PersonSection({
             } else if (key === 'nonRegisteredAccounts') {
                 onNonRegChange(value as NonRegisteredAccount[]);
             } else {
-                onChange(key, value as number | undefined);
+                onChange(key, value as number | object | undefined);
             }
         }
     };
@@ -157,6 +157,8 @@ export function PersonSection({
                         </button>
                     </HelpTooltip>
                 )}
+
+                <PensionFields person={person} onPatch={onPatch} />
             </div>
         </CollapsibleSection>
     );

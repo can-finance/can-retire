@@ -248,6 +248,75 @@ describe('sanitizeSimulationInputs', () => {
         });
     });
 
+    describe('pension', () => {
+        it('is absent when not provided', () => {
+            const result = sanitizeSimulationInputs({ person: {} })!;
+            expect(result.person.pension).toBeUndefined();
+        });
+
+        it('degrades to absent for garbage or non-positive amounts', () => {
+            expect(sanitizeSimulationInputs({ person: { pension: 'garbage' } })!.person.pension).toBeUndefined();
+            expect(sanitizeSimulationInputs({ person: { pension: {} } })!.person.pension).toBeUndefined();
+            expect(sanitizeSimulationInputs({ person: { pension: { annualAmount: 0 } } })!.person.pension).toBeUndefined();
+            expect(sanitizeSimulationInputs({ person: { pension: { annualAmount: -5000 } } })!.person.pension).toBeUndefined();
+            expect(sanitizeSimulationInputs({ person: { pension: { annualAmount: 'lots' } } })!.person.pension).toBeUndefined();
+        });
+
+        it('passes a valid pension through with defaults for omitted fields', () => {
+            const result = sanitizeSimulationInputs({
+                person: { retirementAge: 62, pension: { annualAmount: 24_000 } }
+            })!;
+            expect(result.person.pension).toEqual({
+                annualAmount: 24_000,
+                startAge: 62, // defaults to the person's retirement age
+                indexedToInflation: true
+            });
+        });
+
+        it('clamps annualAmount and startAge to their valid ranges', () => {
+            const result = sanitizeSimulationInputs({
+                person: { pension: { annualAmount: 5_000_000, startAge: 200 } }
+            })!;
+            expect(result.person.pension!.annualAmount).toBe(1_000_000);
+            expect(result.person.pension!.startAge).toBe(80);
+
+            const low = sanitizeSimulationInputs({
+                person: { pension: { annualAmount: 10_000, startAge: 10 } }
+            })!;
+            expect(low.person.pension!.startAge).toBe(40);
+        });
+
+        it('respects an explicit indexedToInflation: false', () => {
+            const result = sanitizeSimulationInputs({
+                person: { pension: { annualAmount: 10_000, indexedToInflation: false } }
+            })!;
+            expect(result.person.pension!.indexedToInflation).toBe(false);
+        });
+
+        it('omits the bridge fields when bridgeAmount is absent or zero', () => {
+            const result = sanitizeSimulationInputs({
+                person: { pension: { annualAmount: 10_000, bridgeAmount: 0, bridgeEndAge: 65 } }
+            })!;
+            expect(result.person.pension!.bridgeAmount).toBeUndefined();
+            expect(result.person.pension!.bridgeEndAge).toBeUndefined();
+        });
+
+        it('includes a clamped bridge when bridgeAmount is positive, defaulting bridgeEndAge to 65', () => {
+            const result = sanitizeSimulationInputs({
+                person: { pension: { annualAmount: 10_000, bridgeAmount: 999_999 } }
+            })!;
+            expect(result.person.pension!.bridgeAmount).toBe(500_000);
+            expect(result.person.pension!.bridgeEndAge).toBe(65);
+        });
+
+        it('clamps bridgeEndAge to [55, 75]', () => {
+            const result = sanitizeSimulationInputs({
+                person: { pension: { annualAmount: 10_000, bridgeAmount: 5_000, bridgeEndAge: 90 } }
+            })!;
+            expect(result.person.pension!.bridgeEndAge).toBe(75);
+        });
+    });
+
     it('filters malformed one-time events and normalizes types', () => {
         const result = sanitizeSimulationInputs({
             person: {},
