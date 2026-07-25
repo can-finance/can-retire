@@ -19,13 +19,6 @@ export interface AuditLine {
     // Signed value in the section's own arithmetic: deductions are negative, so a
     // section's lines add up literally.
     amount: number;
-    // Income lines only: `amount` is the net, these are the pre-tax figure and the
-    // tax apportioned to it. `withholdings` optionally splits that tax share finer
-    // for display — used so far only by Employment, whose gross−net gap is income
-    // tax PLUS CPP/EI. Display-only: the entries sum to `taxShare`.
-    gross?: number;
-    taxShare?: number;
-    withholdings?: Array<{ label: string; amount: number }>;
     // Per-person split of `amount`, present only when the plan has a spouse and the
     // engine reports the split.
     person?: number;
@@ -144,76 +137,43 @@ function payrollWithheld(inputs: SimulationInputs, r: SimulationResult): { payro
 const sumLines = (lines: AuditLine[]) =>
     lines.reduce((s, l) => s + (l.kind === 'info' || l.kind === 'result' || l.kind === 'subtotal' ? 0 : l.amount), 0);
 
-function incomeSourcesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: boolean): AuditSection {
+/**
+ * Section 1 — every dollar of gross cash the household takes in this year.
+ *
+ * These are the lines that used to open `cashFlowSection`, unchanged: they mirror
+ * the engine's own `netIncome` construction exactly (projection.ts builds
+ * `pCashGross + sCashGross + one-time inflows + TFSA/non-reg withdrawals` before
+ * subtracting tax, payroll and reinvestment), which is why the whole flow
+ * reconciles to the cent. Nothing here is netted down — tax comes off in the two
+ * sections below.
+ */
+function incomeSourcesSection(r: SimulationResult, oneTimeInflows: number): AuditSection {
     const lines: AuditLine[] = [];
-    const { payroll } = payrollWithheld(inputs, r);
 
-    const source = (
-        label: string,
-        gross: number,
-        net: number,
-        split?: { person: number; spouse: number },
-        note?: string,
-        withholdings?: Array<{ label: string; amount: number }>
-    ) => {
-        if (Math.abs(gross) < EPS && Math.abs(net) < EPS) return;
-        lines.push({
-            label,
-            amount: net,
-            gross,
-            taxShare: gross - net,
-            ...(withholdings ? { withholdings } : {}),
-            ...(hasSpouse && split ? { person: split.person, spouse: split.spouse } : {}),
-            note
-        });
+    const add = (label: string, amount: number, note?: string) => {
+        if (Math.abs(amount) < EPS) return;
+        lines.push({ label, amount, note });
     };
 
-    // Employment's gross−net gap is income tax PLUS CPP/EI contributions, so split
-    // it into the two for display rather than labelling the whole gap "Tax".
-    // Payroll is reconstructed from `inputs` (see payrollWithheld), not read off the
-    // engine result, so the income-tax remainder can land a cent or two negative in
-    // edge cases — left unclamped so the subtext stays an honest split of taxShare.
-    source('Employment income', r.employmentIncome, r.netEmploymentIncome, undefined, undefined,
-        payroll > EPS
-            ? [
-                { label: 'Income tax', amount: (r.employmentIncome - r.netEmploymentIncome) - payroll },
-                { label: 'CPP/EI', amount: payroll }
-            ]
-            : undefined);
-    source('CPP', r.cppIncome, r.netCPPIncome, { person: r.personNetCPP, spouse: r.spouseNetCPP });
-    source('OAS', r.oasIncome, r.netOASIncome, { person: r.personNetOAS, spouse: r.spouseNetOAS },
-        r.oasClawbackPaid > 1 ? 'Reduced by the OAS recovery tax — see Taxes' : undefined);
-    source('Workplace (DB) pension', r.pensionIncome, r.netPensionIncome,
-        { person: r.personNetPension, spouse: r.spouseNetPension });
-    source('Investment income (interest & dividends)', r.investmentIncome, r.netInvestmentIncome);
+    add('Employment income (gross)', r.employmentIncome);
+    add('CPP (gross)', r.cppIncome);
+    add('OAS (gross)', r.oasIncome);
+    add('Workplace (DB) pension (gross)', r.pensionIncome);
+    add('Investment income received', r.investmentIncome, 'Interest and dividend cash; growth stays in the account');
+    add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal, 'RRIF minimum + meltdown + top-up draws');
+    add('TFSA withdrawals', r.totalTFSAWithdrawal);
+    add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Grossed up so the sale funds its own tax');
+    add('One-time inflows', oneTimeInflows, 'Household cash — not attributed to either person');
 
-    if ((r.pensionSplitAmount ?? 0) > EPS) {
-        lines.push({
-            label: 'Pension income split to spouse',
-            amount: r.pensionSplitAmount!,
-            kind: 'info',
-            note: 'Moves taxable income between spouses; household cash is unchanged'
-        });
-    }
-
-    // The per-source nets are a pro-rata display allocation of each person's total
-    // tax, so they do not sum to household cash. The one identity that does hold
-    // exactly is that the You/Spouse benefit splits add up to the household figures.
-    const expected = r.netCPPIncome + r.netOASIncome + r.netPensionIncome;
-    const actual = r.personNetCPP + r.spouseNetCPP + r.personNetOAS + r.spouseNetOAS
-        + r.personNetPension + r.spouseNetPension;
+    // Every line above is an addend, so the total is exact by construction — there
+    // is no independent quantity left for a check to test.
+    lines.push({ label: 'Total cash in', amount: sumLines(lines), kind: 'result' });
 
     return {
         key: 'incomeSources',
-        title: 'Income sources',
+        title: 'Income & withdrawals (gross)',
         lines,
-        note: 'Tax is apportioned across sources pro-rata for display. The exact household cash identity is in Cash flow.',
-        check: {
-            label: 'You + Spouse benefit nets equal the household totals',
-            expected,
-            actual,
-            residual: actual - expected
-        }
+        note: 'Pre-tax cash the household actually receives. Tax comes off below.'
     };
 }
 
@@ -222,9 +182,9 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     const { payroll } = payrollWithheld(inputs, r);
 
     // --- The partition -------------------------------------------------------
-    // Every line here is the same pro-rata allocation the engine uses for the
-    // per-source nets in Income sources: each slice of a person's taxable income
-    // carries (slice / taxable income) x that person's tax bill. The slices
+    // Every line here is a pro-rata allocation of the household bill: each slice of
+    // a person's taxable income carries (slice / taxable income) x that person's
+    // tax bill. The slices
     // EXHAUST taxable income — the six income sources, the taxable half of
     // realized gains, and the two deductions that shrink the base — so they add
     // up to the household bill exactly. Terminal tax at death is assessed
@@ -241,7 +201,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     // folds it into netEmploymentIncome), so back the payroll out to leave the
     // income tax alone.
     part('Employment income tax', (r.employmentIncome - r.netEmploymentIncome) - payroll,
-        payroll > EPS ? 'Excludes CPP/EI contributions — see Income sources' : undefined);
+        payroll > EPS ? 'Excludes CPP/EI contributions — those come off in Net income & spending' : undefined);
     part('Tax on CPP', r.cppIncome - r.netCPPIncome);
     part('Tax on OAS', r.oasIncome - r.netOASIncome,
         r.oasClawbackPaid > EPS
@@ -324,11 +284,22 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
         });
     }
 
+    // Splitting is tax context, not cash: it moves taxable income between spouses
+    // and leaves household cash untouched, so it belongs here rather than in the
+    // gross cash-in section.
+    if ((r.pensionSplitAmount ?? 0) > EPS) {
+        lines.push({
+            label: 'Pension income split to spouse',
+            amount: r.pensionSplitAmount!,
+            kind: 'info',
+            note: 'Moves taxable income between spouses; household cash is unchanged'
+        });
+    }
+
     return {
         key: 'taxes',
         title: 'Taxes',
         lines,
-        note: 'The tax lines above the total, other than the "of which" lines, are a pro-rata allocation — the same convention as the per-source nets in Income sources — and between them they partition the bill exactly. The "of which" lines are marginal attributions instead: each is the extra tax that source adds on top of all other income, so they overlap rather than partition.',
         check: {
             label: 'The per-source tax lines add up to the household income tax',
             expected: r.taxPaid,
@@ -338,7 +309,17 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     };
 }
 
-function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, oneTimeInflows: number): AuditSection {
+/**
+ * Section 3 — carries the gross total down through the two withholdings to net
+ * income, then reconciles net income against what the household actually spent.
+ *
+ * `cashIn` is the *result line of section 1*, not a re-derivation, so the two
+ * sections cannot drift. The arithmetic below is the same sequence the single old
+ * `cashFlowSection` performed — gross lines summed, then income tax, payroll, the
+ * unallocated splitting saving and reinvestment subtracted — which is what keeps
+ * the check's expected/actual construction, and so its residual, unchanged.
+ */
+function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, cashIn: number): AuditSection {
     const lines: AuditLine[] = [];
     const { payroll } = payrollWithheld(inputs, r);
 
@@ -347,24 +328,12 @@ function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, oneTimeI
         lines.push({ label, amount, note, kind });
     };
 
-    // Gross cash basis. This mirrors the engine's own `netIncome` construction
-    // exactly, which is why it reconciles to the cent — the per-source net figures
-    // in Income sources are a pro-rata display split and do not.
-    add('Employment income (gross)', r.employmentIncome);
-    add('CPP (gross)', r.cppIncome);
-    add('OAS (gross)', r.oasIncome);
-    add('Workplace (DB) pension (gross)', r.pensionIncome);
-    add('Investment income received', r.investmentIncome, 'Interest and dividend cash; growth stays in the account');
-    add('One-time inflows', oneTimeInflows, 'Household cash — not attributed to either person');
-    add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal, 'RRIF minimum + meltdown + top-up draws');
-    add('TFSA withdrawals', r.totalTFSAWithdrawal);
-    add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Grossed up so the sale funds its own tax');
+    add('Total cash in', cashIn, 'Carried down from Income & withdrawals above');
+    add('Less: income tax', -r.taxPaid);
+    add('Less: CPP/EI contributions', -payroll,
+        'Withheld on employment income; derived from the inputs — the engine folds it into net employment income');
 
-    const cashIn = sumLines(lines);
-    lines.push({ label: 'Total cash in', amount: cashIn, kind: 'subtotal' });
-
-    add('Income tax', -r.taxPaid);
-    add('CPP/EI withheld on employment income', -payroll, 'Derived from the inputs — the engine folds this into net employment income');
+    lines.push({ label: 'Net income', amount: sumLines(lines), kind: 'subtotal' });
 
     // Step 5.5 re-optimises tax after Step 3 has already sized withdrawals on the
     // pre-split tax bill, so the saving is cash the engine neither spends nor
@@ -394,7 +363,7 @@ function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, oneTimeI
 
     return {
         key: 'cashFlow',
-        title: 'Cash flow',
+        title: 'Net income & spending',
         lines,
         check: {
             label: 'Cash available equals target spending less any shortfall',
@@ -591,10 +560,15 @@ export function buildYearAudit(
         });
     }
 
+    // Section 3 starts from section 1's own result line rather than recomputing the
+    // gross total, so the two can never disagree.
+    const income = incomeSourcesSection(r, oneTimeInflows);
+    const cashIn = income.lines.find(l => l.kind === 'result')!.amount;
+
     const sections: AuditSection[] = [
-        incomeSourcesSection(inputs, r, hasSpouse),
+        income,
         taxesSection(inputs, r, hasSpouse),
-        cashFlowSection(inputs, r, oneTimeInflows),
+        cashFlowSection(inputs, r, cashIn),
         accountSection({
             key: 'accountsRRSP', title: 'RRSP / RRIF', balance: b => b.rrsp,
             reinvested: r.reinvestedRRSP, withdrawn: r.totalRRSPWithdrawal,

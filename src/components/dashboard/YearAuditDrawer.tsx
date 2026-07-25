@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef } from 'react';
 import type { SimulationInputs, SimulationResult } from '../../engine/types';
 import { buildYearAudit } from '../../utils/yearAudit';
 import type { AuditCheck, AuditLine, AuditSection, AuditSectionKey, AuditBadge } from '../../utils/yearAudit';
@@ -33,6 +33,21 @@ const DEDUCTION_SECTIONS = new Set<AuditSectionKey>([
     'cashFlow', 'accountsRRSP', 'accountsTFSA', 'accountsNonReg', 'estate',
 ]);
 
+// The account sections are balance waterfalls, not part of the income → tax →
+// net → spending story above them. They get a tinted card and a left accent in
+// the account's own colour (matching YearlyBreakdownTable's column classes) so
+// the eye reads them as a separate group. Styling is keyed off the section key —
+// the audit data layer knows nothing about it.
+const ACCOUNT_ACCENT: Partial<Record<AuditSectionKey, string>> = {
+    accountsRRSP: 'border-l-4 border-l-sky-500',
+    accountsTFSA: 'border-l-4 border-l-emerald-500',
+    accountsNonReg: 'border-l-4 border-l-amber-500',
+};
+
+// The account group opens with this heading; Estate follows the group on the
+// plain card style, which is enough to set it apart from the waterfalls.
+const ACCOUNT_GROUP_START: AuditSectionKey = 'accountsRRSP';
+
 // `formatCurrencyCAD` doesn't sign negatives the way the rest of the app does
 // (see YearlyBreakdownTable's shortfall cell) — prefix the minus ourselves.
 function fmtAmt(v: number): string {
@@ -65,16 +80,6 @@ function LineRow({
         <tr className={rowClass}>
             <td className={`px-3 py-2 align-top ${labelClass} ${weightClass}`}>
                 <div>{line.label}</div>
-                {line.gross !== undefined && (
-                    <div className="text-[11px] text-slate-400 mt-0.5 font-normal">
-                        Gross {fmtAmt(line.gross / scale)}
-                        {line.withholdings
-                            ? line.withholdings.map(w => (
-                                <span key={w.label}> · {w.label} {fmtAmt(-w.amount / scale)}</span>
-                            ))
-                            : <> · Tax {fmtAmt(-(line.taxShare ?? 0) / scale)}</>}
-                    </div>
-                )}
                 {line.note && <div className="text-[11px] text-slate-400 mt-0.5 font-normal">{line.note}</div>}
             </td>
             {showSplit && (
@@ -113,11 +118,15 @@ function CheckRow({ check, scale, colSpan }: { check: AuditCheck; scale: number;
 function SectionBlock({ section, hasSpouse, scale }: { section: AuditSection; hasSpouse: boolean; scale: number }) {
     const showSplit = hasSpouse && section.lines.some(l => l.person !== undefined);
     const colSpan = showSplit ? 4 : 2;
+    const accent = ACCOUNT_ACCENT[section.key];
+    const cardClass = accent
+        ? `rounded-xl border border-slate-200 bg-slate-50/50 overflow-hidden ${accent}`
+        : 'rounded-xl border border-slate-100 overflow-hidden';
 
     return (
         <div>
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">{section.title}</h3>
-            <div className="rounded-xl border border-slate-100 overflow-hidden">
+            <div className={cardClass}>
                 <table className="w-full text-sm">
                     {showSplit && (
                         <thead className="bg-slate-50 text-[11px] text-slate-400 uppercase tracking-wide">
@@ -307,7 +316,19 @@ export function YearAuditDrawer({
                 {/* Body */}
                 <div className="flex-1 overflow-y-auto p-5 space-y-6">
                     {audit.sections.map(section => (
-                        <SectionBlock key={section.key} section={section} hasSpouse={hasSpouse} scale={scale} />
+                        <Fragment key={section.key}>
+                            {section.key === ACCOUNT_GROUP_START && (
+                                <div className="pt-4 border-t border-slate-200">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                        Account balances
+                                    </h3>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Where the money sat, not where it came from — each account's opening balance, flows and growth.
+                                    </p>
+                                </div>
+                            )}
+                            <SectionBlock section={section} hasSpouse={hasSpouse} scale={scale} />
+                        </Fragment>
                     ))}
                 </div>
             </div>

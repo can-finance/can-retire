@@ -109,26 +109,44 @@ describe('YearAuditDrawer', () => {
         );
 
         expect(screen.getByRole('dialog')).toBeInTheDocument();
-        for (const title of ['Income sources', 'Taxes', 'Cash flow', 'RRSP / RRIF', 'TFSA', 'Non-registered']) {
+        for (const title of [
+            'Income & withdrawals (gross)', 'Taxes', 'Net income & spending',
+            'RRSP / RRIF', 'TFSA', 'Non-registered',
+        ]) {
             expect(screen.getByText(title)).toBeInTheDocument();
         }
         expect(screen.getByText(String(results[5].year), { exact: false })).toBeInTheDocument();
     });
 
-    it('splits the employment gross−net gap into income tax and CPP/EI', () => {
-        // INITIAL_INPUTS is 48 and still working at index 0, so the employment line
-        // carries a withholdings breakdown. Each entry renders as its own span, so
-        // the "· " prefix distinguishes them from the Cash flow "Income tax" row.
+    it('reads as one flow: gross total carries into net income and then spending', () => {
         const results = runSimulation(INITIAL_INPUTS);
-        expect(results[0].employmentIncome).toBeGreaterThan(0);
         render(
             <YearAuditDrawer
                 inputs={INITIAL_INPUTS} results={results} index={0}
                 inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
             />
         );
-        expect(screen.getByText(/· Income tax/)).toBeInTheDocument();
-        expect(screen.getByText(/· CPP\/EI/)).toBeInTheDocument();
+        // Once as section 1's result, once as section 3's carry-over line.
+        expect(screen.getAllByText('Total cash in')).toHaveLength(2);
+        expect(screen.getByText('Net income')).toBeInTheDocument();
+        expect(screen.getByText('Less: income tax')).toBeInTheDocument();
+        expect(screen.getByText('Less: CPP/EI contributions')).toBeInTheDocument();
+        expect(screen.getByText(/Target spending/)).toBeInTheDocument();
+    });
+
+    it('groups the account waterfalls under their own heading and accent styling', () => {
+        const results = runSimulation(INITIAL_INPUTS);
+        const { container } = render(
+            <YearAuditDrawer
+                inputs={INITIAL_INPUTS} results={results} index={5}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Account balances')).toBeInTheDocument();
+        // One tinted, colour-accented card per account section.
+        for (const accent of ['border-l-sky-500', 'border-l-emerald-500', 'border-l-amber-500']) {
+            expect(container.querySelector(`.${accent}`), accent).not.toBeNull();
+        }
     });
 
     it('shows the Estate section only in a death year', () => {

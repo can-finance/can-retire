@@ -228,7 +228,7 @@ describe('cash-flow identity: what the residual is made of', () => {
             const r = results[i];
             const audit = buildYearAudit(COUPLE, results, i);
             const line = sectionOf(audit, 'cashFlow')!.lines
-                .find(l => l.label.startsWith('CPP/EI withheld'));
+                .find(l => l.label === 'Less: CPP/EI contributions');
             const pEmp = r.age <= COUPLE.person.lifeExpectancy && r.age < COUPLE.person.retirementAge
                 ? COUPLE.person.currentIncome : 0;
             const sEmp = r.spouseAge! <= COUPLE.spouse!.lifeExpectancy && r.spouseAge! < COUPLE.spouse!.retirementAge
@@ -270,11 +270,11 @@ describe('cash-flow identity: what the residual is made of', () => {
         }
     });
 
-    it('one-time inflows are household cash inside the cash-flow section', () => {
+    it('one-time inflows are household cash in the gross income section', () => {
         const results = runSimulation(ONE_TIME);
         const i = results.findIndex(r => r.age === 67);
         expect(i).toBeGreaterThanOrEqual(0);
-        const line = sectionOf(buildYearAudit(ONE_TIME, results, i), 'cashFlow')!.lines
+        const line = sectionOf(buildYearAudit(ONE_TIME, results, i), 'incomeSources')!.lines
             .find(l => l.label === 'One-time inflows');
         expect(line?.amount).toBeCloseTo(120_000, 6);
         expect(oneTimeInflow(ONE_TIME, 67)).toBe(120_000);
@@ -480,31 +480,132 @@ describe('estate section', () => {
     });
 });
 
-describe('income and tax sections', () => {
-    it('per-person benefit nets sum to the household totals', () => {
+describe('gross income section (section 1)', () => {
+    it('every line is the engine\'s gross figure, and they sum to "Total cash in"', () => {
         for (const [name, ins] of SCENARIOS) {
             const results = runSimulation(ins);
-            results.forEach((_, i) => {
-                const check = sectionOf(buildYearAudit(ins, results, i), 'incomeSources')!.check!;
-                expect(Math.abs(check.residual), `${name} i=${i}`).toBeLessThan(1e-6);
-            });
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const section = sectionOf(buildYearAudit(ins, results, i), 'incomeSources')!;
+                // Sub-cent lines are suppressed as noise, so compare at that
+                // resolution rather than asserting an exact float match.
+                const expectLine = (label: string, engineValue: number) => {
+                    const amount = section.lines.find(l => l.label === label)?.amount ?? 0;
+                    expect(Math.abs(amount - engineValue), `${name} i=${i} ${label}`).toBeLessThan(0.01);
+                };
+
+                // Gross, not net: each line must equal the engine field outright.
+                expectLine('Employment income (gross)', r.employmentIncome);
+                expectLine('CPP (gross)', r.cppIncome);
+                expectLine('OAS (gross)', r.oasIncome);
+                expectLine('Workplace (DB) pension (gross)', r.pensionIncome);
+                expectLine('Investment income received', r.investmentIncome);
+                expectLine('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal);
+                expectLine('TFSA withdrawals', r.totalTFSAWithdrawal);
+                expectLine('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal);
+                expectLine('One-time inflows', oneTimeInflow(ins, r.age));
+
+                // The result is the sum of the addend lines by construction, which is
+                // why the section carries no check of its own.
+                const addends = section.lines
+                    .filter(l => l.kind === undefined || l.kind === 'normal')
+                    .reduce((sum, l) => sum + l.amount, 0);
+                const total = section.lines.find(l => l.kind === 'result')!;
+                expect(total.label).toBe('Total cash in');
+                expect(total.amount, `${name} i=${i} total`).toBeCloseTo(addends, 6);
+                expect(section.check, `${name} i=${i} check`).toBeUndefined();
+            }
         }
     });
 
-    it('income lines carry gross, tax share and net consistently', () => {
-        const results = runSimulation(COUPLE);
-        for (let i = 0; i < results.length; i++) {
-            const lines = sectionOf(buildYearAudit(COUPLE, results, i), 'incomeSources')!.lines
-                .filter(l => l.gross !== undefined);
-            for (const l of lines) {
-                expect(l.gross! - l.taxShare!).toBeCloseTo(l.amount, 6);
-                if (l.person !== undefined) {
-                    expect(l.person + l.spouse!).toBeCloseTo(l.amount, 6);
+    it('shows no nets and no per-person split columns', () => {
+        // Section 1 is a pure gross cash-in statement now: the pro-rata per-source
+        // nets (and the You/Spouse columns that displayed them) are gone.
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                for (const line of sectionOf(buildYearAudit(ins, results, i), 'incomeSources')!.lines) {
+                    expect(line.person, `${name} i=${i} ${line.label}`).toBeUndefined();
+                    expect(line.spouse, `${name} i=${i} ${line.label}`).toBeUndefined();
                 }
             }
         }
     });
 
+    it('the pension split is tax context, not a cash line', () => {
+        const results = runSimulation(COUPLE);
+        const i = results.findIndex(r => (r.pensionSplitAmount ?? 0) > 1);
+        expect(i, 'expected a pension-split year in COUPLE').toBeGreaterThanOrEqual(0);
+        const audit = buildYearAudit(COUPLE, results, i);
+        const LABEL = 'Pension income split to spouse';
+
+        expect(sectionOf(audit, 'incomeSources')!.lines.some(l => l.label === LABEL)).toBe(false);
+        const line = sectionOf(audit, 'taxes')!.lines.find(l => l.label === LABEL)!;
+        expect(line.kind).toBe('info');
+        expect(line.amount).toBeCloseTo(results[i].pensionSplitAmount!, 6);
+    });
+});
+
+describe('net income section (section 3)', () => {
+    it('net income is total cash in less income tax and CPP/EI, in every year', () => {
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const audit = buildYearAudit(ins, results, i);
+                const income = sectionOf(audit, 'incomeSources')!;
+                const cash = sectionOf(audit, 'cashFlow')!;
+                const amountOf = (label: string) => cash.lines.find(l => l.label === label)?.amount ?? 0;
+
+                // The carry-over must be section 1's own result, not a re-derivation
+                // (sub-cent totals are suppressed, hence the cent-level compare).
+                const cashIn = income.lines.find(l => l.kind === 'result')!.amount;
+                const carried = amountOf('Total cash in');
+                expect(Math.abs(carried - cashIn), `${name} i=${i} carry-over`).toBeLessThan(0.01);
+
+                const tax = -amountOf('Less: income tax');
+                const payroll = -amountOf('Less: CPP/EI contributions');
+                expect(Math.abs(tax - r.taxPaid), `${name} i=${i} tax`).toBeLessThan(0.01);
+
+                const net = cash.lines.find(l => l.kind === 'subtotal')!;
+                expect(net.label).toBe('Net income');
+                expect(net.amount, `${name} i=${i} net`).toBeCloseTo(carried - tax - payroll, 6);
+            }
+        }
+    });
+
+    it('payroll is deducted here and nowhere else', () => {
+        // It left Taxes deliberately (reading a CPP/EI line as income tax was the
+        // original confusion) and must not creep back in.
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const audit = buildYearAudit(ins, results, i);
+                for (const key of ['incomeSources', 'taxes'] as const) {
+                    expect(
+                        sectionOf(audit, key)!.lines.some(l => l.label.includes('CPP/EI')),
+                        `${name} i=${i} ${key}`
+                    ).toBe(false);
+                }
+            }
+        }
+    });
+
+    it('a working year actually carries the CPP/EI deduction', () => {
+        const results = runSimulation(SURPLUS);
+        const i = results.findIndex(r => r.employmentIncome > 1);
+        expect(i).toBeGreaterThanOrEqual(0);
+        const cash = sectionOf(buildYearAudit(SURPLUS, results, i), 'cashFlow')!;
+        const payrollLine = cash.lines.find(l => l.label === 'Less: CPP/EI contributions')!;
+        expect(payrollLine.amount).toBeLessThan(0);
+        expect(-payrollLine.amount).toBeCloseTo(
+            calculatePayrollContributions(
+                SURPLUS.person.currentIncome, SURPLUS.province, results[i].inflationFactor
+            ).total, 6);
+    });
+});
+
+describe('income and tax sections', () => {
     /**
      * The headline identity of the Taxes section: the lines above the result are a
      * TRUE partition of `taxPaid`, not an overlapping attribution.
@@ -582,47 +683,12 @@ describe('income and tax sections', () => {
         }
     });
 
-    it('the employment withholdings split adds back up to the tax share', () => {
-        // The split is display-only: whatever the income-tax/CPP-EI breakdown, the
-        // two entries must still reconstruct the gross−net gap exactly.
+    it('the Taxes section carries no explanatory note — the layout says it instead', () => {
         for (const [name, ins] of SCENARIOS) {
             const results = runSimulation(ins);
             for (let i = 0; i < results.length; i++) {
-                const line = sectionOf(buildYearAudit(ins, results, i), 'incomeSources')!.lines
-                    .find(l => l.label === 'Employment income');
-                if (!line?.withholdings) continue;
-                const sum = line.withholdings.reduce((s, w) => s + w.amount, 0);
-                expect(sum, `${name} i=${i}`).toBeCloseTo(line.taxShare!, 6);
-            }
-        }
-    });
-
-    it('no employment income means no withholdings breakdown', () => {
-        // Once both spouses are retired the source() guard drops the line entirely;
-        // if it ever survives with a zero gross it must not carry a payroll split.
-        const results = runSimulation(COUPLE);
-        let retiredYears = 0;
-        for (let i = 0; i < results.length; i++) {
-            if (Math.abs(results[i].employmentIncome) > 0.01) continue;
-            retiredYears++;
-            const line = sectionOf(buildYearAudit(COUPLE, results, i), 'incomeSources')!.lines
-                .find(l => l.label === 'Employment income');
-            expect(line?.withholdings, `i=${i}`).toBeUndefined();
-        }
-        expect(retiredYears, 'expected fully-retired years in COUPLE').toBeGreaterThan(0);
-    });
-
-    it('the CPP/EI contributions line is gone from the Taxes section', () => {
-        // Payroll withholding now lives on the Income sources employment line (and in
-        // Cash flow); repeating it under Taxes invited reading it as income tax.
-        for (const [name, ins] of SCENARIOS) {
-            const results = runSimulation(ins);
-            for (let i = 0; i < results.length; i++) {
-                const lines = sectionOf(buildYearAudit(ins, results, i), 'taxes')!.lines;
-                expect(
-                    lines.some(l => l.label === 'CPP/EI contributions (withheld from pay)'),
-                    `${name} i=${i}`
-                ).toBe(false);
+                expect(sectionOf(buildYearAudit(ins, results, i), 'taxes')!.note, `${name} i=${i}`)
+                    .toBeUndefined();
             }
         }
     });
