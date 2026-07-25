@@ -207,7 +207,7 @@ function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSec
     };
 }
 
-function taxesSection(r: SimulationResult, hasSpouse: boolean): AuditSection {
+function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: boolean): AuditSection {
     const lines: AuditLine[] = [];
 
     const effectiveRate = r.grossIncome > 0 ? (r.taxPaid / r.grossIncome) * 100 : 0;
@@ -264,6 +264,20 @@ function taxesSection(r: SimulationResult, hasSpouse: boolean): AuditSection {
             ? `Effective rate ${effectiveRate.toFixed(1)}% of taxable income`
             : undefined
     });
+
+    // Working years only: the CPP/EI withheld from pay (already netted out of the
+    // employment line in Income sources). Payroll contributions, not income tax —
+    // shown here so the household's full deductions are visible in one place, but
+    // deliberately excluded from the figures and check above.
+    const { payroll } = payrollWithheld(inputs, r);
+    if (payroll > EPS) {
+        lines.push({
+            label: 'CPP/EI contributions (withheld from pay)',
+            amount: payroll,
+            kind: 'info',
+            note: 'Payroll contributions, not income tax — not included in the household income tax above'
+        });
+    }
 
     return {
         key: 'taxes',
@@ -534,7 +548,7 @@ export function buildYearAudit(
 
     const sections: AuditSection[] = [
         incomeSourcesSection(r, hasSpouse),
-        taxesSection(r, hasSpouse),
+        taxesSection(inputs, r, hasSpouse),
         cashFlowSection(inputs, r, oneTimeInflows),
         accountSection({
             key: 'accountsRRSP', title: 'RRSP / RRIF', balance: b => b.rrsp,
