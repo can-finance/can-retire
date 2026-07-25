@@ -505,14 +505,81 @@ describe('income and tax sections', () => {
         }
     });
 
-    it('per-person tax shares sum to the household bill, including split years', () => {
+    /**
+     * The headline identity of the Taxes section: the lines above the result are a
+     * TRUE partition of `taxPaid`, not an overlapping attribution.
+     *
+     * Exact by construction rather than approximate. Each line is the pro-rata slice
+     * (slice / taxable income) x tax that the engine already uses for the per-source
+     * nets, and the slices exhaust taxable income: the six income sources, the
+     * taxable half of gains realized while living, less the enhanced-CPP/QPP and
+     * RRSP-contribution deductions that shrink the base — then the pension-splitting
+     * saving, which re-prices the whole bill after those slices are struck. The gains
+     * slice and the two deduction slices have no net-cash figure to be read off, so
+     * the engine reports them (taxShareOnCapGains / taxReliefFrom*).
+     *
+     * The only slack is cosmetic: the section suppresses any slice under a cent, and
+     * there are at most ten of them, so the residual cannot reach $0.10.
+     */
+    it('the taxes lines partition the household bill in every year of every scenario', () => {
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const section = sectionOf(buildYearAudit(ins, results, i), 'taxes')!;
+                // Mirrors sumLines(): info / result / subtotal lines are not addends.
+                const partition = section.lines
+                    .filter(l => l.kind === undefined || l.kind === 'normal')
+                    .reduce((sum, l) => sum + l.amount, 0);
+                expect(section.check!.expected, `${name} i=${i} expected`).toBeCloseTo(results[i].taxPaid, 6);
+                expect(Math.abs(partition - section.check!.expected), `${name} i=${i}`).toBeLessThan(0.1);
+                expect(Math.abs(section.check!.residual), `${name} i=${i} residual`).toBeLessThan(0.1);
+            }
+        }
+    });
+
+    it('the You + Spouse shares still equal the household bill, including split years', () => {
+        // No longer the section's check (the partition is), so it is asserted here.
         const results = runSimulation(COUPLE);
         expect(results.some(r => (r.pensionSplitAmount ?? 0) > 1)).toBe(true);
         results.forEach((r, i) => {
-            const check = sectionOf(buildYearAudit(COUPLE, results, i), 'taxes')!.check!;
-            expect(Math.abs(check.residual), `i=${i}`).toBeLessThan(1e-6);
-            expect(check.expected).toBeCloseTo(r.taxPaid, 6);
+            expect(r.personTaxPaid + r.spouseTaxPaid, `i=${i}`).toBeCloseTo(r.taxPaid, 6);
+            const result = sectionOf(buildYearAudit(COUPLE, results, i), 'taxes')!.lines
+                .find(l => l.kind === 'result')!;
+            expect(result.person! + result.spouse!, `i=${i} result line`).toBeCloseTo(r.taxPaid, 6);
         });
+    });
+
+    it('the pension-splitting saving is an addend, not a footnote', () => {
+        // It re-prices the bill AFTER the per-source slices are struck, so without it
+        // the slices would overshoot taxPaid by exactly the saving.
+        const results = runSimulation(COUPLE);
+        const i = results.findIndex(r => (r.taxSavingsFromSplit ?? 0) > 100);
+        expect(i, 'expected a year with a material splitting saving').toBeGreaterThanOrEqual(0);
+        const line = sectionOf(buildYearAudit(COUPLE, results, i), 'taxes')!.lines
+            .find(l => l.label === 'Less: pension income splitting')!;
+        expect(line.kind).toBeUndefined();
+        expect(line.amount).toBeCloseTo(-(results[i].taxSavingsFromSplit ?? 0), 6);
+    });
+
+    it('terminal tax at death stays out of the partition', () => {
+        // Terminal tax is assessed on the deemed disposition and reported in Estate;
+        // taxPaid — and so the partition — covers the living year only.
+        const results = runSimulation(SINGLE);
+        const i = results.length - 1;
+        expect(results[i].totalTerminalTax!).toBeGreaterThan(1);
+        const section = sectionOf(buildYearAudit(SINGLE, results, i), 'taxes')!;
+        expect(section.check!.expected).toBeCloseTo(results[i].taxPaid, 6);
+        expect(Math.abs(section.check!.residual)).toBeLessThan(0.1);
+        expect(section.lines.some(l => l.label.toLowerCase().includes('terminal'))).toBe(false);
+    });
+
+    it('TFSA withdrawals carry no slice of the bill', () => {
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (const r of results) {
+                expect(r.netTFSAWithdrawal, `${name} age ${r.age}`).toBeCloseTo(r.totalTFSAWithdrawal, 6);
+            }
+        }
     });
 
     it('a negative dividend tax is labelled as a credit, not a bug', () => {
@@ -537,8 +604,9 @@ describe('income and tax sections', () => {
             .find(l => l.label.includes('dividends'))!;
         expect(line.amount).toBeLessThan(0);
         expect(line.note).toContain('Negative by design');
-        // And it must not break the section's identity.
-        expect(Math.abs(sectionOf(buildYearAudit(ins, results, i), 'taxes')!.check!.residual)).toBeLessThan(1e-6);
+        expect(line.kind).toBe('info');
+        // And it must not break the section's partition identity.
+        expect(Math.abs(sectionOf(buildYearAudit(ins, results, i), 'taxes')!.check!.residual)).toBeLessThan(0.1);
     });
 });
 

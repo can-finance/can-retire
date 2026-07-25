@@ -909,6 +909,13 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             return gross - (share * totalTax);
         };
 
+        // The same pro-rata weight, reported rather than netted off a cash figure.
+        // Taxable income has three components with no net-cash line of their own —
+        // the taxable half of realized gains, and the two deductions that shrink the
+        // base — so without these the per-source nets cannot partition the bill.
+        const calcTaxShare = (amount: number, totalGross: number, totalTax: number) =>
+            totalGross > 0 ? (amount / totalGross) * totalTax : 0;
+
         const pGrossTotal = pFinal?.finalTaxable || 0;
         const sGrossTotal = sFinal?.finalTaxable || 0;
 
@@ -940,7 +947,22 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         // TFSA withdrawals are tax-free (net = gross). Non-Reg sales are grossed-up by
         // sellNonReg so the sale's own tax is funded: pNonRegWithdrawal is the gross
-        // debit from the account, pNonRegNet is the cash that went to spending.
+        // debit from the account, pNonRegNet is the cash that went to spending — a
+        // marginal solver estimate, NOT the pro-rata share, which is why the gains
+        // share below is reported separately instead of being read off that gap.
+
+        // Pro-rata shares of the remaining taxable-income components. Together with
+        // the net* fields these exhaust finalTaxable, so the per-source shares add up
+        // to finalTax exactly (see the year-audit Taxes partition).
+        const taxShareOnCapGains =
+            calcTaxShare(pFinal?.taxableGains || 0, pGrossTotal, pFinal?.finalTax || 0)
+            + calcTaxShare(sFinal?.taxableGains || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const taxReliefFromPayrollDeduction =
+            calcTaxShare(pBase?.payrollDeductible || 0, pGrossTotal, pFinal?.finalTax || 0)
+            + calcTaxShare(sBase?.payrollDeductible || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const taxReliefFromRRSPDeduction =
+            calcTaxShare(pRrspContribution, pGrossTotal, pFinal?.finalTax || 0)
+            + calcTaxShare(sRrspContribution, sGrossTotal, sFinal?.finalTax || 0);
 
         // --- Step 7: Terminal Tax (Death Year Calculations) ---
         // Detect if this is the death year for either person
@@ -1156,6 +1178,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             personNetPension: pNetPension,
             spouseNetPension: sNetPension,
             netInvestmentIncome: pNetInvCash + sNetInvCash,
+            taxShareOnCapGains,
+            taxReliefFromPayrollDeduction,
+            taxReliefFromRRSPDeduction,
 
             // Reinvestments
             reinvestedTFSA,

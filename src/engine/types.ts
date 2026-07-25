@@ -140,6 +140,14 @@ export interface SimulationResult {
     netCPPIncome: number;
     netOASIncome: number;
     netInvestmentIncome: number; // Interest + Dividends
+    // Same pro-rata weight as the net* fields, for the taxable-income components
+    // that have no net-cash line: the taxable half of gains realized while living,
+    // and the two deductions that shrink the base. Reported (rather than derived
+    // from a gross−net gap) because they are what makes the per-source shares add
+    // up to taxPaid — see the year-audit Taxes partition.
+    taxShareOnCapGains: number;
+    taxReliefFromPayrollDeduction: number; // Enhanced CPP/QPP + CPP2; positive = relief
+    taxReliefFromRRSPDeduction: number;    // Contributions made from this year's surplus
     // Per-person benefit nets (You/Spouse breakdown in the table)
     personNetCPP: number;
     spouseNetCPP: number;

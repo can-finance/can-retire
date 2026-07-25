@@ -209,12 +209,76 @@ function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSec
 
 function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: boolean): AuditSection {
     const lines: AuditLine[] = [];
+    const { payroll } = payrollWithheld(inputs, r);
+
+    // --- The partition -------------------------------------------------------
+    // Every line here is the same pro-rata allocation the engine uses for the
+    // per-source nets in Income sources: each slice of a person's taxable income
+    // carries (slice / taxable income) x that person's tax bill. The slices
+    // EXHAUST taxable income — the six income sources, the taxable half of
+    // realized gains, and the two deductions that shrink the base — so they add
+    // up to the household bill exactly. Terminal tax at death is assessed
+    // separately and reported in Estate, so it is deliberately absent.
+    //
+    // Slices are rendered signed and unclamped: a deduction reduces the bill, and
+    // the dividend gross-up can push the investment slice past the cash it paid.
+    const part = (label: string, amount: number, note?: string) => {
+        if (Math.abs(amount) < EPS) return;
+        lines.push({ label, amount, note });
+    };
+
+    // Employment's gross-minus-net gap carries CPP/EI withholding too (the engine
+    // folds it into netEmploymentIncome), so back the payroll out to leave the
+    // income tax alone.
+    part('Employment income tax', (r.employmentIncome - r.netEmploymentIncome) - payroll,
+        payroll > EPS ? 'Excludes CPP/EI contributions — shown below' : undefined);
+    part('Tax on CPP', r.cppIncome - r.netCPPIncome);
+    part('Tax on OAS', r.oasIncome - r.netOASIncome,
+        r.oasClawbackPaid > EPS
+            ? 'The OAS recovery tax is inside the household bill, but the pro-rata split spreads it over every line — not just this one'
+            : undefined);
+    part('Tax on DB pension', r.pensionIncome - r.netPensionIncome);
+    part('Tax on investment income', r.investmentIncome - r.netInvestmentIncome,
+        'Interest, dividends and foreign dividends — the slice is struck on the grossed-up dividend');
+    part('Tax on RRSP/RRIF withdrawals', r.totalRRSPWithdrawal - r.netRRSPWithdrawal);
+    // TFSA withdrawals are tax-free, so they carry no slice at all.
+    part('Tax on non-registered sale gains', r.taxShareOnCapGains,
+        'The taxable half of gains realized while living, including fund turnover');
+    part('Less: enhanced CPP/QPP deduction', -r.taxReliefFromPayrollDeduction,
+        'The enhanced CPP/QPP and CPP2 slice of payroll comes off taxable income');
+    part('Less: RRSP contribution deduction', -r.taxReliefFromRRSPDeduction,
+        "Contributions made out of this year's surplus");
+    part('Less: pension income splitting', -(r.taxSavingsFromSplit ?? 0),
+        'Splitting re-prices the whole bill after the per-source slices are struck');
+
+    const partition = sumLines(lines);
 
     const effectiveRate = r.grossIncome > 0 ? (r.taxPaid / r.grossIncome) * 100 : 0;
+    lines.push({
+        label: 'Household income tax',
+        amount: r.taxPaid,
+        ...(hasSpouse ? { person: r.personTaxPaid, spouse: r.spouseTaxPaid } : {}),
+        kind: 'result',
+        note: r.grossIncome > 0
+            ? `Effective rate ${effectiveRate.toFixed(1)}% of taxable income`
+            : undefined
+    });
 
+    // --- Context below the result — none of these are addends ----------------
+    // The per-person split is on the result row's You/Spouse columns; repeating it
+    // as info keeps it readable in the single-column layout without looking like
+    // two more lines to add up.
     if (hasSpouse) {
-        lines.push({ label: 'Your share (after any pension split)', amount: r.personTaxPaid });
-        lines.push({ label: "Spouse's share (after any pension split)", amount: r.spouseTaxPaid });
+        lines.push({
+            label: 'Your share (after any pension split)',
+            amount: r.personTaxPaid,
+            kind: 'info'
+        });
+        lines.push({
+            label: "Spouse's share (after any pension split)",
+            amount: r.spouseTaxPaid,
+            kind: 'info'
+        });
     }
 
     if (r.oasClawbackPaid > EPS) {
@@ -222,7 +286,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
             label: 'Of which OAS recovery tax (clawback)',
             amount: r.oasClawbackPaid,
             kind: 'info',
-            note: 'Household total, before any pension split'
+            note: 'Household total, before any pension split — spread across the lines above, not carried by one'
         });
     }
 
@@ -247,29 +311,11 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     if (Math.abs(r.interestTaxPaid) > EPS) {
         lines.push({ label: 'Of which interest & foreign dividends (marginal)', amount: r.interestTaxPaid, kind: 'info' });
     }
-    if ((r.taxSavingsFromSplit ?? 0) > EPS) {
-        lines.push({
-            label: 'Saved by pension income splitting',
-            amount: -(r.taxSavingsFromSplit ?? 0),
-            kind: 'info'
-        });
-    }
-
-    lines.push({
-        label: 'Household income tax',
-        amount: r.taxPaid,
-        ...(hasSpouse ? { person: r.personTaxPaid, spouse: r.spouseTaxPaid } : {}),
-        kind: 'result',
-        note: r.grossIncome > 0
-            ? `Effective rate ${effectiveRate.toFixed(1)}% of taxable income`
-            : undefined
-    });
 
     // Working years only: the CPP/EI withheld from pay (already netted out of the
     // employment line in Income sources). Payroll contributions, not income tax —
     // shown here so the household's full deductions are visible in one place, but
-    // deliberately excluded from the figures and check above.
-    const { payroll } = payrollWithheld(inputs, r);
+    // deliberately excluded from the partition and the check above.
     if (payroll > EPS) {
         lines.push({
             label: 'CPP/EI contributions (withheld from pay)',
@@ -283,12 +329,12 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
         key: 'taxes',
         title: 'Taxes',
         lines,
-        note: '"Of which" lines are marginal attributions — each is the extra tax that source adds on top of all other income, so they overlap rather than partition the bill.',
+        note: 'The tax lines above the total are a pro-rata allocation — the same convention as the per-source nets in Income sources — and between them they partition the bill exactly. The "of which" lines are marginal attributions instead: each is the extra tax that source adds on top of all other income, so they overlap rather than partition.',
         check: {
-            label: 'You + Spouse shares equal the household tax',
+            label: 'The per-source tax lines add up to the household income tax',
             expected: r.taxPaid,
-            actual: r.personTaxPaid + r.spouseTaxPaid,
-            residual: (r.personTaxPaid + r.spouseTaxPaid) - r.taxPaid
+            actual: partition,
+            residual: partition - r.taxPaid
         }
     };
 }
