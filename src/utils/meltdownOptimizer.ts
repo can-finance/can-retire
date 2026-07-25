@@ -126,6 +126,8 @@ const IMPROVE_EPS = 1;        // net-estate must beat baseline by >$1 to count
 const TIE_EPS = 1;            // net-estate values within $1 are "tied"
 const COARSE_STEPS = 8;       // ~8 nonzero melt values in the estate coarse grid
 const MAX_SWEEPS = 3;         // coordinate-descent sweep cap for couples
+const MAX_PATTERN_STEPS = 8;  // diagonal steps per sweep (grid is 9 long, so this spans it)
+const PATTERN_EST = 8;        // progress-estimate allowance for the pattern phase
 const BATCH = 10;             // engine runs between event-loop yields
 const MC_WARN_MARGIN = 1;     // pp the winner may trail baseline before warning
 
@@ -597,7 +599,7 @@ export async function optimizeMeltdown(
     const s2 = hasSpouse ? p2Melt.length * p2Cpp.length * p2Oas.length : 0;
     const REFINE_EST = objective.refine ? 3 : 0;
     const detPerStrategy = hasSpouse
-        ? MAX_SWEEPS * (s1 + s2) + 2 * REFINE_EST
+        ? MAX_SWEEPS * (s1 + s2 + PATTERN_EST) + 2 * REFINE_EST
         : s1 + REFINE_EST;
     const runsPerCandidate = objective.mode === 'max-spend' ? AVG_BISECTION_RUNS : 1;
     const detEstimate = detPerStrategy * objective.strategies.length * runsPerCandidate;
@@ -674,6 +676,49 @@ export async function optimizeMeltdown(
             });
             await evaluate(init);
 
+            // --- Pattern (diagonal) step -------------------------------------
+            // Coordinate descent moves one person at a time, so it halts at any
+            // point that is the best in its own row AND its own column. On a
+            // DIAGONAL ridge such a point is not the optimum, and no number of
+            // further sweeps escapes it — every single-person move is a no-op by
+            // construction. Pension income splitting is what creates that ridge:
+            // it couples the two melt amounts through household tax, tilting the
+            // surface off the coordinate axes. Measured case: descent settled
+            // $3,499 of net estate below the true grid optimum for a splitting
+            // couple, at a point that was simultaneously its row and column max.
+            //
+            // So after each sweep, try moving BOTH melts one grid step together
+            // (the four diagonal neighbours) and keep walking while that helps.
+            // Evaluations are memoised by signature, so revisits are free.
+            const patternStep = async (): Promise<void> => {
+                for (let step = 0; step < MAX_PATTERN_STEPS; step++) {
+                    const cur = bestRef.current;
+                    if (!cur?.a.spouse) return;
+                    const i = p1Melt.indexOf(cur.a.person.melt);
+                    const j = p2Melt.indexOf(cur.a.spouse.melt);
+                    if (i < 0 || j < 0) return; // off-grid: nothing to step from
+
+                    const beforeSig = cur.sig;
+                    const moves: Assignment[] = [];
+                    for (const di of [-1, 1]) {
+                        for (const dj of [-1, 1]) {
+                            const ni = i + di;
+                            const nj = j + dj;
+                            if (ni < 0 || ni >= p1Melt.length) continue;
+                            if (nj < 0 || nj >= p2Melt.length) continue;
+                            moves.push(tag({
+                                person: { ...cur.a.person, melt: p1Melt[ni] },
+                                spouse: { ...cur.a.spouse!, melt: p2Melt[nj] },
+                            }));
+                        }
+                    }
+                    await evalList(moves);
+                    // No diagonal neighbour beat the incumbent — the ridge (if any)
+                    // has been climbed as far as it goes.
+                    if ((bestRef.current?.sig ?? null) === beforeSig) return;
+                }
+            };
+
             let sweeps = 0;
             let improvedSweep = true;
             while (improvedSweep && sweeps < MAX_SWEEPS) {
@@ -684,6 +729,10 @@ export async function optimizeMeltdown(
 
                 const heldPerson = bestRef.current?.a.person ?? init.person;
                 await evalList(personChoices(p2Melt, p2Cpp, p2Oas).map(pc => tag({ person: heldPerson, spouse: pc })));
+
+                // Climb any diagonal ridge before concluding we have converged, so
+                // the next sweep re-optimises each coordinate from the better point.
+                await patternStep();
 
                 improvedSweep = (bestRef.current?.sig ?? null) !== beforeSig;
                 sweeps++;

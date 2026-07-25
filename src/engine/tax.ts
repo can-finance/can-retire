@@ -652,6 +652,22 @@ export function calculateOptimalSplit(
         person2NewTax: p2BaseTax
     };
 
+    /**
+     * Ternary search narrows an interval and returns its midpoint, so it can
+     * approach an endpoint but never reach it. That matters here because the
+     * optimum is very often EXACTLY at maxSplit — when one spouse's income
+     * dwarfs the other's, transferring everything the rules allow is simply
+     * best. The search would stop ~$60-90 short of the boundary and quietly
+     * leave a few dollars of tax on the table every year.
+     *
+     * So evaluate the boundary explicitly and keep whichever is actually better.
+     */
+    const bestSplitAmount = (from: SplitPerson, to: SplitPerson, searched: number, maxSplit: number): number => {
+        const searchedTax = calcTaxWithSplit(from, to, searched);
+        const boundaryTax = calcTaxWithSplit(from, to, maxSplit);
+        return boundaryTax < searchedTax ? maxSplit : searched;
+    };
+
     // Try splitting from Person 1 to Person 2
     if (p1CanSplit) {
         const maxSplit = p1SplitBase * 0.5;
@@ -672,7 +688,7 @@ export function calculateOptimalSplit(
             }
         }
 
-        const optimalAmount = (low + high) / 2;
+        const optimalAmount = bestSplitAmount(person1, person2, (low + high) / 2, maxSplit);
         const combinedTax = calcTaxWithSplit(person1, person2, optimalAmount);
         const savings = baselineCombinedTax - combinedTax;
 
@@ -707,7 +723,7 @@ export function calculateOptimalSplit(
             }
         }
 
-        const optimalAmount = (low + high) / 2;
+        const optimalAmount = bestSplitAmount(person2, person1, (low + high) / 2, maxSplit);
         const combinedTax = calcTaxWithSplit(person2, person1, optimalAmount);
         const savings = baselineCombinedTax - combinedTax;
 

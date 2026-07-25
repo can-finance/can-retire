@@ -457,6 +457,144 @@ describe('calculateOASClawback', () => {
     });
 });
 
+// calculateOptimalSplit uses a TERNARY search, which only finds the global
+// optimum if combined tax is unimodal in the split amount. That surface is full
+// of kinks — the OAS repayment deduction, per-province credit amounts, the
+// separate federal/provincial zero floors, and Ontario's surtax applying after
+// all credits. If it is ever multi-modal the search silently returns a local
+// optimum: no error, just less tax saved than the household was entitled to.
+//
+// So: scan the whole legal range at fine granularity and check the search agrees.
+// The scan rebuilds the split arithmetic from calculateTotalTax rather than
+// calling the production helper, so a bug in that helper can't hide here.
+describe('calculateOptimalSplit is not fooled by a multi-modal tax surface', () => {
+    const ownQualified = (p: SplitPerson) => p.dbPensionIncome + (p.age >= 65 ? p.rrifIncome : 0);
+
+    /** Combined household tax when `amount` moves from `from` to `to`, DB drawn first. */
+    const combinedTaxAt = (from: SplitPerson, to: SplitPerson, province: string, amount: number): number => {
+        const dbPortion = Math.min(amount, from.dbPensionIncome);
+        const rrifPortion = amount - dbPortion;
+
+        const fromQualified = (from.dbPensionIncome - dbPortion)
+            + (from.age >= 65 ? from.rrifIncome - rrifPortion : 0);
+        const toQualified = ownQualified(to) + dbPortion + (to.age >= 65 ? rrifPortion : 0);
+
+        const fromTax = calculateTotalTax(
+            from.taxableIncome - amount, from.oasIncome, province, 1.0,
+            from.age, fromQualified, from.grossedUpDividends
+        ).total;
+        const toTax = calculateTotalTax(
+            to.taxableIncome + amount, to.oasIncome, province, 1.0,
+            to.age, toQualified, to.grossedUpDividends
+        ).total;
+        return fromTax + toTax;
+    };
+
+    /** Exhaustive $50 scan over the legal split range. */
+    const bestByScan = (from: SplitPerson, to: SplitPerson, province: string) => {
+        const maxSplit = ownQualified(from) * 0.5;
+        const baseline = combinedTaxAt(from, to, province, 0);
+        let bestAmount = 0;
+        let bestTax = baseline;
+        for (let amount = 0; amount <= maxSplit; amount += 50) {
+            const tax = combinedTaxAt(from, to, province, amount);
+            if (tax < bestTax) { bestTax = tax; bestAmount = amount; }
+        }
+        return { bestAmount, bestSavings: baseline - bestTax };
+    };
+
+    const p = (
+        taxableIncome: number,
+        over: Partial<SplitPerson> = {}
+    ): SplitPerson => ({
+        taxableIncome, dbPensionIncome: 0, rrifIncome: 0,
+        oasIncome: 0, grossedUpDividends: 0, age: 72, ...over
+    });
+
+    // Each case puts a different kink in play. The search must reach (within a
+    // dollar of) the best the exhaustive scan can find in every one.
+    const cases: { name: string; from: SplitPerson; to: SplitPerson; province: string }[] = [
+        {
+            name: 'plain RRIF split, no clawback',
+            from: p(140_000, { rrifIncome: 90_000 }),
+            to: p(20_000),
+            province: 'AB',
+        },
+        {
+            name: 'OAS clawback on both sides — the repayment deduction adds a kink',
+            from: p(150_000, { rrifIncome: 100_000, oasIncome: 8_820 }),
+            to: p(30_000, { oasIncome: 8_820, age: 70 }),
+            province: 'ON',
+        },
+        {
+            name: 'transferor in clawback, recipient below it — the kink is crossed mid-range',
+            from: p(120_000, { rrifIncome: 80_000, oasIncome: 8_820 }),
+            to: p(15_000, { oasIncome: 8_820, age: 68 }),
+            province: 'ON',
+        },
+        {
+            name: 'Ontario surtax thresholds crossed during the split',
+            from: p(200_000, { rrifIncome: 150_000, oasIncome: 8_820 }),
+            to: p(25_000, { oasIncome: 8_820 }),
+            province: 'ON',
+        },
+        {
+            name: 'sub-65 DB pension (splittable at any age), recipient gains the credit',
+            from: p(130_000, { dbPensionIncome: 70_000, age: 58 }),
+            to: p(18_000, { age: 56 }),
+            province: 'BC',
+        },
+        {
+            name: 'mixed DB + RRIF, DB drawn first',
+            from: p(160_000, { dbPensionIncome: 40_000, rrifIncome: 60_000, oasIncome: 8_820 }),
+            to: p(22_000, { oasIncome: 8_820 }),
+            province: 'NS',
+        },
+        {
+            name: 'eligible dividends in play — the DTC bends both curves',
+            from: p(140_000, { rrifIncome: 90_000, oasIncome: 8_820, grossedUpDividends: 40_000 }),
+            to: p(30_000, { grossedUpDividends: 12_000 }),
+            province: 'ON',
+        },
+        {
+            name: 'Quebec — abatement applies to the federal half only',
+            from: p(145_000, { rrifIncome: 95_000, oasIncome: 8_820 }),
+            to: p(24_000, { oasIncome: 8_820 }),
+            province: 'QC',
+        },
+    ];
+
+    for (const c of cases) {
+        it(`matches an exhaustive scan: ${c.name}`, () => {
+            const scan = bestByScan(c.from, c.to, c.province);
+            const result = calculateOptimalSplit(c.from, c.to, c.province, 1.0);
+
+            // Sanity: the scenario must actually reward splitting, or the test
+            // would pass vacuously with both answers at zero.
+            expect(scan.bestSavings).toBeGreaterThan(1);
+
+            // The ternary search may land marginally off the $50 scan grid in
+            // either direction, but it must not leave real money behind.
+            expect(result.taxSavings).toBeGreaterThan(scan.bestSavings - 1);
+            expect(result.fromPerson).toBe(1);
+        });
+    }
+
+    it('the reported split amount really produces the reported saving', () => {
+        // Guards against the amount and the savings being computed from
+        // different states — they are returned from separate code paths.
+        const from = p(150_000, { rrifIncome: 100_000, oasIncome: 8_820 });
+        const to = p(30_000, { oasIncome: 8_820, age: 70 });
+        const result = calculateOptimalSplit(from, to, 'ON', 1.0);
+
+        const baseline = combinedTaxAt(from, to, 'ON', 0);
+        const atReported = combinedTaxAt(from, to, 'ON', result.splitAmount);
+        expect(baseline - atReported).toBeCloseTo(result.taxSavings, 2);
+        // And the per-person taxes add up to the post-split household total.
+        expect(result.person1NewTax + result.person2NewTax).toBeCloseTo(atReported, 2);
+    });
+});
+
 describe('calculateOptimalSplit', () => {
     // db = DB lifetime pension (splittable/creditable at any age),
     // rrif = RRIF income (splittable/creditable only at 65+)

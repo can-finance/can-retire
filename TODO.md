@@ -118,6 +118,13 @@ probably enough; silence is not.
 room, terminal full inclusion, spousal rollover, melt destination TFSA-first then
 non-reg surplus sweep via `receivesSurplus`.
 
+### Year audit view (planned 2026-07-24, not started)
+Click a year in the breakdown table or a bar in the "Annual Cash Flow (Net)"
+chart → slide-over drawer reconciling prior year → this year: income sources
+(gross→tax→net), taxes, cash reconciliation, per-account waterfalls with
+derived growth, death-year variant. v1 needs no engine changes; deterministic
+projection only (no Monte Carlo). Full plan: `docs/year-audit-plan.md`.
+
 ### Monte Carlo realism (from 2026-07-18 discussion)
 Current model: single `volatility`, one normal shock added identically to
 `capitalGrowth`/`rrspGrowth`/`tfsaGrowth`; interest & dividend slices pay a fixed

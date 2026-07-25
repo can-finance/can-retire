@@ -121,6 +121,209 @@ describe('optimizeMeltdown', () => {
     }, 30_000);
 });
 
+// --- Brute-force reference oracle (estate objective) ----------------------
+//
+// WHY this exists: the optimizer does NOT enumerate its own candidate space. For
+// a couple it runs coordinate descent — optimize one spouse's levers while the
+// other's are held fixed, alternating for at most MAX_SWEEPS sweeps. Coordinate
+// descent is only guaranteed to find the global optimum when the coordinates are
+// separable, and here they are NOT: pension income splitting couples the two
+// spouses' melt amounts through a single household tax calculation, so the best
+// melt for one person depends on what the other is doing. A descent like that can
+// stall on a ridge and report a local optimum as the answer.
+//
+// Nothing else in this suite would catch that — every other estate test asserts
+// "better than baseline", which a local optimum satisfies happily. So we rebuild
+// the candidate space independently from the three exported builders, apply each
+// combination exactly the way the optimizer's private applyChoice does, score it
+// with the same public engine calls, and take the true argmax. The optimizer's
+// recommendation must be at least that good.
+//
+// This matters most right after a tax-engine change: every heuristic in the
+// search (grid density, sweep cap, tie-breaks) was tuned against the old
+// after-tax surface, and a reshaped surface can grow new ridges.
+
+interface OracleChoice { melt: number; cpp: number; oas: number; }
+
+// Mirror of the optimizer's private applyChoice — deliberately re-implemented
+// here rather than imported, so the oracle stays independent of search internals.
+function applyOracleChoice(p: Person, c: OracleChoice): void {
+    p.rrspMeltAmount = c.melt;
+    p.rrspMeltStartAge = undefined; // engine defaults the start to retirementAge
+    p.cppStartAge = c.cpp;
+    p.oasStartAge = c.oas;
+}
+
+// Full lever cross-product for one person, straight from the exported builders.
+function oracleChoicesFor(p: Person, considerCppOas: boolean): OracleChoice[] {
+    const out: OracleChoice[] = [];
+    for (const melt of buildMeltGrid(p)) {
+        for (const cpp of buildCppCandidates(p, considerCppOas)) {
+            for (const oas of buildOasCandidates(p, considerCppOas)) {
+                out.push({ melt, cpp, oas });
+            }
+        }
+    }
+    return out;
+}
+
+interface OracleResult {
+    best: number;                       // max feasible netEstateValue, -Infinity if none
+    bestAt: { person: OracleChoice; spouse: OracleChoice | null } | null;
+    evaluated: number;
+    feasible: number;
+}
+
+// Exhaustive search over the household cross-product, scored the same way
+// estateObjective() does: netEstateValue, feasible when totalShortfall <= $1k.
+function bruteForceBestEstate(base: SimulationInputs, considerCppOas: boolean): OracleResult {
+    const personChoices = oracleChoicesFor(base.person, considerCppOas);
+    const spouseChoices: (OracleChoice | null)[] = base.spouse
+        ? oracleChoicesFor(base.spouse, considerCppOas)
+        : [null];
+
+    let best = -Infinity;
+    let bestAt: OracleResult['bestAt'] = null;
+    let evaluated = 0;
+    let feasible = 0;
+
+    for (const pc of personChoices) {
+        for (const sc of spouseChoices) {
+            const trial = structuredClone(base);
+            applyOracleChoice(trial.person, pc);
+            if (trial.spouse && sc) applyOracleChoice(trial.spouse, sc);
+
+            const metrics = computeSummaryMetrics(runSimulation(trial), trial, false);
+            evaluated++;
+            if (metrics.totalShortfall > 1000) continue;
+            feasible++;
+            if (metrics.netEstateValue > best) {
+                best = metrics.netEstateValue;
+                bestAt = { person: pc, spouse: sc };
+            }
+        }
+    }
+
+    return { best, bestAt, evaluated, feasible };
+}
+
+// A comfortably-funded couple with income splitting ON. Both spouses hold real
+// RRSPs, so both melt levers bite and splitting ties them together — the exact
+// shape coordinate descent can get stuck on. Assets are deliberately generous and
+// volatility deliberately tiny so nothing is anywhere near shortfall: Monte Carlo
+// then can't legitimately demote the deterministic winner, which would otherwise
+// look like an oracle failure.
+const splittingCoupleInputs = (over: Partial<SimulationInputs> = {}): SimulationInputs => inputs({
+    person: person({
+        age: 62, retirementAge: 62, lifeExpectancy: 88,
+        rrsp: { type: 'RRSP', balance: 800_000 },
+        tfsa: { type: 'TFSA', balance: 120_000 },
+        nonRegisteredAccounts: [nonReg({ balance: 250_000, adjustedCostBase: 200_000 })],
+    }),
+    spouse: person({
+        age: 62, retirementAge: 62, lifeExpectancy: 88,
+        rrsp: { type: 'RRSP', balance: 500_000 },
+        tfsa: { type: 'TFSA', balance: 80_000 },
+        nonRegisteredAccounts: [nonReg({ id: 'nr-spouse', balance: 150_000, adjustedCostBase: 120_000 })],
+    }),
+    postRetirementSpend: 60_000,
+    useIncomeSplitting: true,
+    returnRates: {
+        bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+        capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.02,
+    },
+    ...over,
+});
+
+// Single person, well funded, low volatility — same "nothing near shortfall"
+// guarantee, but with CPP and OAS in play so all three levers are searched.
+const oracleSingleInputs = (over: Partial<SimulationInputs> = {}): SimulationInputs => inputs({
+    person: person({
+        age: 60, retirementAge: 60, lifeExpectancy: 88,
+        rrsp: { type: 'RRSP', balance: 850_000 },
+        tfsa: { type: 'TFSA', balance: 120_000 },
+        nonRegisteredAccounts: [nonReg({ balance: 250_000, adjustedCostBase: 200_000 })],
+    }),
+    postRetirementSpend: 45_000,
+    returnRates: {
+        bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+        capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.02,
+    },
+    ...over,
+});
+
+const ORACLE_OPTS = { mcIterations: 20 } as const;
+
+describe('optimizeMeltdown vs brute-force oracle (estate objective)', () => {
+    it('(m) couple with income splitting: the oracle is well-posed and the search improves on baseline', async () => {
+        const base = splittingCoupleInputs();
+
+        // CPP/OAS pinned, so the space is meltGrid x meltGrid — the pure
+        // two-variable interaction that coordinate descent has to navigate.
+        const oracle = bruteForceBestEstate(base, false);
+        expect(oracle.evaluated).toBe(81);
+        expect(oracle.feasible).toBe(81); // nothing is anywhere near shortfall
+
+        const res = await optimizeMeltdown(base, { ...ORACLE_OPTS, considerCppOas: false });
+
+        // Preconditions for (m2) below. Monte Carlo must not be demoting the
+        // deterministic winner or swapping in a runner-up — if it ever does, this
+        // fails here and says so, instead of (m2) changing colour for a reason
+        // that has nothing to do with the search.
+        expect(res.mcWarning).toBe(false);
+        expect(res.baselineSuccessRate).toBe(100);
+        expect(res.recommendedSuccessRate).toBe(100);
+
+        // Non-vacuous: a candidate genuinely better than the baseline exists.
+        expect(res.improved).toBe(true);
+    }, 120_000);
+
+    // ==== KNOWN PRODUCTION BUG — this test is EXPECTED TO FAIL =============
+    //
+    // REGRESSION GUARD. Coordinate descent alone fails this: it moves one person
+    // at a time, so it halts at any point that is the best in its own row AND its
+    // own column, which on a DIAGONAL ridge is not the optimum. Pension income
+    // splitting creates exactly that ridge by coupling the two melt amounts
+    // through household tax.
+    //
+    // Measured on this fixture before the fix:
+    //   brute-force global max : $3,405,935.79  at (person melt 60,000, spouse melt 47,000)
+    //   coordinate descent     : $3,402,436.80  at (person melt 45,000, spouse melt 56,500)
+    //   shortfall              :     $3,498.98
+    // That losing point was simultaneously its row max and its column max, so no
+    // number of extra sweeps could escape it — MAX_SWEEPS was never the problem.
+    //
+    // The optimizer now takes a pattern (diagonal) step after each sweep, moving
+    // BOTH melts together. If this test regresses, that step has been broken or
+    // removed; raising MAX_SWEEPS will not fix it.
+    it('(m2) couple with income splitting: the search escapes the diagonal ridge', async () => {
+        const base = splittingCoupleInputs();
+        const oracle = bruteForceBestEstate(base, false);
+
+        const res = await optimizeMeltdown(base, { ...ORACLE_OPTS, considerCppOas: false });
+
+        // Estate mode refines between coarse grid points, so the optimizer may
+        // legitimately land ABOVE the best coarse candidate — never below it.
+        expect(res.recommendedMetrics.netEstateValue).toBeGreaterThanOrEqual(oracle.best - 1);
+    }, 120_000);
+
+    it('(n) single person: the melt x CPP x OAS argmax is found across all three levers', async () => {
+        const base = oracleSingleInputs();
+
+        const oracle = bruteForceBestEstate(base, true);
+        expect(oracle.feasible).toBeGreaterThan(0);
+
+        const res = await optimizeMeltdown(base, { ...ORACLE_OPTS, considerCppOas: true });
+
+        expect(res.mcWarning).toBe(false);
+        expect(res.baselineSuccessRate).toBe(100);
+        expect(res.recommendedSuccessRate).toBe(100);
+        expect(res.improved).toBe(true);
+
+        expect(res.recommendedMetrics.netEstateValue).toBeGreaterThanOrEqual(oracle.best - 1);
+    }, 120_000);
+});
+
 // --- Max-spend fixtures ---------------------------------------------------
 
 // Deep pockets, modest planned spend — the sustainable spend should land well
