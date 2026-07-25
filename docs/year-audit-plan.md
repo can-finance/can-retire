@@ -1,6 +1,8 @@
 # Year Audit View — Implementation Plan
 
-Status: **planned, not started**
+Status: **v1 shipped 2026-07-25** (data layer `src/utils/yearAudit.ts`, drawer
+`src/components/dashboard/YearAuditDrawer.tsx`, click wiring in the table and
+cash-flow chart). Phase 2 (tax-math detail) not started.
 Scope decided: deterministic projection only — **Monte Carlo runs are explicitly out of scope**.
 
 ## Goal

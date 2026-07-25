@@ -34,6 +34,8 @@ interface YearlyBreakdownTableProps {
     hasSpouse?: boolean;
     // When annual rebalancing is off, non-reg cells show the drifted composition on hover
     showMixDrift?: boolean;
+    // When provided, rows become clickable/keyboard-operable and open the Year Audit drawer.
+    onSelectYear?: (year: number) => void;
 }
 
 function mixTooltip(m: NonRegMix): string {
@@ -91,14 +93,17 @@ function HeaderCell({ label, tooltip, align }: { label: string; tooltip: string;
     );
 }
 
-export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ data, hasSpouse = false, showMixDrift = false }: YearlyBreakdownTableProps) {
+export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ data, hasSpouse = false, showMixDrift = false, onSelectYear }: YearlyBreakdownTableProps) {
     const columns = getColumns(hasSpouse);
 
     return (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-4 border-b border-slate-100">
                 <h2 className="text-xl font-bold text-slate-900">Year-by-Year Breakdown</h2>
-                <p className="text-xs text-slate-500 mt-1">Hover over column headers for calculation details</p>
+                <p className="text-xs text-slate-500 mt-1">
+                    Hover over column headers for calculation details.
+                    {onSelectYear && ' Click a year for a full breakdown.'}
+                </p>
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -112,8 +117,23 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                     <tbody className="divide-y divide-slate-100">
                         {data.map((row, idx) => {
                             const reinvested = row.reinvestedTFSA + row.reinvestedRRSP + row.reinvestedNonReg;
+                            const clickable = !!onSelectYear;
                             return (
-                            <tr key={row.year} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                            <tr
+                                key={row.year}
+                                className={`${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'} ${clickable ? 'cursor-pointer hover:bg-slate-100' : ''}`}
+                                {...(clickable ? {
+                                    tabIndex: 0,
+                                    'aria-label': `Open ${row.year} breakdown`,
+                                    onClick: () => onSelectYear!(row.year),
+                                    onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            onSelectYear!(row.year);
+                                        }
+                                    },
+                                } : {})}
+                            >
                                 <td className="px-3 py-2 text-slate-700">{row.year}</td>
                                 <td className="px-3 py-2 text-slate-700">{row.age}</td>
                                 {hasSpouse && (

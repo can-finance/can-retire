@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Click any year for a full audit of its calculation.** Clicking a row in the
+  Year-by-Year Breakdown table or a bar in the Annual Cash Flow chart opens a
+  breakdown of that year: income sources (gross → tax → net), the tax bill and
+  what drove it, a cash-flow reconciliation against the spending target, and an
+  opening-to-closing waterfall for each account — with every section showing
+  whether its numbers balance to the dollar. Arrow keys step between years.
+  Applies to the standard projection (Monte Carlo runs are not audited).
+
 ### Changed
 - **Monte Carlo simulations now draw yearly returns lognormally.** The old model
   added a symmetric shock to the return, which ignored the drag that swings put

@@ -118,12 +118,18 @@ probably enough; silence is not.
 room, terminal full inclusion, spousal rollover, melt destination TFSA-first then
 non-reg surplus sweep via `receivesSurplus`.
 
-### Year audit view (planned 2026-07-24, not started)
+### Year audit view — v1 shipped 2026-07-25
 Click a year in the breakdown table or a bar in the "Annual Cash Flow (Net)"
 chart → slide-over drawer reconciling prior year → this year: income sources
 (gross→tax→net), taxes, cash reconciliation, per-account waterfalls with
-derived growth, death-year variant. v1 needs no engine changes; deterministic
-projection only (no Monte Carlo). Full plan: `docs/year-audit-plan.md`.
+derived growth, death-year variant. Deterministic projection only (no Monte
+Carlo). The identity-test harness surfaced (and led to fixing) the net-estate
+double-deduction and the stale-age withdrawal-solver bugs on day one. Full
+plan: `docs/year-audit-plan.md`. Remaining follow-up: Phase 2 "show the tax
+math" (re-run pure tax.ts functions per year, bracket-by-bracket display);
+known residual: the withdrawal solver's tax estimate still omits the
+pension/dividend/payroll credit arguments getFinalStats uses (~$275 worst-year
+cash-flow residual in the default scenario).
 
 ### Monte Carlo realism (from 2026-07-18 discussion)
 Current model: single `volatility`, one lognormal draw applied identically to

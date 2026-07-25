@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
 import { usePlans, uniquePlanName, DEFAULT_PLAN_NAME, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY } from '../../hooks/usePlans';
@@ -13,6 +13,7 @@ import { SpendingChart } from '../charts/SpendingChart';
 import { MonteCarloChart } from '../charts/MonteCarloChart';
 import { SurplusChart } from '../charts/SurplusChart';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
+import { YearAuditDrawer } from './YearAuditDrawer';
 import { runSimulation, runMonteCarlo, blendedNonRegMix } from '../../engine/projection';
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
 import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
@@ -40,6 +41,8 @@ export function Dashboard() {
     const [isInflationAdjusted, setIsInflationAdjusted] = useState(false);
     const [isMonteCarlo, setIsMonteCarlo] = useState(false);
     const [isComparing, setIsComparing] = useState(false);
+    // Year Audit drawer: an index into `simulationResults`, not a year — null when closed.
+    const [selectedYearIndex, setSelectedYearIndex] = useState<number | null>(null);
 
     // Capture a deep-linked "open the meltdown optimizer" request via `?optimize=1`
     // ONCE, synchronously, at mount — mirroring the `setupRequested` capture in
@@ -111,6 +114,14 @@ export function Dashboard() {
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
     }, [inputs]);
+
+    // The table/chart click handlers report a YEAR (not a row position — chart
+    // payloads and table rows don't share an indexing guarantee), so this maps it
+    // back to the matching index into `simulationResults` for the audit drawer.
+    const handleSelectYear = useCallback((year: number) => {
+        const idx = simulationResults.findIndex(r => r.year === year);
+        if (idx !== -1) setSelectedYearIndex(idx);
+    }, [simulationResults]);
 
     // One-line drift readout under each person's account list (only when at
     // least one of their accounts has rebalancing off). Start and end blend
@@ -443,7 +454,7 @@ export function Dashboard() {
                                             ...inputs,
                                             returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
                                         })}
-                                        tooltip="How much returns swing from year to year (standard deviation) — e.g. 10% for equities."
+                                        tooltip="How much returns swing from year to year (standard deviation) — roughly 15% for all-stock portfolios, 10% for a balanced 60/40 mix, 5% for bond-heavy."
                                     />
                                 </div>
                             )}
@@ -478,6 +489,7 @@ export function Dashboard() {
                         data={simulationResults}
                         inflationAdjusted={isInflationAdjusted}
                         domainMax={globalMaxY}
+                        onSelectYear={handleSelectYear}
                     />
                     <SurplusChart
                         data={simulationResults}
@@ -500,10 +512,26 @@ export function Dashboard() {
                             inputs.person.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false) ||
                             !!inputs.spouse?.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false)
                         }
+                        onSelectYear={handleSelectYear}
                     />
                 </div>
             </div>
                 </>
+            )}
+
+            {/* Year Audit drawer — an overlay, not a content swap, so edits behind it
+                keep working. Guarded against a stale index: an input edit while the
+                drawer is open re-runs the simulation and can shrink the array. */}
+            {selectedYearIndex !== null && selectedYearIndex < simulationResults.length && (
+                <YearAuditDrawer
+                    inputs={inputs}
+                    results={simulationResults}
+                    index={selectedYearIndex}
+                    inflationAdjusted={isInflationAdjusted}
+                    hasSpouse={hasSpouse}
+                    onClose={() => setSelectedYearIndex(null)}
+                    onNavigate={setSelectedYearIndex}
+                />
             )}
         </div>
     );
