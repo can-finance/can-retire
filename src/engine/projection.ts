@@ -585,8 +585,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 const pNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (pAlive ? remainingDeficit : 0);
                 const sNetReq = (pAlive && sAlive && s) ? remainingDeficit / 2 : (sAlive && s ? remainingDeficit : 0);
 
-                // function to execute withdrawal for one person
-                const doWithdraw = (personObj: Person, base: PersonAnnualBase, netReq: number): { gross: number, netObtained: number } => {
+                // function to execute withdrawal for one person.
+                // `age` MUST be the person's age in the year being simulated (pAge/sAge).
+                // `personObj.age` is the age at simulation START and never advances, so
+                // using it would price the age amount (65+) against the wrong year.
+                const doWithdraw = (personObj: Person, base: PersonAnnualBase, netReq: number, age: number): { gross: number, netObtained: number } => {
                     if (netReq <= 0 || personObj.rrsp.balance <= 0) return { gross: 0, netObtained: 0 };
 
                     // Solve for Gross on top of everything already taxable this year:
@@ -596,7 +599,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                         ? calculateTaxableCapitalGains(pRealizedGains) + pExtraRRSPGross
                         : calculateTaxableCapitalGains(sRealizedGains) + sExtraRRSPGross);
 
-                    const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, personObj.age);
+                    // Current-year age, not the Person's start age — the solver has to see
+                    // the same age amount the year is finally assessed at.
+                    const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, age);
 
                     // Check balance
                     const actualGross = Math.min(gross, personObj.rrsp.balance);
@@ -610,8 +615,9 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                         const newTaxable = currentTaxable + actualGross;
 
                         // Calculate marginal tax on the *actual* gross we extracted
-                        const originalTax = calculateTotalTax(currentTaxable, base.oasIncome, province, inflationFactor, personObj.age).total;
-                        const newTax = calculateTotalTax(newTaxable, base.oasIncome, province, inflationFactor, personObj.age).total;
+                        // (current-year age, not the Person's start age)
+                        const originalTax = calculateTotalTax(currentTaxable, base.oasIncome, province, inflationFactor, age).total;
+                        const newTax = calculateTotalTax(newTaxable, base.oasIncome, province, inflationFactor, age).total;
 
                         const actualTax = newTax - originalTax;
                         actualNet = actualGross - actualTax;
@@ -621,24 +627,24 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 };
 
                 if (pAlive && pBase) {
-                    const res = doWithdraw(p, pBase, pNetReq);
+                    const res = doWithdraw(p, pBase, pNetReq, pAge);
                     pExtraRRSPGross += res.gross;
                     remainingDeficit -= res.netObtained;
                 }
                 if (sAlive && s && sBase) {
-                    const res = doWithdraw(s, sBase, sNetReq);
+                    const res = doWithdraw(s, sBase, sNetReq, sAge!);
                     sExtraRRSPGross += res.gross;
                     remainingDeficit -= res.netObtained;
                 }
 
                 // Fallback: if one spouse's RRSP couldn't cover their half, the other tops up
                 if (remainingDeficit > 1 && pAlive && pBase && p.rrsp.balance > 0) {
-                    const res = doWithdraw(p, pBase, remainingDeficit);
+                    const res = doWithdraw(p, pBase, remainingDeficit, pAge);
                     pExtraRRSPGross += res.gross;
                     remainingDeficit -= res.netObtained;
                 }
                 if (remainingDeficit > 1 && sAlive && s && sBase && s.rrsp.balance > 0) {
-                    const res = doWithdraw(s, sBase, remainingDeficit);
+                    const res = doWithdraw(s, sBase, remainingDeficit, sAge!);
                     sExtraRRSPGross += res.gross;
                     remainingDeficit -= res.netObtained;
                 }
@@ -1063,12 +1069,21 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         const totalTerminalTax = terminalTaxOnRRSP + terminalTaxOnCapGains;
 
-        // Calculate estate values (only meaningful in death year or final year)
-        const grossEstateValue = (pAlive ? p.rrsp.balance + p.tfsa.balance + totalNonRegBalance(p) : 0) +
+        // Calculate estate values (only meaningful in death year or final year).
+        //
+        // The deemed-disposition branches above ALREADY deducted the terminal tax from
+        // the deceased's RRSP and non-registered balances (so `totalAssets` — and the
+        // balances shown in the year-by-year table — are post-tax). These balances are
+        // therefore the NET estate, and the gross has to be reconstructed by adding the
+        // tax back. Subtracting the tax from them again would double-count it.
+        const postTaxBalances = (pAlive ? p.rrsp.balance + p.tfsa.balance + totalNonRegBalance(p) : 0) +
             (sAlive && s ? s.rrsp.balance + s.tfsa.balance + totalNonRegBalance(s) : 0);
 
-        // Net estate = gross - terminal tax (what heirs actually receive)
-        const netEstateValue = grossEstateValue - totalTerminalTax;
+        // Assets before terminal tax
+        const grossEstateValue = postTaxBalances + totalTerminalTax;
+
+        // What heirs actually receive = gross - terminal tax, deducted exactly once
+        const netEstateValue = postTaxBalances;
 
 
         // Cash-basis gross income: actual dollars received, unlike finalTaxable which

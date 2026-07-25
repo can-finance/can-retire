@@ -72,7 +72,10 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
     // - Proper spouse rollover logic (tax-free transfer if spouse survives)
     const estateTax = lastYear.totalTerminalTax || 0;
 
-    // Convert final estate values to real dollars if needed
+    // Convert final estate values to real dollars if needed.
+    // The engine reports both halves already reconciled: `grossEstateValue` is the
+    // estate BEFORE terminal tax and `netEstateValue` is what is left after it, so
+    // read each straight through rather than subtracting the tax a second time.
     const estateValue = adj(lastYear.grossEstateValue || lastYear.totalAssets, lastYear.inflationFactor);
     const adjustedEstateTax = adj(estateTax, lastYear.inflationFactor);
 
@@ -118,7 +121,10 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
     }
 
     const netRetirementIncome = totalRetirementIncome - annualTaxRetirement;
-    const netEstateValue = estateValue - adjustedEstateTax;
+    // Straight from the engine (see the estate comment above) — NOT estateValue minus
+    // the tax again. The fallback mirrors the `estateValue` fallback: with no engine
+    // figure there is no terminal tax to net off either.
+    const netEstateValue = adj(lastYear.netEstateValue ?? lastYear.totalAssets, lastYear.inflationFactor);
     const totalNetValue = netRetirementIncome + netEstateValue;
 
     const lifetimeTaxPaid = results.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0) + adjustedEstateTax;

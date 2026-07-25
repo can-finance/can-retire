@@ -17,6 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Carlo may shift.
 
 ### Fixed
+- **The projected net estate no longer double-counts the terminal tax bill.** The
+  tax due on the deemed disposition at death was subtracted twice — once from the
+  account balances and again from the estate figure — so the estate left to heirs
+  was understated by a full terminal-tax bill, and could even show as negative.
+  Net estate values now rise accordingly, the "before tax" figure beside them is
+  genuinely the estate before terminal tax, and previously computed projections
+  change.
+- **Retirement withdrawals now account for the age credit from 65 on.** When
+  sizing an RRSP/RRIF withdrawal to hit a spending target, the engine was pricing
+  the tax using the age you started the plan at rather than your age in that year,
+  so from 65 onward it drew too little and yearly spending landed roughly $1,000
+  short of target. Withdrawals now land on target; projections from age 65 on
+  change slightly (a little more withdrawn, a little more tax, slightly lower
+  end balances).
 - **The meltdown optimizer no longer settles for a worse answer for couples.**
   When both spouses had RRSPs and pension income splitting was on, the search
   could stop at a combination that looked best while changing either person's
