@@ -3,101 +3,40 @@
 ## Feature ideas
 
 Build order (decided 2026-07-18): named scenario storage -> scenario comparison
-page -> meltdown optimizer. All three now exist (optimizer v1 2026-07-21). The
-optimizer's results view is just a comparison with a machine-generated scenario,
-and hand-tweaked comparisons are the ground truth for validating the optimizer's
-recommendations before trusting the search.
-
-### Scenario comparison page
-Side-by-side comparison of two or more saved scenarios: success rate, ending/estate
-values, lifetime tax paid, year money runs out, income by source. Needs a way to
-save named scenarios first (current storage holds a single plan under
-`retirement_sim_v2`), then a comparison view — table of headline metrics plus
-overlaid net-worth / Monte Carlo fan charts.
+page -> meltdown optimizer. All three shipped. The optimizer's results view is
+just a comparison with a machine-generated scenario, and hand-tweaked
+comparisons are the ground truth for validating the optimizer's recommendations
+before trusting the search.
 
 ### RRSP meltdown optimizer
 Recommend when to retire and how much RRSP/RRIF to decumulate in which years,
 rather than the user hand-tuning `rrspMeltStartAge`/`rrspMeltAmount` by eye.
-Fleshed out 2026-07-18.
+Pure search loop over existing engine inputs (`src/utils/meltdownOptimizer.ts`
++ `MeltdownOptimizerView`), no engine changes — an objective-mode abstraction
+lets each mode define its own decision variables, scoring, and feasibility bar
+over one shared coordinate-descent search.
 
-**v1 implemented 2026-07-21** (`src/utils/meltdownOptimizer.ts` +
-`MeltdownOptimizerView`): pure search loop over EXISTING engine inputs, no engine
-changes. Decision variables per person: fixed-dollar annual melt amount (grid
-scaled to RRSP balance and window, coarse pass + refinement; melt start fixed at
-retirement age) and — on by default, with an opt-out toggle — CPP start age
-{60, 65, 70} and OAS start age {65, 70}, filtered to ages the person hasn't
-already passed. Couples use coordinate descent (sweep one person's sub-grid
-holding the other fixed, ≤3 sweeps). Objective: maximize `netEstateValue`;
-constraint: `totalShortfall` ≤ $1k; MC-validate winner + top runners-up only,
-demote a winner whose success rate drops >1pt below baseline. Results render
-through the comparison components as ephemeral runs (baseline vs "Suggested
-meltdown") with a plain-language recommendation card and Save-as-plan. Search
-runs chunked on the main thread with progress + AbortSignal.
+- **v1 (estate objective) — shipped 2026-07-21.** Maximize `netEstateValue`
+  subject to `totalShortfall` ≤ $1k, searching per-person melt amount and
+  (opt-out toggle) CPP/OAS start ages; MC-validates the winner + runners-up.
+- **Phase 2 (max-spend objective) — shipped 2026-07-22, v0.9.0.** Fix
+  retirement age, solve for the highest sustainable `postRetirementSpend` via
+  per-candidate bisection; also searches `withdrawalStrategy`. MC success bar
+  is user-pickable (75/85/95%, default 85) and enforced by an adaptive
+  bracket-and-refine step-down (gap-scaled steps, baseline-rate warm start,
+  upward search so a low warm start can't understate the answer) — the
+  planner logic is pure and unit-tested MC-free.
+- **Phase 3 — "When can I retire?" (next up).** See spec below.
+- **Phase 4 — the engine phase.** See spec below.
 
-**Implementation order (decided 2026-07-22):** Phase 2 = "maximum sustainable
-spending" (shipped in v0.9.0), Phase 3 = "when can I retire?" (next up), Phase 4 = the engine phase
-(melt-to-threshold + early RRIF conversion + web worker together), then backlog
-knobs. Rationale: performance is currently fine, so the worker solves a problem
-we don't have yet; the objective modes are pure search-layer work — high user
-value, zero engine risk — while the engine phase carries the only real
-regression risk and refines the *form* of answers rather than answering new
-questions. Nothing in the objectives is discarded when the engine phase lands:
-candidate grids swap dollars→thresholds, outer loops unchanged.
-
-**Phase 2 — "Maximum sustainable spending" mode (specced & implemented
-2026-07-22, v0.9.0).** Second member of the objective family: fix retirement
-age, solve for the highest `postRetirementSpend` the plan can fund. As built:
-objective-mode abstraction extracted (Phase 3 slots into it); per-candidate
-deterministic bisection to $500; `withdrawalStrategy` searched in max-spend
-mode only; MC success bar user-pickable 75/85/95 (default 85) enforced by an
-adaptive bracket-and-refine step-down (gap-scaled steps, warm start from the
-baseline rate, upward search so a low warm start can't understate) — pure
-planner helpers unit-tested MC-free. Spec notes below kept for rationale.
-
-- *Where things live:* search loop + candidate builders in
-  `src/utils/meltdownOptimizer.ts` (coordinate descent over per-person
-  {melt, cppStartAge, oasStartAge}; feasibility = `totalShortfall <= 1000`
-  from `computeSummaryMetrics`; MC validation via `runMonteCarlo`). UI in
-  `src/components/optimizer/MeltdownOptimizerView.tsx` (setup / running /
-  results phases; results = before/after `DecisionTable` + ephemeral
-  `ComparisonRun`s through the comparison components).
-- *Mechanics:* per strategy candidate, max spend = bisection on
-  `postRetirementSpend` (~10 deterministic runs to ~$500 precision;
-  feasibility is monotone in spend). Compose it as the scoring function:
-  rank candidates by their max sustainable spend instead of netEstateValue —
-  the descent loop's shape is unchanged, each evaluation just costs ~10 runs.
-- *Grid can be much coarser than the estate objective:* under max-spend, the
-  voluntary melt amount matters little (deficit-driven withdrawals drain the
-  RRSP anyway; melt mostly reorders taxes). The big levers are CPP/OAS
-  deferral and withdrawal order — consider adding `withdrawalStrategy`
-  (tax-efficient vs rrsp-first) as a searched variable here. Coarser grid
-  offsets the 10x per-candidate cost; net ~2-4x today's search. This is the
-  feature that starts really justifying the web worker.
-- *Success bar (key design decision):* deterministic max-spend is dangerously
-  optimistic and people will LIVE on this number. Bisect deterministically for
-  speed, then step the spend DOWN until Monte Carlo success clears a
-  user-chosen threshold (75/85/95%, conservative default). Do not bisect on
-  MC success directly — at 200 iterations it wobbles a few points and the
-  bisection wanders; deterministic-first + MC step-down (or extra iterations
-  for only the final probes) sidesteps it.
-- *UI:* objective picker on the setup screen ("Leave the largest estate" vs
-  "Spend the most in retirement"). Max-spend headline: "You could sustainably
-  spend $X/yr — $Y/yr more than planned"; add an "Annual spending" row to the
-  before/after table; the recommended `SimulationInputs` carry the raised
-  `postRetirementSpend`, so Apply/Save/comparison flows work unchanged. The
-  estate default stays: it naturally penalizes both under-melting (46%+
-  terminal hit) and over-melting (paying 30% now to dodge 25% later). Lifetime
-  tax + clawback stays a *display metric only* — optimizing it is degenerate
-  (broke people pay no tax).
-- *Caveat to disclose in results:* the engine models flat inflation-adjusted
-  spending; real spending is front-loaded (go-go/slow-go/no-go), so a flat
-  max is conservative early and generous late. Footnote for v1; spending
-  phases are their own future feature.
-- *Architecture:* this and "When can I retire?" (below) are the same
-  feasibility check pointed at different variables — whichever is built first
-  should extract an objective-mode abstraction (objective = {decision vars,
-  scoring fn, feasibility bar, headline formatter}) so the other comes nearly
-  free.
+**Implementation order (decided 2026-07-22):** Phase 3, then Phase 4 (engine
+work), then backlog knobs. Rationale: performance is currently fine, so the
+worker solves a problem we don't have yet; the objective modes are pure
+search-layer work — high user value, zero engine risk — while the engine phase
+carries the only real regression risk and refines the *form* of answers rather
+than answering new questions. Nothing in the objectives is discarded when the
+engine phase lands: candidate grids swap dollars→thresholds, outer loops
+unchanged.
 
 **Phase 3 — "When can I retire?" mode (specced 2026-07-21).** The third member of the
 objective family — all three are duals of the same feasibility check: fix two
@@ -165,15 +104,10 @@ behind an explicit "convert to RRIF at 65" flag.
   (lifestyle choice, don't search it by default; distinct from Phase 3, which
   *solves for* the age).
 
-**SEO landing page — shipped 2026-07-21** at `/rrsp-withdrawal-strategy/`
-(prerendered MPA route in the how-it-works mold; vite.config.ssr.ts and
-scripts/prerender.mjs were generalized to N pages). Leads with "RRSP
-Withdrawal Strategy Calculator" (broader head term than "meltdown"), with
-meltdown/decumulation as prominent secondary terms; FAQPage JSON-LD; CTA
-deep-links into the optimizer via `?optimize=1` (captured/stripped in
-Dashboard like the wizard's `?setup=1`; `#start=` share links win). Future
-SEO follow-ups: watch Search Console for whether "meltdown"-flavoured queries
-justify a second, meltdown-titled page or an H1 tweak.
+**SEO landing page shipped 2026-07-21** at `/rrsp-withdrawal-strategy/`
+(prerendered MPA route; CTA deep-links into the optimizer via `?optimize=1`).
+Future follow-up: watch Search Console for whether "meltdown"-flavoured
+queries justify a second, meltdown-titled page or an H1 tweak.
 
 **Known blind spot to disclose in the UI:** GIS is not modeled. For low-income
 households, pre-65 meltdown is often about protecting GIS eligibility — the

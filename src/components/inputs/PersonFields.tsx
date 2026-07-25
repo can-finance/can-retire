@@ -148,12 +148,26 @@ export function MeltdownFields({
     );
 }
 
+export interface PensionFieldsLabels {
+    section: string;
+    annualAmount: string;
+    startAge: string;
+    indexed: string;
+    bridgeAmount: string;
+    bridgeEndAge: string;
+}
+
 export function PensionFields({
     person,
     onPatch,
+    labels,
+    collapsible = true,
 }: {
     person: Person;
     onPatch: (patch: Partial<Person>) => void;
+    labels: PensionFieldsLabels;
+    /** Wizard renders this as an always-visible step (no toggle); dashboard keeps it collapsible. */
+    collapsible?: boolean;
 }) {
     const [expanded, setExpanded] = useState(false);
     const pension = person.pension;
@@ -187,42 +201,52 @@ export function PensionFields({
             + `${hasBridge ? ` · bridge to ${pension.bridgeEndAge ?? 65}` : ''}`
         : 'None';
 
+    const fields = (
+        <>
+            <div className="grid grid-cols-2 gap-3">
+                <FinancialInput label={labels.annualAmount} value={pension?.annualAmount ?? 0}
+                    onChange={(e) => patchPension({ annualAmount: Number(e.target.value) })}
+                    tooltip="Gross annual defined-benefit pension from a former employer, in today's dollars. Indexed pensions keep pace with inflation; non-indexed pensions pay a fixed dollar amount that loses purchasing power over time." />
+                <FinancialInput label={labels.startAge} prefix="" value={pension?.startAge ?? person.retirementAge}
+                    onChange={(e) => patchPension({ startAge: Number(e.target.value) })} />
+            </div>
+
+            <Toggle
+                checked={pension?.indexedToInflation ?? true}
+                onChange={(val) => patchPension({ indexedToInflation: val })}
+                label={labels.indexed}
+            />
+
+            <div className="grid grid-cols-2 gap-3">
+                <FinancialInput label={labels.bridgeAmount} value={pension?.bridgeAmount ?? 0}
+                    onChange={(e) => patchPension({ bridgeAmount: Number(e.target.value) })}
+                    tooltip="Extra annual amount on top of the pension, paid from the start age until the bridge end age. Many DB plans stop this at 65, when CPP/OAS eligibility begins." />
+                <FinancialInput label={labels.bridgeEndAge} prefix="" value={pension?.bridgeEndAge ?? 65}
+                    onChange={(e) => patchPension({ bridgeEndAge: Number(e.target.value) })}
+                    disabled={!hasBridge} />
+            </div>
+        </>
+    );
+
+    // Non-collapsible means the caller has given this its own titled container
+    // (the wizard's pension step), so `labels.section` would just repeat that
+    // title directly beneath itself — the heading exists to label the toggle,
+    // and without a toggle there's nothing left for it to do.
+    if (!collapsible) {
+        return <div className="space-y-3">{fields}</div>;
+    }
+
     return (
         <div className="space-y-3">
             <button
                 onClick={() => setExpanded(!expanded)}
                 className="w-full flex items-center justify-between transition-colors"
             >
-                <span className="text-sm font-medium text-brand-600 hover:text-brand-700">{expanded ? '▾' : '▸'} Workplace Pension (DB)</span>
+                <span className="text-sm font-medium text-brand-600 hover:text-brand-700">{expanded ? '▾' : '▸'} {labels.section}</span>
                 {!expanded && <span className="text-xs text-slate-400 truncate ml-2">{summary}</span>}
             </button>
 
-            {expanded && (
-                <>
-                    <div className="grid grid-cols-2 gap-3">
-                        <FinancialInput label="Annual Amount" value={pension?.annualAmount ?? 0}
-                            onChange={(e) => patchPension({ annualAmount: Number(e.target.value) })}
-                            tooltip="Gross annual defined-benefit pension from a former employer, in today's dollars. Indexed pensions keep pace with inflation; non-indexed pensions pay a fixed dollar amount that loses purchasing power over time." />
-                        <FinancialInput label="Start Age" prefix="" value={pension?.startAge ?? person.retirementAge}
-                            onChange={(e) => patchPension({ startAge: Number(e.target.value) })} />
-                    </div>
-
-                    <Toggle
-                        checked={pension?.indexedToInflation ?? true}
-                        onChange={(val) => patchPension({ indexedToInflation: val })}
-                        label="Indexed to Inflation"
-                    />
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <FinancialInput label="Bridge Benefit" value={pension?.bridgeAmount ?? 0}
-                            onChange={(e) => patchPension({ bridgeAmount: Number(e.target.value) })}
-                            tooltip="Extra annual amount on top of the pension, paid from the start age until the bridge end age. Many DB plans stop this at 65, when CPP/OAS eligibility begins." />
-                        <FinancialInput label="Bridge End Age" prefix="" value={pension?.bridgeEndAge ?? 65}
-                            onChange={(e) => patchPension({ bridgeEndAge: Number(e.target.value) })}
-                            disabled={!hasBridge} />
-                    </div>
-                </>
-            )}
+            {expanded && fields}
         </div>
     );
 }

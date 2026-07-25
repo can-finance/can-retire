@@ -2,9 +2,16 @@ import { FinancialInput } from '../inputs/FinancialInput';
 import { Toggle } from '../ui/Toggle';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { SectionCard } from '../ui/SectionCard';
-import { ValidationBanner } from '../ui/ValidationBanner';
-import { simpleAnswersErrors, type SimpleAnswers } from './simplePathMapping';
+import { type SimpleAnswers } from './simplePathMapping';
 import { PROVINCES } from '../../constants/provinces';
+
+/**
+ * How many content steps the quick path has. Lives here, next to the component
+ * that actually defines them, so adding a step is one edit rather than two
+ * files kept in sync by hand (OnboardingFlow sizes its progress dots and its
+ * Next/Save switch off this).
+ */
+export const SIMPLE_STEP_COUNT = 2;
 
 interface SimplePathStepProps {
     /** 0 = "About your household", 1 = "Savings and spending" */
@@ -13,12 +20,11 @@ interface SimplePathStepProps {
     onChange: (partial: Partial<SimpleAnswers>) => void;
 }
 
+// Validation lives in OnboardingFlow, which renders one banner per step from the
+// same error set it gates Next on — see simpleAnswersErrors, which validates the
+// RAW answers (not the clamped preview) so a typed inconsistency surfaces instead
+// of being silently replaced by a clamp.
 export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps) {
-    // Validate the RAW answers (not the clamped preview) so a typed inconsistency
-    // — e.g. retirement age below current age — surfaces here instead of being
-    // silently replaced by a clamp. Clamps still apply at commit as a safety net.
-    const { person: personErrors, spouse: spouseErrors } = simpleAnswersErrors(answers);
-
     if (step === 0) {
         return (
             <SectionCard className="space-y-5">
@@ -28,8 +34,6 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
                         A few basics to get started. You can refine everything later on the dashboard.
                     </p>
                 </div>
-
-                <ValidationBanner errors={[...personErrors, ...spouseErrors]} />
 
                 <div className="grid grid-cols-2 gap-4">
                     <FinancialInput

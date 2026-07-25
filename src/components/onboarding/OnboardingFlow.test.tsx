@@ -154,8 +154,8 @@ describe('OnboardingFlow', () => {
         await user.click(spouseSwitch); // on -- restores the stash, not a fresh default
         expect(spouseSwitch).toHaveAttribute('aria-checked', 'true');
 
-        // about-you -> benefits-you -> accounts-you -> meltdown-you -> about-spouse
-        for (let i = 0; i < 4; i++) {
+        // about-you -> benefits-you -> pension-you -> accounts-you -> meltdown-you -> about-spouse
+        for (let i = 0; i < 5; i++) {
             await user.click(screen.getByRole('button', { name: 'Next' }));
         }
         expect(await screen.findByRole('heading', { name: 'About your spouse' })).toBeInTheDocument();
@@ -221,6 +221,159 @@ describe('OnboardingFlow', () => {
         await user.keyboard('{Escape}');
         expect(screen.getByRole('heading', { name: "You're set." })).toBeInTheDocument();
         expect(onDoneClosing).not.toHaveBeenCalled();
+    });
+
+    // The wizard used to warn and commit anyway: the banner lived inside individual
+    // field groups while nothing gated Next/Save, and neither path showed a banner
+    // on the step that owns the Save button.
+    describe('validation gating', () => {
+        it('quick path: Next refuses to advance past an inconsistency and says so', async () => {
+            const user = userEvent.setup();
+            render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '60');
+            await setFinancialInput(user, fieldFor('Retirement age'), '55');
+
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+
+            // Still on step 0, with an explicit reason rather than a dead button.
+            expect(screen.getByRole('heading', { name: 'About your household' })).toBeInTheDocument();
+            expect(screen.getByText(/Fix the item above to continue/)).toBeInTheDocument();
+            expect(screen.getByText("Retirement age can't be earlier than current age")).toBeInTheDocument();
+            expect(window.localStorage.getItem(SIM_KEY)).toBeNull();
+        });
+
+        it('quick path: fixing the value lets Next through again', async () => {
+            const user = userEvent.setup();
+            render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '60');
+            await setFinancialInput(user, fieldFor('Retirement age'), '55');
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+
+            await setFinancialInput(user, fieldFor('Retirement age'), '65');
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+
+            expect(await screen.findByRole('heading', { name: 'Savings and spending' })).toBeInTheDocument();
+        });
+
+        // Regression: gating each step on the whole person's errors trapped the
+        // user on "About you" — a current age past the default melt start age
+        // (55) tripped a check whose field lives on the meltdown step, which
+        // couldn't be reached because Next was blocked.
+        it('detailed path: a current age of 70 does not strand the user on "About you"', async () => {
+            const user = userEvent.setup();
+            render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '70');
+            await setFinancialInput(user, fieldFor('Retirement age'), '72');
+
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+            expect(await screen.findByRole('heading', { name: 'Government benefits' })).toBeInTheDocument();
+
+            // ...and the melt problem still surfaces, on the step that owns it.
+            await user.click(screen.getByRole('button', { name: 'Next' })); // pension
+            await user.click(screen.getByRole('button', { name: 'Next' })); // accounts
+            await user.click(screen.getByRole('button', { name: 'Next' })); // meltdown
+            expect(
+                await screen.findByRole('heading', { name: 'Early RRSP withdrawals (optional)' })
+            ).toBeInTheDocument();
+            expect(screen.getByText("RRSP melt can't start before current age")).toBeInTheDocument();
+
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+            expect(screen.getByText(/Fix the items? above to continue/)).toBeInTheDocument();
+
+            // The field is right here, so the user can actually get unstuck.
+            await setFinancialInput(user, fieldFor('Melt start age'), '71');
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+            expect(await screen.findByRole('heading', { name: 'Household spending' })).toBeInTheDocument();
+        });
+
+        it('detailed path: a broken age blocks Next on the step that owns the field', async () => {
+            const user = userEvent.setup();
+            render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+            await setFinancialInput(user, fieldFor('Life expectancy'), '40');
+
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+
+            expect(screen.getByRole('heading', { name: 'About you' })).toBeInTheDocument();
+            expect(screen.getByText(/Fix the items? above to continue/)).toBeInTheDocument();
+            expect(window.localStorage.getItem(SIM_KEY)).toBeNull();
+        });
+    });
+
+    it('detailed path: the workplace pension is collected and reaches the saved plan', async () => {
+        const user = userEvent.setup();
+        render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
+
+        await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+        // about-you -> benefits-you -> pension-you
+        await user.click(screen.getByRole('button', { name: 'Next' }));
+        await user.click(screen.getByRole('button', { name: 'Next' }));
+        expect(await screen.findByRole('heading', { name: 'Workplace pension' })).toBeInTheDocument();
+
+        await setFinancialInput(user, fieldFor('Annual pension amount'), '42000');
+        await setFinancialInput(user, fieldFor('Pension start age'), '62');
+
+        // accounts-you -> meltdown-you -> spending -> assumptions -> Save
+        for (let i = 0; i < 4; i++) {
+            await user.click(screen.getByRole('button', { name: 'Next' }));
+        }
+        await user.click(screen.getByRole('button', { name: 'Save' }));
+
+        const stored = JSON.parse(window.localStorage.getItem(SIM_KEY)!);
+        expect(stored.person.pension).toMatchObject({ annualAmount: 42000, startAge: 62 });
+    });
+
+    describe('discarding an edited draft', () => {
+        it('Escape asks before throwing away entered answers, and Keep editing cancels', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            render(<OnboardingFlow seed={freshSeed()} onDone={onDone} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '41');
+
+            await user.keyboard('{Escape}');
+            expect(await screen.findByRole('heading', { name: 'Discard your setup?' })).toBeInTheDocument();
+            expect(onDone).not.toHaveBeenCalled();
+
+            await user.click(screen.getByRole('button', { name: 'Keep editing' }));
+            expect(onDone).not.toHaveBeenCalled();
+            expect((fieldFor('Current age') as HTMLInputElement).value).toBe('41');
+        });
+
+        it('Discard leaves without writing the plan', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            render(<OnboardingFlow seed={freshSeed()} onDone={onDone} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '41');
+            await user.keyboard('{Escape}');
+            await user.click(await screen.findByRole('button', { name: 'Discard' }));
+
+            expect(onDone).toHaveBeenCalledWith(false);
+            expect(window.localStorage.getItem(SIM_KEY)).toBeNull();
+            expect(window.localStorage.getItem(ONBOARDING_KEY)).toBe('1');
+        });
+
+        it('an untouched wizard still skips instantly — nothing to protect', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            render(<OnboardingFlow seed={freshSeed()} onDone={onDone} onOpenPrivacy={vi.fn()} />);
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await user.keyboard('{Escape}');
+
+            expect(screen.queryByRole('heading', { name: 'Discard your setup?' })).not.toBeInTheDocument();
+            expect(onDone).toHaveBeenCalledWith(false);
+        });
     });
 
     it('locks body scroll while mounted and restores the previous overflow value on unmount', () => {

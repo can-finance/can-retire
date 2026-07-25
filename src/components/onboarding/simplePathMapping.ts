@@ -27,23 +27,32 @@ export interface SimpleAnswers {
 const sumNonReg = (person: Person): number =>
     person.nonRegisteredAccounts.reduce((acc, a) => acc + a.balance, 0);
 
-/** Pre-fill the quick form from the current draft (defaults on first run). */
+/**
+ * Pre-fill the quick form from the current draft (defaults on first run).
+ *
+ * When the draft has no spouse yet, this is a wizard about to COLLECT the
+ * spouse's real balances — it must not seed them with the sample spouse's
+ * invented money ($300k RRSP, etc.). Every money field defaults to 0 in that
+ * case, so an unedited field means "nothing entered" rather than "half a
+ * million dollars of assets the user never typed in". Age is the one
+ * exception: 0 would be nonsense, so it falls back to the sample spouse's
+ * default age purely as a plausible starting point, not as money.
+ */
 export function seedToSimpleAnswers(seed: SimulationInputs): SimpleAnswers {
-    const spouseDefaults = createDefaultPerson(true);
     return {
         age: seed.person.age,
         retirementAge: seed.person.retirementAge,
         currentIncome: seed.person.currentIncome,
         province: seed.province,
         includeSpouse: !!seed.spouse,
-        spouseAge: seed.spouse?.age ?? spouseDefaults.age,
-        spouseIncome: seed.spouse?.currentIncome ?? spouseDefaults.currentIncome,
+        spouseAge: seed.spouse?.age ?? createDefaultPerson(true).age,
+        spouseIncome: seed.spouse?.currentIncome ?? 0,
         rrsp: seed.person.rrsp.balance,
         tfsa: seed.person.tfsa.balance,
         nonReg: sumNonReg(seed.person),
-        spouseRrsp: seed.spouse?.rrsp.balance ?? spouseDefaults.rrsp.balance,
-        spouseTfsa: seed.spouse?.tfsa.balance ?? spouseDefaults.tfsa.balance,
-        spouseNonReg: seed.spouse ? sumNonReg(seed.spouse) : sumNonReg(spouseDefaults),
+        spouseRrsp: seed.spouse?.rrsp.balance ?? 0,
+        spouseTfsa: seed.spouse?.tfsa.balance ?? 0,
+        spouseNonReg: seed.spouse ? sumNonReg(seed.spouse) : 0,
         preRetirementSpend: seed.preRetirementSpend,
         postRetirementSpend: seed.postRetirementSpend,
     };

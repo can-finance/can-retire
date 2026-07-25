@@ -12,6 +12,14 @@ import { getValidationErrors } from '../../utils/personValidation';
 const ABOUT_LABELS = { age: 'Current Age', retirementAge: 'Retirement Age', lifeExpectancy: 'Life Expectancy' };
 const BENEFITS_LABELS = { cppStartAge: 'CPP Start Age', yearsContributed: 'Years Contributed', oasStartAge: 'OAS Start Age' };
 const MELTDOWN_LABELS = { meltStartAge: 'RRSP Melt Start Age', meltAmount: 'RRSP Melt Amount' };
+const PENSION_LABELS = {
+    section: 'Workplace Pension (DB)',
+    annualAmount: 'Annual Amount',
+    startAge: 'Start Age',
+    indexed: 'Indexed to Inflation',
+    bridgeAmount: 'Bridge Benefit',
+    bridgeEndAge: 'Bridge End Age',
+};
 
 interface PersonSectionProps {
     title: string;
@@ -158,7 +166,7 @@ export function PersonSection({
                     </HelpTooltip>
                 )}
 
-                <PensionFields person={person} onPatch={onPatch} />
+                <PensionFields person={person} onPatch={onPatch} labels={PENSION_LABELS} />
             </div>
         </CollapsibleSection>
     );

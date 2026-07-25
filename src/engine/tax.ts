@@ -3,7 +3,7 @@ import type { TaxRates, TaxBracket } from './types';
 // 2025 Tax Constants — Updated to confirmed 2025 CRA / provincial values
 export const TAX_CONSTANTS: TaxRates = {
     federalBrackets: [
-        { threshold: 0, rate: 0.145 },      // Effective 14.5% for 2025 (mid-year cut from 15% to 14%)
+        { threshold: 0, rate: 0.14 },       // 14% from 2026 on (2025 was a blended 14.5% — see FEDERAL_LOWEST_RATE)
         { threshold: 57375, rate: 0.205 },
         { threshold: 114750, rate: 0.26 },
         { threshold: 177882, rate: 0.29 },
@@ -102,10 +102,18 @@ export const TAX_CONSTANTS: TaxRates = {
         ]
     },
     basicPersonalAmount: {
-        federal: 16129, // 2025
+        federal: 16129, // 2025 full BPA, claimable up to the bottom of the 4th federal bracket
+        // Floor of the federal BPA taper: the amount that remains once net income
+        // reaches the bottom of the 5th (top) federal bracket. Between the two
+        // bracket thresholds the BPA slides linearly from `federal` down to this.
+        // Not a province — see federalBasicPersonalAmount().
+        federalMinimum: 14538, // 2025
         'AB': 22323,
         'BC': 12932,
-        'MB': 15780, // Frozen (not indexed), phases out above $200k income
+        // 2025 per CRA Form TD1MB. Manitoba resumed indexing for 2025 (the previous
+        // 15,780 here was the frozen 2024 amount). Its own phase-out above $200k of
+        // net income is NOT modelled.
+        'MB': 15969,
         'NB': 13396,
         'NL': 11067,
         'NS': 11744,
@@ -128,6 +136,152 @@ export const TAX_CONSTANTS: TaxRates = {
     }
 };
 
+// Lowest federal bracket rate. Non-refundable federal credits (BPA, pension
+// amount, age amount) are valued at this same rate by statute, so the two must
+// move together. 2025 was a blended 14.5% because of the mid-year cut from 15%;
+// every projected year from 2026 on is 14%.
+const FEDERAL_LOWEST_RATE = 0.14;
+
+// Quebec residents pay 16.5% less basic federal tax (the Quebec abatement), in
+// exchange for Quebec administering programs Ottawa runs elsewhere. Without it a
+// Quebec projection overstates total tax by roughly 8% every year.
+const QC_FEDERAL_ABATEMENT = 0.165;
+
+// ---------------------------------------------------------------------------
+// Age and pension-income credit amounts.
+//
+// `TaxRates` (src/engine/types.ts) has no slot for these, so they live here as
+// module tables rather than inside TAX_CONSTANTS — same file, same review
+// surface, still tax DATA kept out of the calculation bodies.
+//
+// Every figure below is a 2025 amount and is indexed by `inflationFactor` at the
+// point of use. Provincial figures come from each jurisdiction's 2025 CRA Form
+// TD1 (which carries the same amounts as the matching Form 428); Quebec's come
+// from Revenu Québec Form TP-1015.3-V (2025-01) and the Ministère des Finances
+// "Parameters of the personal income tax system for 2025", Table 3.
+// ---------------------------------------------------------------------------
+
+/** Federal pension income amount (T1 line 31400). */
+export const FEDERAL_PENSION_INCOME_AMOUNT = 2000;
+
+/**
+ * Provincial/territorial pension income amount. Generally SMALLER than the
+ * federal $2,000: most jurisdictions never indexed the $1,000 they started with,
+ * while AB, NS and ON index theirs and NU/YT simply mirror the federal amount.
+ * Quebec's equivalent is its "amount for retirement income", which is larger.
+ */
+export const PROVINCIAL_PENSION_INCOME_AMOUNT: Record<string, number> = {
+    'AB': 1719,
+    'BC': 1000,
+    'MB': 1000,
+    'NB': 1000,
+    'NL': 1000,
+    'NS': 1173,
+    'NT': 1000,
+    'NU': 2000,
+    'ON': 1762,
+    'PE': 1000,
+    'QC': 3470, // "amount for retirement income" (Schedule B) — not a $2,000-style pension amount
+    'SK': 1000,
+    'YT': 2000,
+};
+
+/** A max claim plus the net income above which it is clawed back. */
+export interface AgeAmount {
+    /** Maximum claim, before the income test. */
+    max: number;
+    /** Net income above which the claim is reduced. */
+    threshold: number;
+}
+
+/** Rate at which the age amount is clawed back above its threshold. */
+export const AGE_AMOUNT_REDUCTION_RATE = 0.15;
+
+/** Federal age amount (T1 line 30100): $9,028 reduced by 15% of income over $45,522. */
+export const FEDERAL_AGE_AMOUNT: AgeAmount = { max: 9028, threshold: 45522 };
+
+/**
+ * Provincial/territorial age amount. Each jurisdiction sets its own maximum and
+ * its own threshold; the 15% claw-back rate is the same everywhere (each TD1's
+ * published partial-claim range is exactly threshold -> threshold + max/0.15,
+ * which is what pins the rate down).
+ */
+export const PROVINCIAL_AGE_AMOUNT: Record<string, AgeAmount> = {
+    'AB': { max: 6221, threshold: 46308 },
+    'BC': { max: 5799, threshold: 43169 },
+    'MB': { max: 3728, threshold: 27749 },
+    'NB': { max: 6037, threshold: 44945 },
+    'NL': { max: 7064, threshold: 38712 },
+    'NS': { max: 5734, threshold: 30828 },
+    'NT': { max: 8727, threshold: 45522 },
+    'NU': { max: 12303, threshold: 45522 },
+    'ON': { max: 6223, threshold: 46330 },
+    'PE': { max: 6510, threshold: 36600 },
+    // QC max and threshold are confirmed (TP-1015.3-V 2025-01 / MFQ parameters).
+    // Two approximations remain, both in the taxpayer's favour: Quebec reduces on
+    // net FAMILY income (we only have the individual's), and its claw-back RATE is
+    // UNCONFIRMED, so AGE_AMOUNT_REDUCTION_RATE (the federal 15%) is used instead.
+    'QC': { max: 3906, threshold: 42090 },
+    'SK': { max: 5785, threshold: 43066 },
+    'YT': { max: 9028, threshold: 45522 },
+};
+
+/**
+ * Federal basic personal amount at a given income.
+ *
+ * The BPA is not flat: it is the full amount up to the bottom of the 4th federal
+ * bracket, slides linearly down to `federalMinimum` at the bottom of the 5th, and
+ * stays there above that. Treating it as flat over-credits high earners by up to
+ * `(federal - federalMinimum) x FEDERAL_LOWEST_RATE` a year.
+ *
+ * The taper endpoints ARE the 4th and 5th bracket thresholds by statute, so they
+ * are read straight off the bracket table rather than restated — that also means
+ * they index with inflation exactly as the brackets do.
+ */
+export function federalBasicPersonalAmount(
+    taxableIncome: number,
+    inflationFactor: number = 1.0,
+    taxRates: TaxRates = TAX_CONSTANTS
+): number {
+    const max = taxRates.basicPersonalAmount.federal * inflationFactor;
+    if (taxRates.federalBrackets.length < 5) return max;
+
+    const min = (taxRates.basicPersonalAmount.federalMinimum ?? taxRates.basicPersonalAmount.federal)
+        * inflationFactor;
+    const taperStart = taxRates.federalBrackets[3].threshold * inflationFactor;
+    const taperEnd = taxRates.federalBrackets[4].threshold * inflationFactor;
+
+    if (taxableIncome <= taperStart || taperEnd <= taperStart) return max;
+    if (taxableIncome >= taperEnd) return min;
+    return max - (max - min) * ((taxableIncome - taperStart) / (taperEnd - taperStart));
+}
+
+/** Age amount actually claimable at `income`, after the 15% income test. */
+function ageAmountClaim(income: number, amount: AgeAmount, inflationFactor: number): number {
+    const max = amount.max * inflationFactor;
+    const threshold = amount.threshold * inflationFactor;
+    return Math.max(0, max - Math.max(0, income - threshold) * AGE_AMOUNT_REDUCTION_RATE);
+}
+
+const PROVINCIAL_DTC_RATES: Record<string, number> = {
+    'AB': 0.0812, 'BC': 0.12, 'MB': 0.08, 'NB': 0.14,
+    'NL': 0.0635, 'NS': 0.0885, 'NT': 0.1155, 'NU': 0.0551,
+    'ON': 0.10, 'PE': 0.1063, 'QC': 0.117, 'SK': 0.11, 'YT': 0.1502
+};
+
+/**
+ * Federal + provincial income tax on an already-final taxable income.
+ *
+ * Federal and provincial tax are tracked SEPARATELY rather than as one running
+ * total, because non-refundable credits can't cross jurisdictions: excess
+ * federal credits don't reduce provincial tax, and each side floors at zero
+ * independently. Keeping them apart is also what makes the Quebec abatement
+ * expressible at all, since it applies to basic federal tax only.
+ *
+ * NOTE: this takes taxable income AFTER any OAS repayment deduction. Callers
+ * that need the OAS recovery tax should use `calculateTotalTax`, which handles
+ * the deduction and the recovery together.
+ */
 export function calculateIncomeTax(
     taxableIncome: number,
     province: string,
@@ -135,75 +289,187 @@ export function calculateIncomeTax(
     taxRates: TaxRates = TAX_CONSTANTS,
     age: number = 0,
     eligiblePensionIncome: number = 0, // ALREADY-QUALIFIED pension income; the CALLER applies the age rules
-    grossedUpDividends: number = 0 // Dividend income after 38% gross-up
+    grossedUpDividends: number = 0, // Dividend income after 38% gross-up
+    creditablePayroll: number = 0 // Base CPP/QPP + EI contributions (credit, not deduction)
 ): number {
-    const fedTax = calculateTieredTax(taxableIncome, taxRates.federalBrackets, inflationFactor);
-    const provTax = calculateTieredTax(taxableIncome, taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'], inflationFactor);
+    const provBrackets = taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'];
 
-    // Indexed Credits
-    // Note: credits use the statutory 15% lowest rate; the first bracket's 14.5% is the
-    // 2025 transitional rate (mid-year cut), so credit value is slightly overstated for 2025.
-    const fedCredits = (taxRates.basicPersonalAmount.federal * inflationFactor) * 0.15;
-    const provRate = (taxRates.provincialBrackets[province] || taxRates.provincialBrackets['ON'])[0].rate;
-    const provCredits = (taxRates.basicPersonalAmount[province] || taxRates.basicPersonalAmount['ON']) * inflationFactor * provRate;
+    let fed = calculateTieredTax(taxableIncome, taxRates.federalBrackets, inflationFactor);
+    let prov = calculateTieredTax(taxableIncome, provBrackets, inflationFactor);
 
-    let totalTax = (fedTax - fedCredits) + (provTax - provCredits);
+    // --- Basic personal amounts ---
+    fed -= federalBasicPersonalAmount(taxableIncome, inflationFactor, taxRates) * FEDERAL_LOWEST_RATE;
+    prov -= (taxRates.basicPersonalAmount[province] || taxRates.basicPersonalAmount['ON'])
+        * inflationFactor * provBrackets[0].rate;
 
-    // --- Pension Income Credit (Federal non-refundable) ---
+    // --- Pension Income Credit ---
     // Applies to whatever qualifying pension income the caller passes in. The CALLER is
     // responsible for the age rules: DB lifetime-pension income (incl. bridge) qualifies at
     // ANY age; RRIF/annuity income qualifies only at 65+. So this function does NOT re-gate on
     // age — a caller passing eligiblePensionIncome for a person under 65 is asserting that
     // amount has already qualified (e.g. DB pension, or split DB income in a recipient's hands).
     // Never includes ordinary RRSP withdrawals, employment income, CPP, OAS, or investment income.
+    // Federal and provincial pension amounts are capped SEPARATELY: the provincial
+    // cap is its own (usually smaller) figure, and each side is credited at its own
+    // lowest bracket rate.
     if (eligiblePensionIncome > 0) {
-        const maxPensionCredit = 2000 * inflationFactor;
-        const eligibleAmount = Math.min(eligiblePensionIncome, maxPensionCredit);
-        // Federal: 15% of eligible amount
-        totalTax -= eligibleAmount * 0.15;
-        // Provincial: ~5% approximation (varies by province)
-        totalTax -= eligibleAmount * 0.05;
+        const fedClaim = Math.min(eligiblePensionIncome, FEDERAL_PENSION_INCOME_AMOUNT * inflationFactor);
+        fed -= fedClaim * FEDERAL_LOWEST_RATE;
+
+        const provMax = (PROVINCIAL_PENSION_INCOME_AMOUNT[province] ?? FEDERAL_PENSION_INCOME_AMOUNT)
+            * inflationFactor;
+        prov -= Math.min(eligiblePensionIncome, provMax) * provBrackets[0].rate;
     }
 
     // --- Dividend Tax Credit ---
-    // For eligible Canadian dividends grossed up by 38%
-    // Federal DTC: ~15.02% of grossed-up amount
-    // Provincial DTC: varies by province (using simplified rates)
+    // Eligible Canadian dividends, grossed up by 38%. The federal 15.0198% is a fixed
+    // statutory fraction of the grossed-up amount — it does NOT track the lowest bracket
+    // rate, so it stays put when FEDERAL_LOWEST_RATE moves.
     if (grossedUpDividends > 0) {
-        const federalDTC = grossedUpDividends * 0.1502;
-        const provincialDTCRates: Record<string, number> = {
-            'AB': 0.0812, 'BC': 0.12, 'MB': 0.08, 'NB': 0.14,
-            'NL': 0.0635, 'NS': 0.0885, 'NT': 0.1155, 'NU': 0.0551,
-            'ON': 0.10, 'PE': 0.1063, 'QC': 0.117, 'SK': 0.11, 'YT': 0.1502
-        };
-        const provincialDTC = grossedUpDividends * (provincialDTCRates[province] || 0.10);
-        totalTax -= (federalDTC + provincialDTC);
+        fed -= grossedUpDividends * 0.1502;
+        prov -= grossedUpDividends * (PROVINCIAL_DTC_RATES[province] ?? 0.10);
     }
 
-    // Age Amount (Federal) — 2025: Max $9,028, reduced by 15% of income > $45,522
+    // --- Age Amount ---
+    // Each jurisdiction runs its OWN income test on its OWN maximum, so the federal
+    // and provincial claimable amounts differ at the same income — they cannot share
+    // one `claimable` figure.
     if (age >= 65) {
-        const maxClaim = 9028 * inflationFactor;
-        const threshold = 45522 * inflationFactor;
+        fed -= ageAmountClaim(taxableIncome, FEDERAL_AGE_AMOUNT, inflationFactor) * FEDERAL_LOWEST_RATE;
 
-        // Reduction is 15% of net income exceeding threshold
-        const reduction = Math.max(0, (taxableIncome - threshold) * 0.15);
-        const claimable = Math.max(0, maxClaim - reduction);
-
-        // Federal credit value
-        totalTax -= claimable * 0.15;
-
-        // Provincial Age Amount (Simplified Approx)
-        // Adding ~5% impact for province
-        totalTax -= claimable * 0.05;
+        const provAge = PROVINCIAL_AGE_AMOUNT[province] ?? FEDERAL_AGE_AMOUNT;
+        prov -= ageAmountClaim(taxableIncome, provAge, inflationFactor) * provBrackets[0].rate;
     }
 
-    // Ontario Health Premium + Surtax (neither is indexed)
+    // --- CPP/QPP base + EI contributions ---
+    // A non-refundable credit at each jurisdiction's lowest rate. The enhanced
+    // slice is handled as a deduction by the caller, not here.
+    if (creditablePayroll > 0) {
+        fed -= creditablePayroll * FEDERAL_LOWEST_RATE;
+        prov -= creditablePayroll * provBrackets[0].rate;
+    }
+
+    // --- Quebec abatement --- 16.5% of basic federal tax, after federal credits.
+    if (province === 'QC') {
+        fed -= Math.max(0, fed) * QC_FEDERAL_ABATEMENT;
+    }
+
+    // Credits are non-refundable per jurisdiction: neither side can go below zero,
+    // and neither can spill into the other.
+    const provPayable = Math.max(0, prov);
+    let total = Math.max(0, fed) + provPayable;
+
     if (province === 'ON') {
-        totalTax += calculateOHP(taxableIncome);
-        totalTax += calculateOntarioSurtax(provTax - provCredits, inflationFactor);
+        // Surtax applies to Ontario tax remaining AFTER non-refundable credits, so a
+        // filer whose credits wipe out provincial tax owes no surtax.
+        total += calculateOntarioSurtax(provPayable, inflationFactor);
+        // The Health Premium is a separate levy, not reduced by tax credits, so it is
+        // added after the zero floor rather than before it.
+        total += calculateOHP(taxableIncome);
     }
 
-    return Math.max(0, totalTax);
+    return total;
+}
+
+export interface TaxBreakdown {
+    /** Federal + provincial income tax, after the OAS repayment deduction. */
+    incomeTax: number;
+    /** OAS recovery tax (the clawback itself). */
+    oasRecovery: number;
+    total: number;
+}
+
+/**
+ * The full tax bill for a year: income tax plus OAS recovery tax, computed the
+ * way CRA stacks them.
+ *
+ * The OAS recovery is calculated on net income BEFORE the repayment (line
+ * 23400), then DEDUCTED in arriving at net income (line 23500 -> 23600), so the
+ * clawed-back OAS is not also taxed as ordinary income. Computing tax on the
+ * undeducted figure and adding the recovery on top — which is what every call
+ * site used to do by hand — double-taxes that slice, by up to ~$4,200/yr for a
+ * retiree deep in the clawback range.
+ *
+ * Use this anywhere both pieces are needed; `calculateIncomeTax` alone is only
+ * correct when there is no OAS in the picture.
+ */
+export function calculateTotalTax(
+    netIncomeBeforeRepayment: number,
+    oasReceived: number,
+    province: string,
+    inflationFactor: number = 1.0,
+    age: number = 0,
+    eligiblePensionIncome: number = 0,
+    grossedUpDividends: number = 0,
+    creditablePayroll: number = 0
+): TaxBreakdown {
+    const oasRecovery = calculateOASClawback(netIncomeBeforeRepayment, oasReceived, inflationFactor);
+    const taxableIncome = Math.max(0, netIncomeBeforeRepayment - oasRecovery);
+    const incomeTax = calculateIncomeTax(
+        taxableIncome, province, inflationFactor, undefined,
+        age, eligiblePensionIncome, grossedUpDividends, creditablePayroll
+    );
+    return { incomeTax, oasRecovery, total: incomeTax + oasRecovery };
+}
+
+export interface PayrollContributions {
+    /** Total cash withheld — never reaches the household's pocket. */
+    total: number;
+    /**
+     * Portion deductible from income: the ENHANCED slice of CPP/QPP (1%) plus the
+     * whole second-tier CPP2/QPP2 band. Comes off taxable income outright.
+     */
+    deductible: number;
+    /**
+     * Portion relieved by a non-refundable credit at each jurisdiction's lowest
+     * rate: the BASE slice of CPP/QPP plus EI. Not a deduction — worth only the
+     * bottom-bracket rate however much the filer earns.
+     */
+    creditable: number;
+}
+
+/**
+ * Mandatory employee payroll contributions on employment income: CPP (or QPP in
+ * Quebec) including the second-tier CPP2/QPP2 band, plus EI at the Quebec-reduced
+ * rate where applicable. These are real cash out the door before anything can be
+ * spent or saved.
+ *
+ * The split matters because the two halves get different tax treatment. When CPP
+ * was enhanced starting 2019, the extra contributions were made DEDUCTIBLE while
+ * the original base contributions kept their non-refundable credit — so the same
+ * paycheque deduction is relieved two different ways.
+ *
+ * NOT modelled: Quebec's QPIP premium.
+ */
+export function calculatePayrollContributions(
+    employmentIncome: number,
+    province: string,
+    inflationFactor: number = 1.0,
+    taxRates: TaxRates = TAX_CONSTANTS
+): PayrollContributions {
+    if (employmentIncome <= 0) return { total: 0, deductible: 0, creditable: 0 };
+
+    const isQC = province === 'QC';
+    const ympe = taxRates.cpp.maxPensionableEarnings * inflationFactor;
+    const exemption = taxRates.cpp.basicExemption * inflationFactor;
+    const yampe = 81_300 * inflationFactor; // 2025 second earnings ceiling
+    const mie = 65_700 * inflationFactor;   // 2025 EI maximum insurable earnings
+
+    // CPP 5.95% = 4.95% base (credit) + 1.00% enhanced (deduction).
+    // QPP 6.40% = 5.40% base (credit) + 1.00% enhanced (deduction).
+    const baseRate = isQC ? 0.054 : 0.0495;
+    const ENHANCED_RATE = 0.01;
+    const pensionable = Math.max(0, Math.min(employmentIncome, ympe) - exemption);
+    // The second tier is entirely enhanced, so all of it is deductible.
+    const tier2 = Math.max(0, Math.min(employmentIncome, yampe) - ympe) * 0.04;
+
+    // Quebec's EI rate is lower because QPIP covers parental benefits separately.
+    const eiRate = isQC ? 0.0131 : 0.0164;
+    const ei = Math.min(employmentIncome, mie) * eiRate;
+
+    const deductible = pensionable * ENHANCED_RATE + tier2;
+    const creditable = pensionable * baseRate + ei;
+    return { total: deductible + creditable, deductible, creditable };
 }
 
 function calculateTieredTax(income: number, brackets: TaxBracket[], inflationFactor: number = 1.0): number {
@@ -223,14 +489,23 @@ function calculateTieredTax(income: number, brackets: TaxBracket[], inflationFac
     return accumulatedTax;
 }
 
-// Ontario Health Premium — thresholds and amounts are NOT indexed.
-// These bands have been frozen since 2004 and are applied to nominal income.
-function calculateOHP(income: number): number {
-    if (income <= 20000) return 0;
-    if (income <= 36000) return 300;
-    if (income <= 48000) return 450;
-    if (income <= 72000) return 600;
-    if (income <= 200000) return 750;
+/**
+ * Ontario Health Premium — thresholds and amounts are NOT indexed. These bands
+ * have been frozen since 2004 and are applied to nominal income.
+ *
+ * The premium PHASES IN within each band rather than jumping to the band maximum
+ * at its floor: inside a band you pay the previous band's ceiling plus a marginal
+ * rate on income above the band floor, until that band's own ceiling is reached.
+ * Charging the maximum from the floor overstated the premium by up to $294 at the
+ * $20,000 edge (CRA charges $6 at $20,100, not $300).
+ */
+export function calculateOHP(income: number): number {
+    if (income <= 20_000) return 0;
+    if (income <= 25_000) return Math.min(300, 0.06 * (income - 20_000));
+    if (income <= 36_000) return Math.min(450, 300 + 0.06 * (income - 25_000));
+    if (income <= 48_000) return Math.min(600, 450 + 0.25 * (income - 36_000));
+    if (income <= 72_000) return Math.min(750, 600 + 0.25 * (income - 48_000));
+    if (income <= 200_000) return Math.min(900, 750 + 0.25 * (income - 72_000));
     return 900;
 }
 
@@ -312,16 +587,17 @@ export function calculateOptimalSplit(
     const ownQualified = (per: SplitPerson): number =>
         per.dbPensionIncome + (per.age >= 65 ? per.rrifIncome : 0);
 
-    // Calculate baseline taxes (no splitting)
-    const p1BaseTax = calculateIncomeTax(
-        person1.taxableIncome, province, inflationFactor, undefined,
+    // Calculate baseline taxes (no splitting). `taxableIncome` here is net income
+    // BEFORE any OAS repayment — calculateTotalTax applies that deduction itself.
+    const p1BaseTax = calculateTotalTax(
+        person1.taxableIncome, person1.oasIncome, province, inflationFactor,
         person1.age, ownQualified(person1), person1.grossedUpDividends
-    ) + calculateOASClawback(person1.taxableIncome, person1.oasIncome, inflationFactor);
+    ).total;
 
-    const p2BaseTax = calculateIncomeTax(
-        person2.taxableIncome, province, inflationFactor, undefined,
+    const p2BaseTax = calculateTotalTax(
+        person2.taxableIncome, person2.oasIncome, province, inflationFactor,
         person2.age, ownQualified(person2), person2.grossedUpDividends
-    ) + calculateOASClawback(person2.taxableIncome, person2.oasIncome, inflationFactor);
+    ).total;
 
     const baselineCombinedTax = p1BaseTax + p2BaseTax;
 
@@ -343,15 +619,15 @@ export function calculateOptimalSplit(
         const toNewTaxable = toPerson.taxableIncome + amount;
         const toNewQualified = ownQualified(toPerson) + dbPortion + (toPerson.age >= 65 ? rrifPortion : 0);
 
-        const fromTax = calculateIncomeTax(
-            fromNewTaxable, province, inflationFactor, undefined,
+        const fromTax = calculateTotalTax(
+            fromNewTaxable, fromPerson.oasIncome, province, inflationFactor,
             fromPerson.age, fromNewQualified, fromPerson.grossedUpDividends
-        ) + calculateOASClawback(fromNewTaxable, fromPerson.oasIncome, inflationFactor);
+        ).total;
 
-        const toTax = calculateIncomeTax(
-            toNewTaxable, province, inflationFactor, undefined,
+        const toTax = calculateTotalTax(
+            toNewTaxable, toPerson.oasIncome, province, inflationFactor,
             toPerson.age, toNewQualified, toPerson.grossedUpDividends
-        ) + calculateOASClawback(toNewTaxable, toPerson.oasIncome, inflationFactor);
+        ).total;
 
         return { fromTax, toTax };
     };

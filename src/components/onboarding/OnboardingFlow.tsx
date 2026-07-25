@@ -2,13 +2,25 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Person, SimulationInputs } from '../../engine/types';
 import { BrandLockup } from '../layout/AppLayout';
 import { SectionCard } from '../ui/SectionCard';
+import { Dialog } from '../ui/Dialog';
+import { ValidationBanner } from '../ui/ValidationBanner';
 import { commitOnboardingInputs, hasSavedPlan, markOnboardingDone } from '../../utils/onboarding';
 import { createDefaultPerson } from '../../utils/inputSanitizer';
 import { OnboardingIntro } from './OnboardingIntro';
 import { OnboardingClosing } from './OnboardingClosing';
-import { SimplePathStep } from './SimplePathStep';
-import { seedToSimpleAnswers, mergeSimpleAnswers, type SimpleAnswers } from './simplePathMapping';
+import { SimplePathStep, SIMPLE_STEP_COUNT } from './SimplePathStep';
+import {
+    seedToSimpleAnswers,
+    mergeSimpleAnswers,
+    simpleAnswersErrors,
+    type SimpleAnswers,
+} from './simplePathMapping';
 import { buildDetailedSteps } from './detailedSteps';
+
+const dialogSecondaryBtn =
+    'px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors';
+const dialogDestructiveBtn =
+    'px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors';
 
 interface OnboardingFlowProps {
     seed: SimulationInputs;
@@ -19,8 +31,6 @@ interface OnboardingFlowProps {
 }
 
 type Screen = 'intro' | 'simple' | 'detailed' | 'closing';
-
-const SIMPLE_STEP_COUNT = 2; // S1 + S2
 
 export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowProps) {
     const [screen, setScreen] = useState<Screen>('intro');
@@ -46,6 +56,17 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
     // written" for close purposes (App only remounts Dashboard — bumping its
     // epoch — when the close is committed).
     const [hasCommitted, setHasCommitted] = useState(false);
+
+    // True once the user has actually entered something in either path. Gates the
+    // discard confirmation — an untouched wizard has nothing worth protecting, so
+    // Escape/Skip stay instant there.
+    const [dirty, setDirty] = useState(false);
+    const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+    // Set when Next/Save was pressed but validation refused. Purely for the
+    // "fix the highlighted items" nudge — the banner itself renders off the
+    // error set, not off this.
+    const [blocked, setBlocked] = useState(false);
 
     // Lock document scroll while the overlay is mounted — `inert` on the
     // background tree blocks its pointer/focus but not wheel/touch scroll-chaining,
@@ -77,12 +98,24 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
     // fresh default. Mirrors the quick path's non-destructive spouse merge.
     const [spouseStash, setSpouseStash] = useState<Person | undefined>(seed.spouse);
     const toggleSpouse = (on: boolean) => {
+        setDirty(true);
         if (on) {
             setDraft((cur) => ({ ...cur, spouse: spouseStash ?? createDefaultPerson(true) }));
         } else {
             if (draft.spouse) setSpouseStash(draft.spouse);
             setDraft((cur) => ({ ...cur, spouse: undefined }));
         }
+    };
+
+    // Every edit routes through these so `dirty` can't fall out of sync with what
+    // the user has actually typed.
+    const editDraft: typeof setDraft = (update) => {
+        setDirty(true);
+        setDraft(update);
+    };
+    const editAnswers = (partial: Partial<SimpleAnswers>) => {
+        setDirty(true);
+        setAnswers((a) => ({ ...a, ...partial }));
     };
 
     // Cheap to rebuild each render; buildDetailedSteps only reads `draft` to shape
@@ -124,22 +157,37 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
         onDone(hasCommitted);
     }, [onDone, hasCommitted]);
 
+    // Skip/cancel, guarded. Discarding an untouched wizard costs nothing, so that
+    // stays instant; once the user has actually entered something, throwing away
+    // a Full setup (up to twelve steps) to one stray keypress is too cheap, so we
+    // confirm first. Already-committed drafts need no guard — the data is saved.
+    const requestSkip = useCallback(() => {
+        if (!dirty || hasCommitted) {
+            skip();
+            return;
+        }
+        setConfirmDiscard(true);
+    }, [dirty, hasCommitted, skip]);
+
     // Escape mirrors the header's skip/cancel button. The closing screen hides
     // that button (Save already committed, or there's nothing left to skip), so
     // Escape does nothing there rather than guessing which action was meant.
     // Note: this always fires, even mid-edit in a text field — a FinancialInput
-    // commits on blur/Enter, so an in-flight keystroke can be lost when Escape
-    // closes the wizard. Acceptable: standard modal behavior, and the draft
-    // itself is never the persisted plan until Save runs.
+    // commits on blur/Enter, so an in-flight keystroke can be lost. The draft is
+    // never the persisted plan until Save runs, and the confirmation above now
+    // catches the case where that draft holds real work.
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
             if (screen === 'closing') return;
-            skip();
+            // While the confirmation is up it owns Escape — otherwise dismissing
+            // it would immediately re-open it.
+            if (confirmDiscard) return;
+            requestSkip();
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [screen, skip]);
+    }, [screen, confirmDiscard, requestSkip]);
 
     // --- navigation ----------------------------------------------------------
 
@@ -156,21 +204,80 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
     const lastContentIndex = () =>
         path === 'simple' ? SIMPLE_STEP_COUNT - 1 : detailedSteps.length - 1;
 
+    // --- validation ----------------------------------------------------------
+    // One error set per step, used for BOTH the banner and the Next/Save gate, so
+    // the wizard can never block on something it didn't show — or warn about
+    // something that doesn't block. Previously the banners lived inside individual
+    // field groups while the gate didn't exist at all, so several steps (including
+    // every step that owns the Save button) committed in silence.
+
+    const quickErrors = (): string[] => {
+        const { person, spouse } = simpleAnswersErrors(answers);
+        return [...person, ...spouse];
+    };
+
+    /** Every field the quick validator checks lives on quick step 0. */
+    const errorsAtStep = (index: number): string[] =>
+        path === 'simple'
+            ? (index === 0 ? quickErrors() : [])
+            : (detailedSteps[index]?.errors(draft) ?? []);
+
+    /**
+     * First step still holding an inconsistency, or -1 when the whole draft is
+     * clean. Save consults this rather than just the current step, so values that
+     * arrived with the seed — a relaunch on an already-invalid saved plan — can't
+     * slip through steps the user never visited.
+     */
+    const firstInvalidStep = (): number => {
+        if (path === 'simple') return quickErrors().length > 0 ? 0 : -1;
+        return detailedSteps.findIndex((s) => s.errors(draft).length > 0);
+    };
+
+    const currentStepErrors = errorsAtStep(safeStepIndex);
+    const isLastContentStep = safeStepIndex >= lastContentIndex();
+    const pendingInvalidStep = firstInvalidStep();
+
+    // The commit step shows whatever will block Save, even when it belongs to an
+    // earlier step; every other step shows only its own.
+    const bannerErrors =
+        currentStepErrors.length > 0
+            ? currentStepErrors
+            : isLastContentStep && pendingInvalidStep >= 0
+              ? errorsAtStep(pendingInvalidStep)
+              : [];
+
     const goNext = () => {
-        const last = lastContentIndex();
-        if (safeStepIndex < last) {
+        // Never carry a broken value forward — it gets fixed here, with the
+        // offending field on screen, instead of stranding the user on a later
+        // step with no way to reach it.
+        if (currentStepErrors.length > 0) {
+            setBlocked(true);
+            return;
+        }
+        if (!isLastContentStep) {
+            setBlocked(false);
             setStepIndex(safeStepIndex + 1);
             return;
         }
-        // Last content step's button is "Save" — commit now (both paths), so the
-        // closing screen that follows is purely a confirmation. Re-entering this
-        // step (Back, then Save again) simply re-commits; that's fine.
+        // Last content step's button is "Save". Re-check the whole draft first and
+        // jump to the offending step, so a seeded inconsistency can't be committed
+        // and the user lands where they can actually fix it.
+        if (pendingInvalidStep >= 0) {
+            setBlocked(true);
+            setStepIndex(pendingInvalidStep);
+            return;
+        }
+        // Commit now (both paths), so the closing screen that follows is purely a
+        // confirmation. Re-entering this step (Back, then Save again) simply
+        // re-commits; that's fine.
+        setBlocked(false);
         commitOnboardingInputs(finalInputs());
         setHasCommitted(true);
         setScreen('closing');
     };
 
     const goBack = () => {
+        setBlocked(false);
         if (screen === 'closing') {
             setScreen(path === 'simple' ? 'simple' : 'detailed');
             setStepIndex(lastContentIndex());
@@ -204,7 +311,7 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
                 isRelaunch={isRelaunch}
                 onSimple={startSimple}
                 onDetailed={startDetailed}
-                onSkip={skip}
+                onSkip={requestSkip}
             />
         );
     } else if (screen === 'simple') {
@@ -212,14 +319,14 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
             <SimplePathStep
                 step={safeStepIndex === 0 ? 0 : 1}
                 answers={answers}
-                onChange={(partial) => setAnswers((a) => ({ ...a, ...partial }))}
+                onChange={editAnswers}
             />
         );
     } else if (screen === 'detailed') {
         const stepDef = detailedSteps[safeStepIndex];
         content = stepDef ? (
             <SectionForStep title={stepDef.title} blurb={stepDef.blurb}>
-                {stepDef.render(draft, setDraft)}
+                {stepDef.render(draft, editDraft)}
             </SectionForStep>
         ) : null;
     } else {
@@ -257,7 +364,7 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
                     </BrandLockup>
                     {screen !== 'closing' && (
                         <button
-                            onClick={skip}
+                            onClick={requestSkip}
                             className="text-sm font-medium text-slate-700 hover:text-slate-900 transition-colors"
                         >
                             {isRelaunch ? 'Cancel — keep my current numbers' : 'Skip setup'}
@@ -291,26 +398,75 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
                         </div>
                     )}
 
+                    {/* One banner per step, driven by the same errors that gate
+                        Next/Save. Sits above the step body so it's the first thing
+                        read, and is present on EVERY step — including the one that
+                        commits. */}
+                    {showFooter && bannerErrors.length > 0 && (
+                        <div className="mb-4">
+                            <ValidationBanner errors={bannerErrors} />
+                        </div>
+                    )}
+
                     {content}
 
                     {showFooter && (
-                        <div className="flex items-center justify-between gap-3 mt-6">
-                            <button
-                                onClick={goBack}
-                                className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-200/60 transition-colors"
-                            >
-                                Back
-                            </button>
-                            <button
-                                onClick={goNext}
-                                className="px-6 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors"
-                            >
-                                {safeStepIndex >= lastContentIndex() ? 'Save' : 'Next'}
-                            </button>
+                        <div className="mt-6 space-y-2">
+                            {blocked && bannerErrors.length > 0 && (
+                                <p className="text-xs font-medium text-amber-700 text-right">
+                                    Fix the {bannerErrors.length === 1 ? 'item' : 'items'} above to continue.
+                                </p>
+                            )}
+                            <div className="flex items-center justify-between gap-3">
+                                <button
+                                    onClick={goBack}
+                                    className="px-4 py-2.5 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-200/60 transition-colors"
+                                >
+                                    Back
+                                </button>
+                                <button
+                                    onClick={goNext}
+                                    className="px-6 py-2.5 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors"
+                                >
+                                    {isLastContentStep ? 'Save' : 'Next'}
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
             </main>
+
+            {/* Nested inside the z-[200] overlay, so the Dialog's own z-[150]
+                resolves within this stacking context and lands on top of the
+                wizard rather than behind it. */}
+            <Dialog
+                open={confirmDiscard}
+                onClose={() => setConfirmDiscard(false)}
+                title="Discard your setup?"
+                maxWidth="max-w-sm"
+                footer={
+                    <>
+                        <button type="button" data-autofocus onClick={() => setConfirmDiscard(false)} className={dialogSecondaryBtn}>
+                            Keep editing
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setConfirmDiscard(false); skip(); }}
+                            className={dialogDestructiveBtn}
+                        >
+                            Discard
+                        </button>
+                    </>
+                }
+            >
+                <p>
+                    What you've entered here hasn't been saved.{' '}
+                    {isRelaunch
+                        ? 'Your plan will keep its current numbers.'
+                        : 'The dashboard will open with sample numbers instead.'}{' '}
+                    You can run Guided Setup again at any time.
+                </p>
+            </Dialog>
         </div>
     );
 }

@@ -1,6 +1,6 @@
 
 import type { Person, NonRegisteredAccount, NonRegMix, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
-import { calculateIncomeTax, calculateOASClawback, calculateOptimalSplit } from './tax';
+import { calculateTotalTax, calculatePayrollContributions, calculateOptimalSplit } from './tax';
 import type { SplitPerson } from './tax';
 import { calculateEstimatedCPP, calculateOAS } from './cpp';
 
@@ -92,6 +92,9 @@ interface PersonAnnualBase {
     foreignDivIncome: number; // Foreign dividends: fully taxable, no gross-up or credit
     employmentIncome: number;
     investmentIncomeNet: number; // Interest + Dividends (After Tax share approx)
+    payrollContributions: number; // Employee CPP/QPP + EI withheld from employment income
+    payrollCreditable: number;    // Base CPP/QPP + EI — relieved by a credit, not a deduction
+    payrollDeductible: number;    // Enhanced CPP/QPP + CPP2 — comes off taxable income
     baseNetCash: number; // Employment + CPP/OAS + RRIF/Melt + Invest (Net)
     turnoverRealizedGains: number; // Gains realized by fund turnover this year (no cash; ACB bumped)
 }
@@ -124,11 +127,8 @@ function solveGrossWithdrawal(
 
         // Calculate tax with this specific add-on
         const newTaxable = currentTaxable + addedTaxable;
-        const newClawback = calculateOASClawback(newTaxable, baseOAS, inflationFactor);
-        const newTax = calculateIncomeTax(newTaxable, province, inflationFactor, undefined, age) + newClawback;
-
-        const originalClawback = calculateOASClawback(currentTaxable, baseOAS, inflationFactor);
-        const originalTax = calculateIncomeTax(currentTaxable, province, inflationFactor, undefined, age) + originalClawback;
+        const newTax = calculateTotalTax(newTaxable, baseOAS, province, inflationFactor, age).total;
+        const originalTax = calculateTotalTax(currentTaxable, baseOAS, province, inflationFactor, age).total;
 
         const marginalTax = newTax - originalTax;
         const netResult = mid - marginalTax;
@@ -147,8 +147,8 @@ function solveGrossWithdrawal(
     // Fallback if not perfectly converged
     const gross = (low + high) / 2;
     const newTaxable = currentTaxable + gross;
-    const marginalTax = (calculateIncomeTax(newTaxable, province, inflationFactor, undefined, age) + calculateOASClawback(newTaxable, baseOAS, inflationFactor)) -
-        (calculateIncomeTax(currentTaxable, province, inflationFactor, undefined, age) + calculateOASClawback(currentTaxable, baseOAS, inflationFactor));
+    const marginalTax = calculateTotalTax(newTaxable, baseOAS, province, inflationFactor, age).total
+        - calculateTotalTax(currentTaxable, baseOAS, province, inflationFactor, age).total;
 
     return { gross, tax: marginalTax };
 }
@@ -271,24 +271,36 @@ function simulatePersonBaseYear(
     // Employment
     const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
 
+    // Mandatory CPP/QPP + EI withheld on employment income.
+    const payrollForTax = calculatePayrollContributions(employmentIncome, province, inflationFactor);
+
     // Calculate Base Tax
     // Qualifying pension income for the $2,000 credit: DB pension at any age, plus RRIF
     // withdrawals only at 65+. The voluntary RRSP melt is an ordinary RRSP withdrawal and
     // does NOT qualify. (calculateIncomeTax no longer age-gates; the caller applies the rules.)
     const eligiblePensionIncome = pensionIncome + (age >= 65 ? rrifWithdrawal : 0);
-    const baseTaxable = employmentIncome + cppIncome + oasIncome + pensionIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp + foreignDivIncome;
+    // The enhanced CPP/QPP slice (and all of CPP2) is deductible, so it never enters
+    // taxable income in the first place.
+    const baseTaxable = Math.max(0, employmentIncome + cppIncome + oasIncome + pensionIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divGrossUp + foreignDivIncome - payrollForTax.deductible);
     // Turnover gains are taxed in the base year (so the deficit funds their tax) but
     // kept OUT of the returned taxableIncome — downstream withdrawal solvers add
     // calculateTaxableCapitalGains(realizedGains) themselves, seeded with these gains.
     const baseTaxableWithTurnover = baseTaxable + calculateTaxableCapitalGains(turnoverRealizedGains);
-    const oasRecovery = calculateOASClawback(baseTaxableWithTurnover, oasIncome, inflationFactor);
-    const totalTax = calculateIncomeTax(baseTaxableWithTurnover, province, inflationFactor, undefined, age, eligiblePensionIncome, divGrossUp) + oasRecovery;
+    const totalTax = calculateTotalTax(
+        baseTaxableWithTurnover, oasIncome, province, inflationFactor, age,
+        eligiblePensionIncome, divGrossUp, payrollForTax.creditable
+    ).total;
+
+    // Mandatory CPP/QPP + EI on employment income — cash out the door before any of
+    // it can be spent or saved. The enhanced slice is deducted from income above;
+    // the base slice comes back as a credit inside the tax call.
+    const payrollContributions = payrollForTax.total;
 
     // Net Cash Calculation
     // Total Cash In = Emp + CPP + OAS + Pension + RRIF + Melt + Int + Div
     // Note: Div is actual cash, not gross up. Turnover distributions are reinvested (no cash).
     const totalCashIn = employmentIncome + cppIncome + oasIncome + pensionIncome + rrifWithdrawal + voluntaryRRSPWithdrawal + interestIncome + divIncome + foreignDivIncome;
-    const baseNetCash = totalCashIn - totalTax;
+    const baseNetCash = totalCashIn - totalTax - payrollContributions;
 
     return {
         taxableIncome: baseTaxable,
@@ -302,6 +314,9 @@ function simulatePersonBaseYear(
         divIncome,
         foreignDivIncome,
         employmentIncome,
+        payrollContributions,
+        payrollCreditable: payrollForTax.creditable,
+        payrollDeductible: payrollForTax.deductible,
         investmentIncomeNet: (interestIncome + divIncome + foreignDivIncome), // This is gross investment cash, we deduct tax globally later
         baseNetCash,
         turnoverRealizedGains
@@ -413,6 +428,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         let reinvestedTFSA = 0;
         let reinvestedRRSP = 0;
         let reinvestedNonReg = 0;
+        // Per-person share of reinvestedRRSP. An RRSP contribution is deductible, so
+        // each person's own contribution has to reduce their own taxable income —
+        // the household total can't do that.
+        let pRrspContribution = 0;
+        let sRrspContribution = 0;
 
         // Spending the household could not fund this year (all accounts drained)
         let shortfall = 0;
@@ -462,8 +482,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
                         const totalTaxAt = (realizedGains: number) => {
                             const taxable = taxableBase + calculateTaxableCapitalGains(realizedGains);
-                            return calculateIncomeTax(taxable, province, inflationFactor, undefined, age)
-                                + calculateOASClawback(taxable, base.oasIncome, inflationFactor);
+                            return calculateTotalTax(taxable, base.oasIncome, province, inflationFactor, age).total;
                         };
                         const baselineTax = totalTaxAt(priorGains);
                         const netFor = (gross: number) => gross - (totalTaxAt(priorGains + gross * gainRatio) - baselineTax);
@@ -578,11 +597,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                         const newTaxable = currentTaxable + actualGross;
 
                         // Calculate marginal tax on the *actual* gross we extracted
-                        const originalClawback = calculateOASClawback(currentTaxable, base.oasIncome, inflationFactor);
-                        const originalTax = calculateIncomeTax(currentTaxable, province, inflationFactor, undefined, personObj.age) + originalClawback;
-
-                        const newClawback = calculateOASClawback(newTaxable, base.oasIncome, inflationFactor);
-                        const newTax = calculateIncomeTax(newTaxable, province, inflationFactor, undefined, personObj.age) + newClawback;
+                        const originalTax = calculateTotalTax(currentTaxable, base.oasIncome, province, inflationFactor, personObj.age).total;
+                        const newTax = calculateTotalTax(newTaxable, base.oasIncome, province, inflationFactor, personObj.age).total;
 
                         const actualTax = newTax - originalTax;
                         actualNet = actualGross - actualTax;
@@ -661,6 +677,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 p.rrsp.balance += add;
                 remaining -= add;
                 reinvestedRRSP += add;
+                pRrspContribution += add;
             }
 
             const sIsMelting = s && s.rrspMeltAmount && s.rrspMeltAmount > 0 && sAge! >= (s.rrspMeltStartAge || s.retirementAge);
@@ -671,6 +688,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 s.rrsp.balance += add;
                 remaining -= add;
                 reinvestedRRSP += add;
+                sRrspContribution += add;
             }
 
             // 3. Non-Reg: swept into each person's designated surplus account
@@ -699,7 +717,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // --- Step 5: Final Tax & Net Recalculation ---
         // Now we know exact Gross Income components.
 
-        const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number) => {
+        const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number, rrspContribution = 0) => {
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
             // Qualifying pension income for the $2,000 credit AND for income splitting:
             // DB pension qualifies at any age; RRIF withdrawals qualify only at 65+. The
@@ -711,21 +729,38 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             const qualifiedPension = dbPensionIncome + (age >= 65 ? rrifIncome : 0);
             const taxableGains = calculateTaxableCapitalGains(realizedGains);
             const grossedUpDivs = base.divIncome * 1.38;
-            const finalTaxable = base.employmentIncome + base.cppIncome + base.oasIncome + base.pensionIncome + totalRRSP + base.interestIncome + grossedUpDivs + base.foreignDivIncome + taxableGains;
+            // An RRSP contribution made out of this year's surplus is deductible, so it
+            // comes off taxable income (and off the OAS-clawback base with it).
+            const grossTaxable = Math.max(0, base.employmentIncome + base.cppIncome + base.oasIncome + base.pensionIncome + totalRRSP + base.interestIncome + grossedUpDivs + base.foreignDivIncome + taxableGains - base.payrollDeductible);
+            const finalTaxable = Math.max(0, grossTaxable - rrspContribution);
 
-            const oasRecovery = calculateOASClawback(finalTaxable, base.oasIncome, inflationFactor);
-            // Pass qualifiedPension (age rules already applied) and grossedUpDivs for the dividend tax credit
-            const finalTax = calculateIncomeTax(finalTaxable, province, inflationFactor, undefined, age, qualifiedPension, grossedUpDivs) + oasRecovery;
+            // Pass qualifiedPension (age rules already applied) and grossedUpDivs for the
+            // dividend tax credit. calculateTotalTax applies the OAS repayment deduction
+            // before taxing, then adds the recovery back.
+            const { total: finalTax, oasRecovery } = calculateTotalTax(
+                finalTaxable, base.oasIncome, province, inflationFactor, age,
+                qualifiedPension, grossedUpDivs, base.payrollCreditable
+            );
 
             // Marginal attribution of investment tax by source: the extra tax each
             // source adds on top of all other income (tax with it minus tax without
             // it, including its OAS-clawback effect). Dividend tax can be negative —
             // at low income the dividend tax credit shelters other income too.
-            const taxWithout = (excludedTaxable: number, excludeDivCredit = false) => {
-                const taxable = finalTaxable - excludedTaxable;
-                const oas = calculateOASClawback(taxable, base.oasIncome, inflationFactor);
-                return calculateIncomeTax(taxable, province, inflationFactor, undefined, age, qualifiedPension, excludeDivCredit ? 0 : grossedUpDivs) + oas;
-            };
+            const taxWithout = (excludedTaxable: number, excludeDivCredit = false) =>
+                calculateTotalTax(
+                    finalTaxable - excludedTaxable, base.oasIncome, province, inflationFactor,
+                    age, qualifiedPension, excludeDivCredit ? 0 : grossedUpDivs, base.payrollCreditable
+                ).total;
+            // The deduction is worth this much cash. Step 4 sized the surplus using the
+            // undeducted tax, so this refund is money the household has but hasn't
+            // allocated yet — it gets swept below rather than silently inflating spend.
+            const rrspDeductionRefund = rrspContribution > 0
+                ? Math.max(0, calculateTotalTax(
+                    grossTaxable, base.oasIncome, province, inflationFactor, age,
+                    qualifiedPension, grossedUpDivs, base.payrollCreditable
+                  ).total - finalTax)
+                : 0;
+
             const capGainsTax = taxableGains > 0 ? Math.max(0, finalTax - taxWithout(taxableGains)) : 0;
             const dividendTax = grossedUpDivs > 0 ? finalTax - taxWithout(grossedUpDivs, true) : 0;
             const interestTax = (base.interestIncome + base.foreignDivIncome) > 0
@@ -740,6 +775,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 dbPensionIncome,
                 rrifIncome,
                 qualifiedPension,
+                rrspDeductionRefund,
+                grossedUpDivs,
                 taxableGains,
                 oasRecovery,
                 capGainsTax,
@@ -748,8 +785,22 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             };
         };
 
-        const pFinal = pAlive && pBase ? getFinalStats(pBase, pExtraRRSPGross, pRealizedGains, pAge) : null;
-        const sFinal = sAlive && s && sBase ? getFinalStats(sBase, sExtraRRSPGross, sRealizedGains, sAge!) : null;
+        const pFinal = pAlive && pBase ? getFinalStats(pBase, pExtraRRSPGross, pRealizedGains, pAge, pRrspContribution) : null;
+        const sFinal = sAlive && s && sBase ? getFinalStats(sBase, sExtraRRSPGross, sRealizedGains, sAge!, sRrspContribution) : null;
+
+        // Sweep each person's RRSP-deduction refund into their non-registered account.
+        // Without this the lower tax bill would surface as netIncome exceeding the
+        // spending target — the cash is real, so it belongs in an account, not in
+        // "money spent". Contributions only happen in surplus years, so this never
+        // competes with a deficit withdrawal.
+        for (const [who, refund] of [[p, pFinal?.rrspDeductionRefund || 0], [s, sFinal?.rrspDeductionRefund || 0]] as const) {
+            if (!who || refund <= 0) continue;
+            const target = surplusAccount(who);
+            if (!target) continue;
+            target.balance += refund;
+            target.adjustedCostBase += refund; // contributed at cost
+            reinvestedNonReg += refund;
+        }
 
         let totalTaxPaid = (pFinal?.finalTax || 0) + (sFinal?.finalTax || 0);
         // Per-person tax for the table breakdown (replaced by post-split amounts below)
@@ -843,7 +894,10 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const sGrossTotal = sFinal?.finalTaxable || 0;
 
         // Person Nets
-        const pNetEmp = calcNet(pBase?.employmentIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
+        // Salary shown net of BOTH income tax and payroll withholding — CPP/EI never
+        // reach the household's pocket.
+        const pNetEmp = calcNet(pBase?.employmentIncome || 0, pGrossTotal, pFinal?.finalTax || 0)
+            - (pBase?.payrollContributions || 0);
         const pNetCPP = calcNet(pBase?.cppIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
         const pNetOAS = calcNet(pBase?.oasIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
         const pNetPension = calcNet(pBase?.pensionIncome || 0, pGrossTotal, pFinal?.finalTax || 0);
@@ -855,7 +909,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         const pNetInvCash = ((pBase?.interestIncome || 0) + (pBase?.divIncome || 0) + (pBase?.foreignDivIncome || 0)) - pInvTax;
 
         // Spouse Nets
-        const sNetEmp = calcNet(sBase?.employmentIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
+        const sNetEmp = calcNet(sBase?.employmentIncome || 0, sGrossTotal, sFinal?.finalTax || 0)
+            - (sBase?.payrollContributions || 0);
         const sNetCPP = calcNet(sBase?.cppIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
         const sNetOAS = calcNet(sBase?.oasIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
         const sNetPension = calcNet(sBase?.pensionIncome || 0, sGrossTotal, sFinal?.finalTax || 0);
@@ -916,7 +971,15 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                     const pRegularTaxable = pFinal?.finalTaxable || 0;
                     const pRegularTax = pFinal?.finalTax || 0;
 
-                    const totalTaxWithDeemed = calculateIncomeTax(pRegularTaxable + totalDeemedIncome, province, inflationFactor, undefined, pAge);
+                    // The two terms must be symmetric or the subtraction stops isolating the
+                    // deemed disposition's marginal cost. These tax arguments must mirror
+                    // getFinalStats exactly: same credits (qualified pension, grossed-up
+                    // dividends) and the same OAS-clawback term, just on the higher income.
+                    const deemedTaxable = pRegularTaxable + totalDeemedIncome;
+                    const totalTaxWithDeemed = calculateTotalTax(
+                        deemedTaxable, pBase?.oasIncome || 0, province, inflationFactor, pAge,
+                        pFinal?.qualifiedPension || 0, pFinal?.grossedUpDivs || 0
+                    ).total;
                     const incrementalTerminalTax = Math.max(0, totalTaxWithDeemed - pRegularTax);
 
                     terminalTaxOnRRSP += incrementalTerminalTax * (pRRSPBalance / totalDeemedIncome);
@@ -962,7 +1025,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                     const sRegularTaxable = sFinal?.finalTaxable || 0;
                     const sRegularTax = sFinal?.finalTax || 0;
 
-                    const totalTaxWithDeemed = calculateIncomeTax(sRegularTaxable + totalDeemedIncome, province, inflationFactor, undefined, sAge!);
+                    // Symmetry with the baseline is what makes this subtraction meaningful:
+                    // these tax arguments must mirror getFinalStats exactly (same credits and
+                    // OAS-clawback term), applied to the deemed-inclusive income.
+                    const deemedTaxable = sRegularTaxable + totalDeemedIncome;
+                    const totalTaxWithDeemed = calculateTotalTax(
+                        deemedTaxable, sBase?.oasIncome || 0, province, inflationFactor, sAge!,
+                        sFinal?.qualifiedPension || 0, sFinal?.grossedUpDivs || 0
+                    ).total;
                     const incrementalTerminalTax = Math.max(0, totalTaxWithDeemed - sRegularTax);
 
                     terminalTaxOnRRSP += incrementalTerminalTax * (sRRSPBalance / totalDeemedIncome);
@@ -1013,6 +1083,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             // reinvested rather than spent (RRIF minimums / CPP can force income past the
             // target). Equals targetSpend when funded, targetSpend - shortfall when not.
             netIncome: pCashGross + sCashGross + annualOneTimeInflows - totalTaxPaid
+                - ((pBase?.payrollContributions || 0) + (sBase?.payrollContributions || 0))
                 + pTFSAWithdrawal + sTFSAWithdrawal + pNonRegWithdrawal + sNonRegWithdrawal
                 - (reinvestedTFSA + reinvestedRRSP + reinvestedNonReg),
             spending: targetSpend,

@@ -14,7 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   over the projection), and an optional bridge benefit paid until a chosen age
   (default 65). Pension income flows through taxes, OAS clawback, withdrawal
   needs, and the optimizer, and appears as its own series in the cash-flow chart
-  and a Net Pension column in the year-by-year table.
+  and a Net Pension column in the year-by-year table. Guided Setup's Full setup
+  collects it too, as its own step for you and for your spouse.
 
 ### Changed
 - **Pension income credit and pension splitting follow the real age rules.**
@@ -22,6 +23,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spousal income splitting at any age — so early retirees with a workplace
   pension get both before 65. RRIF income continues to qualify only from 65.
   Existing plans are unaffected: without a DB pension the tax math is unchanged.
+
+### Fixed
+- **OAS clawback is no longer taxed twice.** When the OAS recovery tax applied,
+  the clawed-back amount was counted as income *and* the recovery was added on
+  top. CRA deducts the repayment before calculating income tax, so it should be
+  taxed once. This overstated tax by roughly $850/yr at $110,000 of income and
+  about $4,200/yr at $200,000 — every year in the clawback range. Projections
+  for anyone whose income triggers the clawback improve, and the optimizer's
+  clawback-avoidance suggestions were being scored against inflated numbers.
+- **Quebec projections no longer overstate tax by ~8%.** Quebec residents
+  receive a 16.5% abatement of federal tax, which was missing entirely. Every
+  Quebec plan's lifetime tax, net income, and estate figures change.
+- **Federal tax uses the current 14% bottom rate.** The engine applied 14.5%,
+  the blended rate from 2025's mid-year cut, to every projected year. The rate
+  has been 14% since 2026, and the federal credits that track it (basic
+  personal, pension, and age amounts) now use 14% as well.
+- **Employment income is reduced by CPP/QPP and EI contributions.** Payroll
+  deductions were ignored, overstating take-home pay while working by roughly
+  $5,500/yr at higher incomes, which inflated projected savings at retirement.
+  Quebec uses QPP and the lower Quebec EI rate. Their tax relief is modelled
+  too: the enhanced portion (and all of CPP2) is deducted from income, while the
+  base contribution and EI reduce tax as credits.
+- **RRSP contributions now reduce taxable income.** Money the plan routed into
+  an RRSP raised the balance but never generated the deduction it earns in real
+  life — a $10,000 contribution at a 40% marginal rate was quietly forgoing
+  about $4,000. The resulting tax saving is kept as savings, so it grows with
+  the plan instead of vanishing.
+- **Ontario Health Premium is charged the way it's actually calculated.** It
+  phased up in steps, jumping to a band's full amount the moment income crossed
+  the threshold — $300 at $20,100 of income, where the real premium is $6. It
+  now phases in gradually within each band. The premium is also a separate levy
+  that tax credits don't reduce, so it is now charged even when credits
+  eliminate income tax; and the Ontario surtax now applies to provincial tax
+  remaining *after* all credits, rather than after the basic personal amount
+  alone.
+- **The federal basic personal amount tapers at high income.** It was applied in
+  full at every income level; it actually shrinks from $16,129 to $14,538
+  between roughly $178,000 and $253,000 of income.
+- **Manitoba's basic personal amount updated to the 2025 figure** ($15,969, up
+  from the frozen 2024 $15,780), slightly lowering tax for Manitoba plans.
+- **Provincial pension and age credits use each province's own amounts.** Both
+  were estimated with a flat 5% rate applied to the *federal* claim amounts.
+  Every province and territory now uses its own credit amounts and its own
+  lowest tax rate — Ontario's pension amount is $1,762, not $2,000, and age
+  amounts and their income thresholds vary widely by province.
+- **Guided Setup no longer saves numbers it warned you about.** Both paths
+  showed an amber warning for inconsistent entries — a retirement age before
+  your current age, a life expectancy before either — but let you continue and
+  save anyway, and neither path showed the warning on the step holding the Save
+  button. Setup now stops at the step where the problem is, with the field in
+  front of you, and says what to fix. Quick start had been silently rewriting
+  the offending value at save time (a retirement age of 40 entered at age 48 was
+  stored as 48); Full setup had been saving it as typed, which could produce a
+  plan with no projection at all.
+- **Guided Setup asks before discarding your answers.** Pressing Escape or Skip
+  part-way through — up to twelve steps in Full setup — used to throw everything
+  away instantly. It now confirms first, and still leaves immediately if you
+  haven't entered anything yet.
+- **Quick start no longer pre-fills a spouse with sample money.** Turning on
+  "Include a spouse / partner" filled their RRSP, TFSA, and non-registered
+  balances with the sample plan's amounts (about $500,000 in total), which were
+  saved as yours if you didn't notice. Those fields now start empty.
+- **Estate tax in the final year now accounts for pension and dividend credits and
+  the OAS clawback.** When someone died with no surviving spouse, the tax on the
+  deemed disposition of their RRSP/RRIF and unrealized gains was measured against
+  a version of their final-year income that quietly dropped the pension income
+  credit and the dividend tax credit and ignored the OAS clawback. Estate tax was
+  overstated for anyone with workplace pension income or eligible Canadian
+  dividends in their final year, and understated for anyone whose income triggers
+  the OAS clawback. Estate tax and net estate figures change for those plans;
+  plans without pension, dividend, or clawback income in the death year are
+  unaffected, as are estates that roll over to a surviving spouse.
 
 ## [0.9.0] - 2026-07-22
 
