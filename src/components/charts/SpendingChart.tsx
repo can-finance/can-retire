@@ -68,7 +68,12 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
 
     return (
         <div className="h-[350px] lg:h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-            <h3 className="mb-6 text-xl font-bold text-slate-900">Annual Cash Flow (Net)</h3>
+            <div className="mb-6 flex items-baseline justify-between gap-4">
+                <h3 className="text-xl font-bold text-slate-900">Annual Cash Flow (Net)</h3>
+                {onSelectYear && (
+                    <p className="hidden sm:block text-xs text-slate-400">Click a bar for that year's full breakdown</p>
+                )}
+            </div>
             <ResponsiveContainer width="100%" height="90%">
                 <ComposedChart
                     data={chartData}
