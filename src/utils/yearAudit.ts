@@ -20,9 +20,11 @@ export interface AuditLine {
     // section's lines add up literally.
     amount: number;
     // Income lines only: `amount` is the net, these are the pre-tax figure and the
-    // tax apportioned to it. Employment's taxShare also carries CPP/EI withholding.
+    // tax apportioned to it. Employment's taxShare also carries CPP/EI withholding —
+    // taxShareLabel overrides the UI's default "Tax" wording where that matters.
     gross?: number;
     taxShare?: number;
+    taxShareLabel?: string;
     // Per-person split of `amount`, present only when the plan has a spouse and the
     // engine reports the split.
     person?: number;
@@ -149,7 +151,8 @@ function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSec
         gross: number,
         net: number,
         split?: { person: number; spouse: number },
-        note?: string
+        note?: string,
+        taxShareLabel?: string
     ) => {
         if (Math.abs(gross) < EPS && Math.abs(net) < EPS) return;
         lines.push({
@@ -157,13 +160,16 @@ function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSec
             amount: net,
             gross,
             taxShare: gross - net,
+            ...(taxShareLabel ? { taxShareLabel } : {}),
             ...(hasSpouse && split ? { person: split.person, spouse: split.spouse } : {}),
             note
         });
     };
 
+    // Employment's gross−net gap is income tax PLUS CPP/EI contributions, so the
+    // generic "Tax" subtext label would misattribute the payroll share.
     source('Employment income', r.employmentIncome, r.netEmploymentIncome, undefined,
-        r.employmentIncome > EPS ? 'Net of income tax and CPP/EI withholding' : undefined);
+        undefined, 'Tax + CPP/EI');
     source('CPP', r.cppIncome, r.netCPPIncome, { person: r.personNetCPP, spouse: r.spouseNetCPP });
     source('OAS', r.oasIncome, r.netOASIncome, { person: r.personNetOAS, spouse: r.spouseNetOAS },
         r.oasClawbackPaid > 1 ? 'Reduced by the OAS recovery tax — see Taxes' : undefined);
