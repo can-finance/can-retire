@@ -14,6 +14,17 @@ function boxMullerRandom(): number {
     return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
 }
 
+// Lognormal yearly return: preserves the arithmetic mean `meanRate`,
+// bounds the outcome below by −100%. z is a standard-normal draw.
+// meanRate <= −100% is nonsensical and would make ln() undefined, so it passes
+// through unshocked.
+export function lognormalReturn(meanRate: number, sigma: number, z: number): number {
+    const gross = 1 + meanRate;
+    if (gross <= 0) return meanRate;
+    const mu = Math.log(gross) - (sigma * sigma) / 2;
+    return Math.exp(mu + sigma * z) - 1;
+}
+
 function calculateTaxableCapitalGains(totalGains: number): number {
     // Flat 50% inclusion rate. The June 2024 proposal to raise the rate to 2/3
     // above $250,000 was deferred and then cancelled (March 2025) — never enacted.
@@ -386,15 +397,17 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // --- Determine Returns for this Year ---
         let currentYearRates = returnRates;
         if (stochastic && returnRates.volatility) {
-            // Apply volatility to all growth rates with a single draw — one
-            // correlated market shock across RRSP, TFSA, and non-reg equity.
-            // Simple model: Return = Mean + (Vol * Z)
-            const shock = returnRates.volatility * boxMullerRandom();
+            // One correlated market draw per year across RRSP, TFSA, and
+            // non-reg equity. Returns are lognormal: the entered rate stays the
+            // arithmetic mean while the median carries volatility drag, and no
+            // draw can push a year's return below −100%.
+            const z = boxMullerRandom();
+            const vol = returnRates.volatility;
             currentYearRates = {
                 ...returnRates,
-                capitalGrowth: returnRates.capitalGrowth + shock,
-                rrspGrowth: returnRates.rrspGrowth != null ? returnRates.rrspGrowth + shock : undefined,
-                tfsaGrowth: returnRates.tfsaGrowth != null ? returnRates.tfsaGrowth + shock : undefined
+                capitalGrowth: lognormalReturn(returnRates.capitalGrowth, vol, z),
+                rrspGrowth: returnRates.rrspGrowth != null ? lognormalReturn(returnRates.rrspGrowth, vol, z) : undefined,
+                tfsaGrowth: returnRates.tfsaGrowth != null ? lognormalReturn(returnRates.tfsaGrowth, vol, z) : undefined
             };
         }
 

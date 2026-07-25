@@ -126,10 +126,10 @@ derived growth, death-year variant. v1 needs no engine changes; deterministic
 projection only (no Monte Carlo). Full plan: `docs/year-audit-plan.md`.
 
 ### Monte Carlo realism (from 2026-07-18 discussion)
-Current model: single `volatility`, one normal shock added identically to
+Current model: single `volatility`, one lognormal draw applied identically to
 `capitalGrowth`/`rrspGrowth`/`tfsaGrowth`; interest & dividend slices pay a fixed
 yield and their principal never moves.
-- **Lognormal draws** (do first, cheap): replace `mean + vol*Z` with
+- **Lognormal draws — shipped 2026-07-25.** Replaced `mean + vol*Z` with
   `exp(mu + sigma*Z) - 1`, `mu = ln(1+mean) - sigma^2/2`. Fixes the missing
   volatility drag on median outcomes and makes sub-−100% returns impossible.
 - **Per-asset-class price volatility** (one-factor model): shock slice *balances*,

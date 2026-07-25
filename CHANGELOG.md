@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Monte Carlo simulations now draw yearly returns lognormally.** The old model
+  added a symmetric shock to the return, which ignored the drag that swings put
+  on compound growth and could even produce a year worse than losing everything.
+  Median outcomes and success rates shift slightly lower now that volatility drag
+  is modelled correctly, and returns can no longer fall below −100%. Deterministic
+  projections are unchanged; optimizer recommendations validated against Monte
+  Carlo may shift.
+
 ### Fixed
 - **The meltdown optimizer no longer settles for a worse answer for couples.**
   When both spouses had RRSPs and pension income splitting was on, the search

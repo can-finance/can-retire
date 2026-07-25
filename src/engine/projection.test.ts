@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runSimulation, runMonteCarlo } from './projection';
+import { runSimulation, runMonteCarlo, lognormalReturn } from './projection';
 import { calculateIncomeTax, calculateOASClawback, calculateTotalTax } from './tax';
 import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult } from './types';
 import { INITIAL_INPUTS } from '../utils/inputSanitizer';
@@ -977,6 +977,54 @@ describe('DB pension income', () => {
             expect(Number.isNaN(r.netIncome)).toBe(false);
             expect(Number.isNaN(r.taxPaid)).toBe(false);
         }
+    });
+});
+
+describe('lognormalReturn', () => {
+    // Standard normal density, for numerically integrating E[1 + rate].
+    const phi = (z: number) => Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
+
+    // Trapezoid rule over z ∈ [-8, 8]; the tails beyond 8 sigma are negligible.
+    const expectedGross = (meanRate: number, sigma: number): number => {
+        const step = 0.001;
+        let sum = 0;
+        for (let z = -8; z <= 8; z += step) {
+            const w = (z === -8) ? 0.5 : 1;
+            sum += w * (1 + lognormalReturn(meanRate, sigma, z)) * phi(z);
+        }
+        return sum * step;
+    };
+
+    it('z = 0 gives the median, which sits below the mean (volatility drag)', () => {
+        const r = 0.06, sigma = 0.15;
+        const median = lognormalReturn(r, sigma, 0);
+        expect(median).toBeCloseTo((1 + r) * Math.exp(-(sigma * sigma) / 2) - 1, 12);
+        expect(median).toBeLessThan(r);
+    });
+
+    it('is bounded below by −100% even for extreme downside draws', () => {
+        expect(lognormalReturn(0.05, 0.5, -10)).toBeGreaterThan(-1);
+        expect(lognormalReturn(0.05, 0.5, -10)).toBeLessThan(0);
+        expect(lognormalReturn(0.07, 0.2, -40)).toBeGreaterThan(-1);
+    });
+
+    // Zero volatility leaves the rate untouched apart from the float round-trip
+    // through log/exp (~1e-16), so this compares to full double precision.
+    it('sigma = 0 returns the mean rate for any z', () => {
+        for (const z of [-3, -0.5, 0, 0.5, 3]) {
+            expect(lognormalReturn(0.06, 0, z)).toBeCloseTo(0.06, 15);
+        }
+    });
+
+    it('preserves the arithmetic mean of the entered rate', () => {
+        for (const [r, sigma] of [[0.05, 0.1], [0.07, 0.15], [0.02, 0.25], [-0.03, 0.2]]) {
+            expect(expectedGross(r, sigma)).toBeCloseTo(1 + r, 6);
+        }
+    });
+
+    it('returns the rate unshocked instead of NaN when 1 + meanRate <= 0', () => {
+        expect(lognormalReturn(-1, 0.1, 1)).toBe(-1);
+        expect(lognormalReturn(-1.5, 0.1, -1)).toBe(-1.5);
     });
 });
 
