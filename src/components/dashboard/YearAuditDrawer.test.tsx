@@ -115,6 +115,22 @@ describe('YearAuditDrawer', () => {
         expect(screen.getByText(String(results[5].year), { exact: false })).toBeInTheDocument();
     });
 
+    it('splits the employment gross−net gap into income tax and CPP/EI', () => {
+        // INITIAL_INPUTS is 48 and still working at index 0, so the employment line
+        // carries a withholdings breakdown. Each entry renders as its own span, so
+        // the "· " prefix distinguishes them from the Cash flow "Income tax" row.
+        const results = runSimulation(INITIAL_INPUTS);
+        expect(results[0].employmentIncome).toBeGreaterThan(0);
+        render(
+            <YearAuditDrawer
+                inputs={INITIAL_INPUTS} results={results} index={0}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getByText(/· Income tax/)).toBeInTheDocument();
+        expect(screen.getByText(/· CPP\/EI/)).toBeInTheDocument();
+    });
+
     it('shows the Estate section only in a death year', () => {
         const results = runSimulation(WIDOWED);
         const deathIndex = results.findIndex(r => r.isDeathYear);

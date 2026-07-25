@@ -20,11 +20,12 @@ export interface AuditLine {
     // section's lines add up literally.
     amount: number;
     // Income lines only: `amount` is the net, these are the pre-tax figure and the
-    // tax apportioned to it. Employment's taxShare also carries CPP/EI withholding —
-    // taxShareLabel overrides the UI's default "Tax" wording where that matters.
+    // tax apportioned to it. `withholdings` optionally splits that tax share finer
+    // for display — used so far only by Employment, whose gross−net gap is income
+    // tax PLUS CPP/EI. Display-only: the entries sum to `taxShare`.
     gross?: number;
     taxShare?: number;
-    taxShareLabel?: string;
+    withholdings?: Array<{ label: string; amount: number }>;
     // Per-person split of `amount`, present only when the plan has a spouse and the
     // engine reports the split.
     person?: number;
@@ -143,8 +144,9 @@ function payrollWithheld(inputs: SimulationInputs, r: SimulationResult): { payro
 const sumLines = (lines: AuditLine[]) =>
     lines.reduce((s, l) => s + (l.kind === 'info' || l.kind === 'result' || l.kind === 'subtotal' ? 0 : l.amount), 0);
 
-function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSection {
+function incomeSourcesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: boolean): AuditSection {
     const lines: AuditLine[] = [];
+    const { payroll } = payrollWithheld(inputs, r);
 
     const source = (
         label: string,
@@ -152,7 +154,7 @@ function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSec
         net: number,
         split?: { person: number; spouse: number },
         note?: string,
-        taxShareLabel?: string
+        withholdings?: Array<{ label: string; amount: number }>
     ) => {
         if (Math.abs(gross) < EPS && Math.abs(net) < EPS) return;
         lines.push({
@@ -160,16 +162,24 @@ function incomeSourcesSection(r: SimulationResult, hasSpouse: boolean): AuditSec
             amount: net,
             gross,
             taxShare: gross - net,
-            ...(taxShareLabel ? { taxShareLabel } : {}),
+            ...(withholdings ? { withholdings } : {}),
             ...(hasSpouse && split ? { person: split.person, spouse: split.spouse } : {}),
             note
         });
     };
 
-    // Employment's gross−net gap is income tax PLUS CPP/EI contributions, so the
-    // generic "Tax" subtext label would misattribute the payroll share.
-    source('Employment income', r.employmentIncome, r.netEmploymentIncome, undefined,
-        undefined, 'Tax + CPP/EI');
+    // Employment's gross−net gap is income tax PLUS CPP/EI contributions, so split
+    // it into the two for display rather than labelling the whole gap "Tax".
+    // Payroll is reconstructed from `inputs` (see payrollWithheld), not read off the
+    // engine result, so the income-tax remainder can land a cent or two negative in
+    // edge cases — left unclamped so the subtext stays an honest split of taxShare.
+    source('Employment income', r.employmentIncome, r.netEmploymentIncome, undefined, undefined,
+        payroll > EPS
+            ? [
+                { label: 'Income tax', amount: (r.employmentIncome - r.netEmploymentIncome) - payroll },
+                { label: 'CPP/EI', amount: payroll }
+            ]
+            : undefined);
     source('CPP', r.cppIncome, r.netCPPIncome, { person: r.personNetCPP, spouse: r.spouseNetCPP });
     source('OAS', r.oasIncome, r.netOASIncome, { person: r.personNetOAS, spouse: r.spouseNetOAS },
         r.oasClawbackPaid > 1 ? 'Reduced by the OAS recovery tax — see Taxes' : undefined);
@@ -231,7 +241,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     // folds it into netEmploymentIncome), so back the payroll out to leave the
     // income tax alone.
     part('Employment income tax', (r.employmentIncome - r.netEmploymentIncome) - payroll,
-        payroll > EPS ? 'Excludes CPP/EI contributions — shown below' : undefined);
+        payroll > EPS ? 'Excludes CPP/EI contributions — see Income sources' : undefined);
     part('Tax on CPP', r.cppIncome - r.netCPPIncome);
     part('Tax on OAS', r.oasIncome - r.netOASIncome,
         r.oasClawbackPaid > EPS
@@ -240,10 +250,34 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     part('Tax on DB pension', r.pensionIncome - r.netPensionIncome);
     part('Tax on investment income', r.investmentIncome - r.netInvestmentIncome,
         'Interest, dividends and foreign dividends — the slice is struck on the grossed-up dividend');
-    part('Tax on RRSP/RRIF withdrawals', r.totalRRSPWithdrawal - r.netRRSPWithdrawal);
-    // TFSA withdrawals are tax-free, so they carry no slice at all.
     part('Tax on non-registered sale gains', r.taxShareOnCapGains,
         'The taxable half of gains realized while living, including fund turnover');
+
+    // Marginal attribution: the extra tax each source adds on top of all other
+    // income. These overlap with the total and with each other — they are not a
+    // partition of the tax bill. Interleaved here, next to the investment slices
+    // they qualify; `sumLines` skips `info` lines wherever they sit.
+    if (Math.abs(r.capGainsTaxPaid) > EPS) {
+        lines.push({ label: 'Of which capital gains (marginal)', amount: r.capGainsTaxPaid, kind: 'info' });
+    }
+    if (Math.abs(r.dividendTaxPaid) > EPS) {
+        lines.push({
+            label: r.dividendTaxPaid < 0
+                ? 'Of which dividends (marginal) — credit sheltering other income'
+                : 'Of which dividends (marginal)',
+            amount: r.dividendTaxPaid,
+            kind: 'info',
+            note: r.dividendTaxPaid < 0
+                ? 'Negative by design: the dividend tax credit exceeds the tax on the dividends'
+                : undefined
+        });
+    }
+    if (Math.abs(r.interestTaxPaid) > EPS) {
+        lines.push({ label: 'Of which interest & foreign dividends (marginal)', amount: r.interestTaxPaid, kind: 'info' });
+    }
+
+    part('Tax on RRSP/RRIF withdrawals', r.totalRRSPWithdrawal - r.netRRSPWithdrawal);
+    // TFSA withdrawals are tax-free, so they carry no slice at all.
     part('Less: enhanced CPP/QPP deduction', -r.taxReliefFromPayrollDeduction,
         'The enhanced CPP/QPP and CPP2 slice of payroll comes off taxable income');
     part('Less: RRSP contribution deduction', -r.taxReliefFromRRSPDeduction,
@@ -290,46 +324,11 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
         });
     }
 
-    // Marginal attribution: the extra tax each source adds on top of all other
-    // income. These overlap with the total and with each other — they are not a
-    // partition of the tax bill.
-    if (Math.abs(r.capGainsTaxPaid) > EPS) {
-        lines.push({ label: 'Of which capital gains (marginal)', amount: r.capGainsTaxPaid, kind: 'info' });
-    }
-    if (Math.abs(r.dividendTaxPaid) > EPS) {
-        lines.push({
-            label: r.dividendTaxPaid < 0
-                ? 'Of which dividends (marginal) — credit sheltering other income'
-                : 'Of which dividends (marginal)',
-            amount: r.dividendTaxPaid,
-            kind: 'info',
-            note: r.dividendTaxPaid < 0
-                ? 'Negative by design: the dividend tax credit exceeds the tax on the dividends'
-                : undefined
-        });
-    }
-    if (Math.abs(r.interestTaxPaid) > EPS) {
-        lines.push({ label: 'Of which interest & foreign dividends (marginal)', amount: r.interestTaxPaid, kind: 'info' });
-    }
-
-    // Working years only: the CPP/EI withheld from pay (already netted out of the
-    // employment line in Income sources). Payroll contributions, not income tax —
-    // shown here so the household's full deductions are visible in one place, but
-    // deliberately excluded from the partition and the check above.
-    if (payroll > EPS) {
-        lines.push({
-            label: 'CPP/EI contributions (withheld from pay)',
-            amount: payroll,
-            kind: 'info',
-            note: 'Payroll contributions, not income tax — not included in the household income tax above'
-        });
-    }
-
     return {
         key: 'taxes',
         title: 'Taxes',
         lines,
-        note: 'The tax lines above the total are a pro-rata allocation — the same convention as the per-source nets in Income sources — and between them they partition the bill exactly. The "of which" lines are marginal attributions instead: each is the extra tax that source adds on top of all other income, so they overlap rather than partition.',
+        note: 'The tax lines above the total, other than the "of which" lines, are a pro-rata allocation — the same convention as the per-source nets in Income sources — and between them they partition the bill exactly. The "of which" lines are marginal attributions instead: each is the extra tax that source adds on top of all other income, so they overlap rather than partition.',
         check: {
             label: 'The per-source tax lines add up to the household income tax',
             expected: r.taxPaid,
@@ -593,7 +592,7 @@ export function buildYearAudit(
     }
 
     const sections: AuditSection[] = [
-        incomeSourcesSection(r, hasSpouse),
+        incomeSourcesSection(inputs, r, hasSpouse),
         taxesSection(inputs, r, hasSpouse),
         cashFlowSection(inputs, r, oneTimeInflows),
         accountSection({

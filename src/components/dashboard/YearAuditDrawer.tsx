@@ -67,7 +67,12 @@ function LineRow({
                 <div>{line.label}</div>
                 {line.gross !== undefined && (
                     <div className="text-[11px] text-slate-400 mt-0.5 font-normal">
-                        Gross {fmtAmt(line.gross / scale)} · {line.taxShareLabel ?? 'Tax'} {fmtAmt(-(line.taxShare ?? 0) / scale)}
+                        Gross {fmtAmt(line.gross / scale)}
+                        {line.withholdings
+                            ? line.withholdings.map(w => (
+                                <span key={w.label}> · {w.label} {fmtAmt(-w.amount / scale)}</span>
+                            ))
+                            : <> · Tax {fmtAmt(-(line.taxShare ?? 0) / scale)}</>}
                     </div>
                 )}
                 {line.note && <div className="text-[11px] text-slate-400 mt-0.5 font-normal">{line.note}</div>}

@@ -582,6 +582,80 @@ describe('income and tax sections', () => {
         }
     });
 
+    it('the employment withholdings split adds back up to the tax share', () => {
+        // The split is display-only: whatever the income-tax/CPP-EI breakdown, the
+        // two entries must still reconstruct the gross−net gap exactly.
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const line = sectionOf(buildYearAudit(ins, results, i), 'incomeSources')!.lines
+                    .find(l => l.label === 'Employment income');
+                if (!line?.withholdings) continue;
+                const sum = line.withholdings.reduce((s, w) => s + w.amount, 0);
+                expect(sum, `${name} i=${i}`).toBeCloseTo(line.taxShare!, 6);
+            }
+        }
+    });
+
+    it('no employment income means no withholdings breakdown', () => {
+        // Once both spouses are retired the source() guard drops the line entirely;
+        // if it ever survives with a zero gross it must not carry a payroll split.
+        const results = runSimulation(COUPLE);
+        let retiredYears = 0;
+        for (let i = 0; i < results.length; i++) {
+            if (Math.abs(results[i].employmentIncome) > 0.01) continue;
+            retiredYears++;
+            const line = sectionOf(buildYearAudit(COUPLE, results, i), 'incomeSources')!.lines
+                .find(l => l.label === 'Employment income');
+            expect(line?.withholdings, `i=${i}`).toBeUndefined();
+        }
+        expect(retiredYears, 'expected fully-retired years in COUPLE').toBeGreaterThan(0);
+    });
+
+    it('the CPP/EI contributions line is gone from the Taxes section', () => {
+        // Payroll withholding now lives on the Income sources employment line (and in
+        // Cash flow); repeating it under Taxes invited reading it as income tax.
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const lines = sectionOf(buildYearAudit(ins, results, i), 'taxes')!.lines;
+                expect(
+                    lines.some(l => l.label === 'CPP/EI contributions (withheld from pay)'),
+                    `${name} i=${i}`
+                ).toBe(false);
+            }
+        }
+    });
+
+    it('the marginal "of which" lines sit with the investment slices, above the result', () => {
+        // They qualify the investment/gains slices, so they read best next to them —
+        // but they must still land before the result row that closes the partition.
+        const MARGINAL = [
+            (l: string) => l === 'Of which capital gains (marginal)',
+            (l: string) => l.includes('Of which dividends (marginal)'),
+            (l: string) => l === 'Of which interest & foreign dividends (marginal)'
+        ];
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const lines = sectionOf(buildYearAudit(ins, results, i), 'taxes')!.lines;
+                const resultIdx = lines.findIndex(l => l.kind === 'result');
+                // Both anchors are suppressed in a $0 year — nothing to order against.
+                const gainsIdx = lines.findIndex(l => l.label === 'Tax on non-registered sale gains');
+                const anchorIdx = gainsIdx >= 0
+                    ? gainsIdx
+                    : lines.findIndex(l => l.label === 'Tax on investment income');
+                if (anchorIdx < 0) continue;
+                for (const matches of MARGINAL) {
+                    const idx = lines.findIndex(l => matches(l.label));
+                    if (idx < 0) continue;
+                    expect(idx, `${name} i=${i} ${lines[idx].label} after anchor`).toBeGreaterThan(anchorIdx);
+                    expect(idx, `${name} i=${i} ${lines[idx].label} before result`).toBeLessThan(resultIdx);
+                }
+            }
+        }
+    });
+
     it('a negative dividend tax is labelled as a credit, not a bug', () => {
         // A $35k DB pension plus $12k of eligible dividends keeps taxable income in
         // the lowest combined bracket (~20%), below the ~25% gross-up-plus-credit
