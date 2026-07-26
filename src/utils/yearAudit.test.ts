@@ -693,39 +693,20 @@ describe('income and tax sections', () => {
         }
     });
 
-    it('the marginal "of which" lines sit with the investment slices, above the result', () => {
-        // They qualify the investment/gains slices, so they read best next to them —
-        // but they must still land before the result row that closes the partition.
-        const MARGINAL = [
-            (l: string) => l === 'Of which capital gains (marginal)',
-            (l: string) => l.includes('Of which dividends (marginal)'),
-            (l: string) => l === 'Of which interest & foreign dividends (marginal)'
-        ];
+    it('the marginal "of which" attributions are absent — the marginal view lives in the table tooltip', () => {
         for (const [name, ins] of SCENARIOS) {
             const results = runSimulation(ins);
             for (let i = 0; i < results.length; i++) {
                 const lines = sectionOf(buildYearAudit(ins, results, i), 'taxes')!.lines;
-                const resultIdx = lines.findIndex(l => l.kind === 'result');
-                // Both anchors are suppressed in a $0 year — nothing to order against.
-                const gainsIdx = lines.findIndex(l => l.label === 'Tax on non-registered sale gains');
-                const anchorIdx = gainsIdx >= 0
-                    ? gainsIdx
-                    : lines.findIndex(l => l.label === 'Tax on investment income');
-                if (anchorIdx < 0) continue;
-                for (const matches of MARGINAL) {
-                    const idx = lines.findIndex(l => matches(l.label));
-                    if (idx < 0) continue;
-                    expect(idx, `${name} i=${i} ${lines[idx].label} after anchor`).toBeGreaterThan(anchorIdx);
-                    expect(idx, `${name} i=${i} ${lines[idx].label} before result`).toBeLessThan(resultIdx);
-                }
+                expect(lines.some(l => l.label.includes('(marginal)')), `${name} i=${i}`).toBe(false);
             }
         }
     });
 
-    it('a negative dividend tax is labelled as a credit, not a bug', () => {
+    it('the partition still balances when the dividend credit turns the marginal dividend tax negative', () => {
         // A $35k DB pension plus $12k of eligible dividends keeps taxable income in
         // the lowest combined bracket (~20%), below the ~25% gross-up-plus-credit
-        // break-even — so the credit shelters income the dividends did not generate.
+        // break-even — the nastiest credit interaction the partition has to absorb.
         const ins = inputs({
             person: person({
                 pension: { annualAmount: 35_000, startAge: 60, indexedToInflation: false },
@@ -740,12 +721,6 @@ describe('income and tax sections', () => {
         const results = runSimulation(ins);
         const i = results.findIndex(r => r.dividendTaxPaid < -1);
         expect(i, 'expected a year where the dividend credit goes negative').toBeGreaterThanOrEqual(0);
-        const line = sectionOf(buildYearAudit(ins, results, i), 'taxes')!.lines
-            .find(l => l.label.includes('dividends'))!;
-        expect(line.amount).toBeLessThan(0);
-        expect(line.note).toContain('Negative by design');
-        expect(line.kind).toBe('info');
-        // And it must not break the section's partition identity.
         expect(Math.abs(sectionOf(buildYearAudit(ins, results, i), 'taxes')!.check!.residual)).toBeLessThan(0.1);
     });
 });

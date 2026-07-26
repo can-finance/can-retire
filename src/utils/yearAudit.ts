@@ -211,33 +211,15 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     part('Tax on non-registered sale gains', r.taxShareOnCapGains,
         'The taxable half of gains realized while living, including fund turnover');
 
-    // Marginal attribution: the extra tax each source adds on top of all other
-    // income. These overlap with the total and with each other — they are not a
-    // partition of the tax bill. Interleaved here, next to the investment slices
-    // they qualify; `sumLines` skips `info` lines wherever they sit.
-    if (Math.abs(r.capGainsTaxPaid) > EPS) {
-        lines.push({ label: 'Of which capital gains (marginal)', amount: r.capGainsTaxPaid, kind: 'info' });
-    }
-    if (Math.abs(r.dividendTaxPaid) > EPS) {
-        lines.push({
-            label: r.dividendTaxPaid < 0
-                ? 'Of which dividends (marginal) — credit sheltering other income'
-                : 'Of which dividends (marginal)',
-            amount: r.dividendTaxPaid,
-            kind: 'info',
-            note: r.dividendTaxPaid < 0
-                ? 'Negative by design: the dividend tax credit exceeds the tax on the dividends'
-                : undefined
-        });
-    }
-    if (Math.abs(r.interestTaxPaid) > EPS) {
-        lines.push({ label: 'Of which interest & foreign dividends (marginal)', amount: r.interestTaxPaid, kind: 'info' });
-    }
+    // The marginal per-source attributions (capGainsTaxPaid / dividendTaxPaid /
+    // interestTaxPaid) are deliberately NOT shown here: they overlap each other and
+    // the partition, so they read as lines that should add up but don't. The
+    // marginal view lives in the year-by-year table's Tax Paid hover breakdown.
 
     part('Tax on RRSP/RRIF withdrawals', r.totalRRSPWithdrawal - r.netRRSPWithdrawal);
     // TFSA withdrawals are tax-free, so they carry no slice at all.
     part('Less: enhanced CPP/QPP deduction', -r.taxReliefFromPayrollDeduction,
-        'The enhanced CPP/QPP and CPP2 slice of payroll comes off taxable income');
+        'The enhanced portion of CPP/QPP contributions (and CPP2) is deducted from taxable income — this is the tax that deduction saves');
     part('Less: RRSP contribution deduction', -r.taxReliefFromRRSPDeduction,
         "Contributions made out of this year's surplus");
     part('Less: pension income splitting', -(r.taxSavingsFromSplit ?? 0),
@@ -275,7 +257,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
 
     if (r.oasClawbackPaid > EPS) {
         lines.push({
-            label: 'Of which OAS recovery tax (clawback)',
+            label: 'Includes OAS recovery tax (clawback)',
             amount: r.oasClawbackPaid,
             kind: 'info',
             note: 'Household total, before any pension split — spread across the lines above, not carried by one'

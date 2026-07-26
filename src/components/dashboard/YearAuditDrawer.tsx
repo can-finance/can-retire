@@ -84,15 +84,15 @@ function LineRow({
             </td>
             {showSplit && (
                 <>
-                    <td className="px-3 py-2 text-right text-slate-500 align-top">
+                    <td className="px-3 py-2 text-right text-slate-500 align-top whitespace-nowrap">
                         {line.person !== undefined ? fmtAmt(line.person / scale) : '—'}
                     </td>
-                    <td className="px-3 py-2 text-right text-slate-500 align-top">
+                    <td className="px-3 py-2 text-right text-slate-500 align-top whitespace-nowrap">
                         {line.spouse !== undefined ? fmtAmt(line.spouse / scale) : '—'}
                     </td>
                 </>
             )}
-            <td className={`px-3 py-2 text-right align-top ${amountClass} ${weightClass}`}>
+            <td className={`px-3 py-2 text-right align-top whitespace-nowrap ${amountClass} ${weightClass}`}>
                 {fmtAmt(amt)}
             </td>
         </tr>
