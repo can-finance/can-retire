@@ -1,5 +1,15 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
+// Shared footer-button styles for Dialog usages across the app (share/delete/
+// discard/clear confirmations, etc). Centralized here — alongside the Dialog
+// they decorate — instead of duplicated per call site.
+export const dialogPrimaryBtn =
+    'px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors';
+export const dialogSecondaryBtn =
+    'px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors';
+export const dialogDestructiveBtn =
+    'px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors';
+
 interface DialogProps {
     /** When false, nothing renders. */
     open: boolean;

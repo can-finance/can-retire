@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Person, SimulationInputs } from '../../engine/types';
 import { BrandLockup } from '../layout/AppLayout';
 import { SectionCard } from '../ui/SectionCard';
-import { Dialog } from '../ui/Dialog';
+import { Dialog, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
 import { ValidationBanner } from '../ui/ValidationBanner';
 import { commitOnboardingInputs, hasSavedPlan, markOnboardingDone } from '../../utils/onboarding';
 import { createDefaultPerson } from '../../utils/inputSanitizer';
@@ -16,11 +16,6 @@ import {
     type SimpleAnswers,
 } from './simplePathMapping';
 import { buildDetailedSteps } from './detailedSteps';
-
-const dialogSecondaryBtn =
-    'px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors';
-const dialogDestructiveBtn =
-    'px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors';
 
 interface OnboardingFlowProps {
     seed: SimulationInputs;

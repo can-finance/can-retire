@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"Clear all data" link in the footer.** Erases every saved plan and figure
+  from the browser and returns the app to the guided setup, as a brand-new
+  visitor would see it — behind a confirmation dialog so it can't be triggered
+  by accident.
 - **Click any year for a full audit of its calculation.** Clicking a row in the
   Year-by-Year Breakdown table or a bar in the Annual Cash Flow chart opens a
   breakdown of that year: income sources (gross → tax → net), the tax bill and

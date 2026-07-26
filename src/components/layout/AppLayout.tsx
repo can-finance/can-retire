@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { HelpTooltip } from '../ui/HelpTooltip';
+import { Dialog, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
+import { clearAllAppData } from '../../utils/clearAllData';
 
 export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy';
 
@@ -102,6 +104,25 @@ export function BrandLockup({
 }
 
 export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayoutProps) {
+    // AppLayout is shared by the dashboard SPA and the standalone MPA pages
+    // (/cpp-calculator/, /how-it-works/, /rrsp-withdrawal-strategy/), so this
+    // control — and the wipe it triggers — must work from any of them.
+    const [confirmClear, setConfirmClear] = useState(false);
+
+    const handleConfirmClear = () => {
+        clearAllAppData();
+        setConfirmClear(false);
+        // A full document load — not a client-side state reset — is what
+        // guarantees every hook, cache, and React tree is rebuilt from scratch,
+        // and that App.tsx re-evaluates isOnboardingEligible() at mount, which
+        // with all keys absent yields the true new-visitor experience.
+        // Navigating to '/' explicitly (rather than location.reload()) also
+        // drops any #start= share hash or ?setup= query that would otherwise
+        // re-import a scenario or re-open onboarding, and correctly returns the
+        // user to the dashboard when triggered from one of the MPA pages.
+        window.location.assign('/');
+    };
+
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900">
             <header className="lg:sticky lg:top-0 z-50 w-full border-b border-white/50 bg-white/60 backdrop-blur-xl">
@@ -168,10 +189,22 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                 <div className="container mx-auto px-4 py-6 text-center space-y-1.5">
                     {/* Privacy badge — lived in the header until the nav outgrew the
                         space (and `hidden xl:` meant most visitors never saw it).
-                        Here it shows at every viewport width, on every page. */}
-                    <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100 mb-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                        Runs Entirely in Your Browser • Your Data Never Leaves Your Device
+                        Here it shows at every viewport width, on every page. The
+                        "Clear all data" control sits immediately to its right —
+                        wrap-friendly on narrow screens — as a quiet utility link,
+                        not a primary action competing with the pill. */}
+                    <div className="flex items-center justify-center gap-2 flex-wrap mb-2">
+                        <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                            Runs Entirely in Your Browser • Your Data Never Leaves Your Device
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setConfirmClear(true)}
+                            className="text-xs text-slate-400 underline decoration-dotted underline-offset-2 hover:text-rose-500 transition-colors"
+                        >
+                            Clear all data
+                        </button>
                     </div>
                     <p className="text-sm text-slate-400">
                         For planning and educational purposes only — not financial, tax, or investment advice.
@@ -231,6 +264,28 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                     </p>
                 </div>
             </footer>
+
+            <Dialog
+                open={confirmClear}
+                onClose={() => setConfirmClear(false)}
+                title="Clear all data?"
+                maxWidth="max-w-sm"
+                footer={
+                    <>
+                        <button type="button" data-autofocus onClick={() => setConfirmClear(false)} className={dialogSecondaryBtn}>
+                            Cancel
+                        </button>
+                        <button type="button" onClick={handleConfirmClear} className={dialogDestructiveBtn}>
+                            Clear everything
+                        </button>
+                    </>
+                }
+            >
+                <p>
+                    This permanently deletes every saved plan and all entered figures from this browser, and
+                    returns the app to the guided setup. This can't be undone.
+                </p>
+            </Dialog>
         </div>
     );
 }

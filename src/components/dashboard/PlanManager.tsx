@@ -4,7 +4,7 @@ import type { SavedPlan } from '../../hooks/usePlans';
 import type { SimulationInputs } from '../../engine/types';
 import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
-import { Dialog } from '../ui/Dialog';
+import { Dialog, dialogPrimaryBtn, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
 
 // null = closed. 'copied'/'manual' carry the share URL; 'error' is the
 // generation-failure state.
@@ -13,13 +13,6 @@ type ShareState =
     | { kind: 'copied'; url: string }
     | { kind: 'manual'; url: string }
     | { kind: 'error' };
-
-const dialogPrimaryBtn =
-    'px-4 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors';
-const dialogSecondaryBtn =
-    'px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors';
-const dialogDestructiveBtn =
-    'px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 transition-colors';
 
 interface PlanManagerProps {
     plans: SavedPlan[];
