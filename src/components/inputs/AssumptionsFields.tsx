@@ -74,7 +74,7 @@ export function ReturnsFields({ inputs, onChange }: {
     return (
         <div className="grid grid-cols-2 gap-4">
             <FinancialInput
-                label="RRSP Return"
+                label="RRSP Return (total)"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}
@@ -83,10 +83,10 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Whole-account annual return on RRSP/RRIF balances — tax-sheltered, so no yield/gains split."
+                tooltip="Total annual return on RRSP/RRIF balances, income and growth combined — tax-sheltered, so there is no yield/gains split to model."
             />
             <FinancialInput
-                label="TFSA Return"
+                label="TFSA Return (total)"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}
@@ -95,10 +95,10 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Whole-account annual return on TFSA balances — tax-free, so no yield/gains split."
+                tooltip="Total annual return on TFSA balances, income and growth combined — tax-free, so there is no yield/gains split to model."
             />
             <FinancialInput
-                label="Non-Reg Growth"
+                label="Non-Reg Growth (price only)"
                 prefix="%"
                 minFractionDigits={1}
                 maxFractionDigits={1}
@@ -107,7 +107,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Price appreciation of the Equity (Growth) share of the non-registered mix. The other mix slices earn their yield inputs instead."
+                tooltip={'Price appreciation ONLY, on the Equity (Growth) share of the non-registered mix. Do not add dividend or interest yield here — those are entered in the fields below and would be counted twice.\nUnlike RRSP/TFSA Return above, which is a whole-account total return, this is the capital-gains half of an equity return.'}
             />
             <FinancialInput
                 label="Non-Reg Bonds Total Return"
