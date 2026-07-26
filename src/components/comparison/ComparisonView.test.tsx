@@ -190,6 +190,12 @@ function chipButton(name: string): HTMLElement {
     return screen.getByRole('button', { name: new RegExp(`^${name}`) });
 }
 
+/** The <tr> whose metric-label cell is exactly `label`, or null when the row isn't rendered. */
+function metricRow(label: string): HTMLElement | null {
+    const cell = screen.queryByText(label, { selector: 'td' });
+    return cell ? (cell.closest('tr') as HTMLElement) : null;
+}
+
 afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
@@ -338,5 +344,52 @@ describe('ComparisonView', () => {
 
         // The Net estate card lists one value per selected plan (2 plans → 2 values).
         expect(within(card).getAllByText('$850,000')).toHaveLength(2);
+    });
+
+    it('renders a DB pension row in the lifetime-income group', () => {
+        renderView([makePlan({ name: 'Plan A' }), makePlan({ name: 'Plan B' })], null);
+
+        const row = metricRow('DB pension');
+        expect(row).not.toBeNull();
+        // The mocked rows carry no pension income → $0 for each of the two plans.
+        expect(within(row!).getAllByText('$0')).toHaveLength(2);
+    });
+
+    describe('Plan inputs group', () => {
+        it('always shows annual retirement spending and retirement age, even when identical', () => {
+            renderView([makePlan({ name: 'Plan A' }), makePlan({ name: 'Plan B' })], null);
+
+            expect(screen.getByText('Plan inputs')).toBeInTheDocument();
+
+            // First row at/after retirementAge (60) is the age-60 mocked row: spending 55000.
+            const spendRow = metricRow('Annual retirement spending (first full retirement year)');
+            expect(spendRow).not.toBeNull();
+            expect(within(spendRow!).getAllByText('$55,000')).toHaveLength(2);
+
+            // Identical across both plans, but flagged always-on.
+            const ageRow = metricRow('Retirement age');
+            expect(ageRow).not.toBeNull();
+            expect(within(ageRow!).getAllByText('60')).toHaveLength(2);
+        });
+
+        it('hides Province when both plans match and shows it when they differ', () => {
+            renderView([makePlan({ name: 'Plan A' }), makePlan({ name: 'Plan B' })], null);
+            expect(metricRow('Province')).toBeNull();
+
+            cleanup();
+
+            renderView(
+                [
+                    makePlan({ name: 'Ontario' }),
+                    makePlan({ name: 'BC', inputs: { ...INITIAL_INPUTS, province: 'BC' } }),
+                ],
+                null
+            );
+
+            const row = metricRow('Province');
+            expect(row).not.toBeNull();
+            expect(within(row!).getByText('ON')).toBeInTheDocument();
+            expect(within(row!).getByText('BC')).toBeInTheDocument();
+        });
     });
 });

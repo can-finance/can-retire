@@ -23,6 +23,8 @@ describe('computeSummaryMetrics', () => {
             totalShortfall: 0,
             totalSpending: 0,
             lifetimeTaxPaid: 0,
+            lifetimeOASClawback: 0,
+            rrspBalanceAt71: null,
             lifetimeNetCPP: 0,
             lifetimeNetOAS: 0,
             lifetimeNetPension: 0,
@@ -78,6 +80,50 @@ describe('computeSummaryMetrics', () => {
             expect(m.lifetimeNetPension).toBeGreaterThan(0);
         });
 
+        it('lifetimeOASClawback sums the per-year OAS recovery tax', () => {
+            const expected = results.reduce((acc, r) => acc + r.oasClawbackPaid, 0);
+            expect(metrics.lifetimeOASClawback).toBeCloseTo(expected, 6);
+        });
+
+        it('lifetimeOASClawback is positive when income is high enough to trigger recovery tax', () => {
+            const inputs = {
+                ...INITIAL_INPUTS,
+                person: {
+                    ...INITIAL_INPUTS.person,
+                    pension: { annualAmount: 150_000, startAge: 65, indexedToInflation: true }
+                }
+            };
+            const m = computeSummaryMetrics(runSimulation(inputs), inputs, false);
+            expect(m.lifetimeOASClawback).toBeGreaterThan(0);
+        });
+
+        it('rrspBalanceAt71 is the household RRSP balance in the age-71 row', () => {
+            const row71 = results.find(r => r.age === 71);
+            expect(row71).toBeDefined();
+            expect(metrics.rrspBalanceAt71).toBeCloseTo(
+                row71!.accounts.rrsp + (row71!.spouseAccounts?.rrsp ?? 0), 6
+            );
+        });
+
+        it('rrspBalanceAt71 includes the spouse RRSP for a couple', () => {
+            const inputs = { ...INITIAL_INPUTS, spouse: { ...INITIAL_INPUTS.person, age: 45 } };
+            const res = runSimulation(inputs);
+            const m = computeSummaryMetrics(res, inputs, false);
+            const row71 = res.find(r => r.age === 71)!;
+            expect(row71.spouseAccounts).toBeDefined();
+            expect(m.rrspBalanceAt71).toBeCloseTo(row71.accounts.rrsp + row71.spouseAccounts!.rrsp, 6);
+        });
+
+        it('rrspBalanceAt71 is null when no result year has the person at 71', () => {
+            // Person starts at 75 and dies at 80 — the plan never contains an age-71 row.
+            const inputs = {
+                ...INITIAL_INPUTS,
+                person: { ...INITIAL_INPUTS.person, age: 75, retirementAge: 60, lifeExpectancy: 80 }
+            };
+            const m = computeSummaryMetrics(runSimulation(inputs), inputs, false);
+            expect(m.rrspBalanceAt71).toBeNull();
+        });
+
         it('realized-gains metrics are finite and non-negative', () => {
             expect(Number.isFinite(metrics.lifetimeRealizedGainsNet)).toBe(true);
             expect(metrics.lifetimeRealizedGainsNet).toBeGreaterThanOrEqual(0);
@@ -113,6 +159,20 @@ describe('computeSummaryMetrics', () => {
             const real = computeSummaryMetrics(results, inputs, true);
 
             expect(real.lifetimeTaxPaid).toBeLessThan(nominal.lifetimeTaxPaid);
+        });
+
+        it('deflates rrspBalanceAt71 by the age-71 row inflation factor', () => {
+            const inputs = INITIAL_INPUTS.inflationRate > 0
+                ? INITIAL_INPUTS
+                : { ...INITIAL_INPUTS, inflationRate: 0.025 };
+
+            const results = runSimulation(inputs);
+            const row71 = results.find(r => r.age === 71)!;
+            const real = computeSummaryMetrics(results, inputs, true);
+            const nominal = computeSummaryMetrics(results, inputs, false);
+
+            expect(row71.inflationFactor).toBeGreaterThan(1);
+            expect(real.rrspBalanceAt71).toBeCloseTo(nominal.rrspBalanceAt71! / row71.inflationFactor, 6);
         });
     });
 });

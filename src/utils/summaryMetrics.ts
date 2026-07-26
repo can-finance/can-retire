@@ -18,6 +18,14 @@ export interface SummaryMetrics {
     totalShortfall: number;
     totalSpending: number; // Lifetime spending actually funded (desired minus shortfall)
     lifetimeTaxPaid: number;
+    lifetimeOASClawback: number; // Lifetime OAS recovery tax (already inside lifetimeTaxPaid)
+    // Household RRSP/RRIF balance at the END of the year the PRIMARY person turns 71.
+    // Age 71 is the last voluntary-melt year (the engine melts while `age < 72`), so this
+    // is the balance entering the mandatory-RRIF regime. `r.age` is the primary person's
+    // age, so for a couple the spouse's own 71 may land in a different calendar year —
+    // this is a household total sampled on the primary's clock, not a per-person figure.
+    // null when no result row has age 71 (already past 71 at plan start, or dies first).
+    rrspBalanceAt71: number | null;
     lifetimeNetCPP: number;
     lifetimeNetOAS: number;
     lifetimeNetPension: number;
@@ -47,6 +55,8 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
             totalShortfall: 0,
             totalSpending: 0,
             lifetimeTaxPaid: 0,
+            lifetimeOASClawback: 0,
+            rrspBalanceAt71: null as number | null,
             lifetimeNetCPP: 0,
             lifetimeNetOAS: 0,
             lifetimeNetPension: 0,
@@ -128,6 +138,13 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
     const totalNetValue = netRetirementIncome + netEstateValue;
 
     const lifetimeTaxPaid = results.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0) + adjustedEstateTax;
+    const lifetimeOASClawback = results.reduce((acc, curr) => acc + adj(curr.oasClawbackPaid, curr.inflationFactor), 0);
+    // See the interface comment: age 71 is the last voluntary-melt year (`age < 72`),
+    // and `r.age` tracks the primary person only.
+    const rowAt71 = results.find(r => r.age === 71);
+    const rrspBalanceAt71 = rowAt71
+        ? adj(rowAt71.accounts.rrsp + (rowAt71.spouseAccounts?.rrsp ?? 0), rowAt71.inflationFactor)
+        : null;
     const lifetimeNetCPP = results.reduce((acc, curr) => acc + adj(curr.netCPPIncome, curr.inflationFactor), 0);
     const lifetimeNetOAS = results.reduce((acc, curr) => acc + adj(curr.netOASIncome, curr.inflationFactor), 0);
     const lifetimeNetPension = results.reduce((acc, curr) => acc + adj(curr.netPensionIncome, curr.inflationFactor), 0);
@@ -157,6 +174,8 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
         totalShortfall,
         totalSpending,
         lifetimeTaxPaid,
+        lifetimeOASClawback,
+        rrspBalanceAt71,
         lifetimeNetCPP,
         lifetimeNetOAS,
         lifetimeNetPension,

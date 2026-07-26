@@ -80,6 +80,34 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         return run.monteCarlo.medianEndOfPlanAssets / factor;
     };
 
+    // Downside (5th percentile) end-of-plan assets — the last percentile row, deflated
+    // the same way as the median above.
+    const downsideEndAssets = (run: ComparisonRun): number | null => {
+        if (!run.monteCarlo) return null;
+        const factor = inflationAdjusted
+            ? run.results[run.results.length - 1]?.inflationFactor ?? 1.0
+            : 1.0;
+        const last = run.monteCarlo.percentiles[run.monteCarlo.percentiles.length - 1];
+        return last === undefined ? null : last.p5 / factor;
+    };
+
+    // Annual retirement spending is read off the first retirement result row rather
+    // than `inputs.postRetirementSpend`: the row is already denominated correctly for
+    // whichever dollar basis is selected, and it picks up any one-time expense that
+    // lands in that year.
+    const retirementSpending = (run: ComparisonRun): number | null => {
+        const row = run.results.find(r => r.age >= run.comparand.inputs.person.retirementAge);
+        if (!row) return null;
+        return inflationAdjusted ? row.spending / row.inflationFactor : row.spending;
+    };
+
+    // Rates are stored as fractions (0.025 = 2.5%) — projection.ts consumes them raw
+    // as `(1 + inflationRate)` and `balance * bondReturn` — so scale for display.
+    const ratePct = (v: number | undefined): number | null => (v === undefined ? null : v * 100);
+
+    // "65 / 63" for couples, plain "65" for a single person.
+    const pairText = (p: number, s: number | undefined): string => (s === undefined ? `${p}` : `${p} / ${s}`);
+
     const outOfMoneyCell = (run: ComparisonRun): ReactNode => {
         const age = run.metrics.outOfMoneyAge;
         if (age === null) return <span className="text-emerald-700 font-semibold">Never</span>;
@@ -98,7 +126,82 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
               delta?: Delta;
           };
 
+    // The "Plan inputs" group is a "what differs" summary, so a row whose value is
+    // identical across every selected plan carries no signal and is dropped (unless
+    // flagged `always`). Equality is tested on `key` — a rendered string — so rows
+    // mixing numbers, text and undefined all compare on the same stable basis.
+    type InputRowSpec = {
+        label: string;
+        always?: boolean;
+        key: (run: ComparisonRun) => string;
+        cell: (run: ComparisonRun) => ReactNode;
+        delta?: Delta;
+    };
+
+    const planInputRows = (specs: InputRowSpec[]): MetricRow[] =>
+        specs
+            .filter(s => s.always || !runs.every(r => s.key(r) === s.key(runs[0])))
+            .map(({ label, cell, delta }) => ({ kind: 'data' as const, label, cell, delta }));
+
+    // A plain text input row: the rendered text is also the comparison key, and there
+    // is no meaningful delta (omitting `delta` renders an em dash in that column).
+    const textInputRow = (label: string, text: (run: ComparisonRun) => string, always = false): InputRowSpec => ({
+        label,
+        always,
+        key: text,
+        cell: text,
+    });
+
+    // A pct input row: same scaled value drives the cell, the comparison key and the delta.
+    const pctInputRow = (label: string, value: (run: ComparisonRun) => number | undefined): InputRowSpec => {
+        const pct = (run: ComparisonRun) => ratePct(value(run));
+        return {
+            label,
+            key: run => {
+                const v = pct(run);
+                return v === null ? '—' : fmtPct1(v);
+            },
+            cell: run => {
+                const v = pct(run);
+                return v === null ? DASH : fmtPct1(v);
+            },
+            delta: { kind: 'pct', dir: 'neutral', decimals: 1, value: pct },
+        };
+    };
+
     const rows: MetricRow[] = [
+        { kind: 'group', label: 'Plan inputs', note: '(what differs between these plans)' },
+        ...planInputRows([
+            {
+                label: 'Annual retirement spending (first full retirement year)',
+                always: true,
+                key: run => String(retirementSpending(run)),
+                cell: run => {
+                    const v = retirementSpending(run);
+                    return v === null ? DASH : formatCurrencyCAD(v);
+                },
+                delta: { kind: 'currency', dir: 'neutral', value: retirementSpending },
+            },
+            textInputRow(
+                'Retirement age',
+                run => pairText(run.comparand.inputs.person.retirementAge, run.comparand.inputs.spouse?.retirementAge),
+                true,
+            ),
+            textInputRow('Life expectancy', run =>
+                pairText(run.comparand.inputs.person.lifeExpectancy, run.comparand.inputs.spouse?.lifeExpectancy),
+            ),
+            textInputRow('Province', run => run.comparand.inputs.province),
+            textInputRow('Withdrawal strategy', run =>
+                (run.comparand.inputs.withdrawalStrategy ?? 'tax-efficient') === 'rrsp-first'
+                    ? 'RRSP first'
+                    : 'Tax-efficient',
+            ),
+            textInputRow('Income splitting', run => (run.comparand.inputs.useIncomeSplitting ? 'On' : 'Off')),
+            pctInputRow('Inflation', run => run.comparand.inputs.inflationRate),
+            pctInputRow('Equity growth', run => run.comparand.inputs.returnRates.capitalGrowth),
+            pctInputRow('Bond return', run => run.comparand.inputs.returnRates.bondReturn),
+            pctInputRow('Volatility', run => run.comparand.inputs.returnRates.volatility),
+        ]),
         { kind: 'group', label: 'Outcomes' },
         {
             kind: 'data',
@@ -129,6 +232,15 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             cell: run => fmtPct1(run.metrics.initialWithdrawalRate),
             delta: { kind: 'pct', dir: 'neutral', decimals: 1, value: r => r.metrics.initialWithdrawalRate },
         },
+        {
+            kind: 'data',
+            label: 'RRSP/RRIF balance at 71',
+            cell: run => {
+                const v = run.metrics.rrspBalanceAt71;
+                return v === null ? DASH : formatCurrencyCAD(v);
+            },
+            delta: { kind: 'currency', dir: 'neutral', value: r => r.metrics.rrspBalanceAt71 },
+        },
         { kind: 'group', label: 'Monte Carlo', note: '(range of outcomes under random market returns)' },
         {
             kind: 'data',
@@ -151,6 +263,15 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
                 return v === null ? <span className="text-slate-300">…</span> : formatCurrencyCAD(v);
             },
             delta: { kind: 'currency', dir: 'higher', value: r => medianEndAssets(r) },
+        },
+        {
+            kind: 'data',
+            label: 'Downside end-of-plan assets (5th percentile)',
+            cell: run => {
+                const v = downsideEndAssets(run);
+                return v === null ? <span className="text-slate-300">…</span> : formatCurrencyCAD(v);
+            },
+            delta: { kind: 'currency', dir: 'higher', value: r => downsideEndAssets(r) },
         },
         { kind: 'group', label: 'Estate' },
         {
@@ -190,6 +311,12 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         },
         {
             kind: 'data',
+            label: 'OAS clawed back (lifetime)',
+            cell: run => formatCurrencyCAD(run.metrics.lifetimeOASClawback),
+            delta: { kind: 'currency', dir: 'lower', value: r => r.metrics.lifetimeOASClawback },
+        },
+        {
+            kind: 'data',
             label: 'Retirement effective tax rate',
             cell: run => fmtPct1(run.metrics.effectiveTaxRateRetirement),
             delta: { kind: 'pct', dir: 'neutral', decimals: 1, value: r => r.metrics.effectiveTaxRateRetirement },
@@ -212,6 +339,12 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             label: 'OAS',
             cell: run => formatCurrencyCAD(run.metrics.lifetimeNetOAS),
             delta: { kind: 'currency', dir: 'neutral', value: r => r.metrics.lifetimeNetOAS },
+        },
+        {
+            kind: 'data',
+            label: 'DB pension',
+            cell: run => formatCurrencyCAD(run.metrics.lifetimeNetPension),
+            delta: { kind: 'currency', dir: 'neutral', value: r => r.metrics.lifetimeNetPension },
         },
         {
             kind: 'data',

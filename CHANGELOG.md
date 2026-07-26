@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.11.0] - 2026-07-26
 
 ### Added
+- **Plan comparison now shows what the plans assume, not just what they produce.**
+  A new "Plan inputs" section at the top of the comparison table leads with annual
+  retirement spending and retirement age, and lists life expectancy, province,
+  withdrawal strategy, income splitting, inflation and return assumptions — but only
+  where the plans being compared actually disagree, so the section stays short and
+  reads as a summary of the differences.
+- **Four new comparison rows.** Lifetime DB pension income (which was computed but
+  never shown), lifetime OAS clawed back, the household RRSP/RRIF balance at 71 —
+  the last year before mandatory RRIF minimums, so it shows what a meltdown actually
+  changed — and downside (5th percentile) end-of-plan assets alongside the median,
+  since two plans with the same success rate can have very different worst cases.
 - **"Clear all data" link in the footer.** Erases every saved plan and figure
   from the browser and returns the app to the guided setup, as a brand-new
   visitor would see it — behind a confirmation dialog so it can't be triggered
