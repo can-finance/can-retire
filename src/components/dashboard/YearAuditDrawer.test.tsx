@@ -127,7 +127,7 @@ describe('YearAuditDrawer', () => {
             />
         );
         // Once as section 1's result, once as section 3's carry-over line.
-        expect(screen.getAllByText('Total cash in')).toHaveLength(2);
+        expect(screen.getAllByText('Total cash in (pre-tax)')).toHaveLength(2);
         expect(screen.getByText('Net income')).toBeInTheDocument();
         expect(screen.getByText('Less: income tax')).toBeInTheDocument();
         expect(screen.getByText('Less: CPP/EI contributions')).toBeInTheDocument();

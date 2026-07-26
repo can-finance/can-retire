@@ -155,7 +155,7 @@ function incomeSourcesSection(r: SimulationResult, oneTimeInflows: number): Audi
         lines.push({ label, amount, note });
     };
 
-    add('Employment income (gross)', r.employmentIncome);
+    add('Employment income', r.employmentIncome);
     add('CPP (gross)', r.cppIncome);
     add('OAS (gross)', r.oasIncome);
     add('Workplace (DB) pension (gross)', r.pensionIncome);
@@ -167,13 +167,12 @@ function incomeSourcesSection(r: SimulationResult, oneTimeInflows: number): Audi
 
     // Every line above is an addend, so the total is exact by construction — there
     // is no independent quantity left for a check to test.
-    lines.push({ label: 'Total cash in', amount: sumLines(lines), kind: 'result' });
+    lines.push({ label: 'Total cash in (pre-tax)', amount: sumLines(lines), kind: 'result' });
 
     return {
         key: 'incomeSources',
         title: 'Income & withdrawals (gross)',
-        lines,
-        note: 'Pre-tax cash the household actually receives. Tax comes off below.'
+        lines
     };
 }
 
@@ -200,8 +199,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     // Employment's gross-minus-net gap carries CPP/EI withholding too (the engine
     // folds it into netEmploymentIncome), so back the payroll out to leave the
     // income tax alone.
-    part('Employment income tax', (r.employmentIncome - r.netEmploymentIncome) - payroll,
-        payroll > EPS ? 'Excludes CPP/EI contributions — those come off in Net income & spending' : undefined);
+    part('Employment income tax', (r.employmentIncome - r.netEmploymentIncome) - payroll);
     part('Tax on CPP', r.cppIncome - r.netCPPIncome);
     part('Tax on OAS', r.oasIncome - r.netOASIncome,
         r.oasClawbackPaid > EPS
@@ -209,7 +207,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
             : undefined);
     part('Tax on DB pension', r.pensionIncome - r.netPensionIncome);
     part('Tax on investment income', r.investmentIncome - r.netInvestmentIncome,
-        'Interest, dividends and foreign dividends — the slice is struck on the grossed-up dividend');
+        'Interest, dividends and foreign dividends');
     part('Tax on non-registered sale gains', r.taxShareOnCapGains,
         'The taxable half of gains realized while living, including fund turnover');
 
@@ -328,7 +326,7 @@ function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, cashIn: 
         lines.push({ label, amount, note, kind });
     };
 
-    add('Total cash in', cashIn, 'Carried down from Income & withdrawals above');
+    add('Total cash in (pre-tax)', cashIn, 'Carried down from Income & withdrawals above');
     add('Less: income tax', -r.taxPaid);
     add('Less: CPP/EI contributions', -payroll,
         'Withheld on employment income; derived from the inputs — the engine folds it into net employment income');

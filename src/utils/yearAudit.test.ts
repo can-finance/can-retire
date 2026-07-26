@@ -481,7 +481,7 @@ describe('estate section', () => {
 });
 
 describe('gross income section (section 1)', () => {
-    it('every line is the engine\'s gross figure, and they sum to "Total cash in"', () => {
+    it('every line is the engine\'s gross figure, and they sum to "Total cash in (pre-tax)"', () => {
         for (const [name, ins] of SCENARIOS) {
             const results = runSimulation(ins);
             for (let i = 0; i < results.length; i++) {
@@ -495,7 +495,7 @@ describe('gross income section (section 1)', () => {
                 };
 
                 // Gross, not net: each line must equal the engine field outright.
-                expectLine('Employment income (gross)', r.employmentIncome);
+                expectLine('Employment income', r.employmentIncome);
                 expectLine('CPP (gross)', r.cppIncome);
                 expectLine('OAS (gross)', r.oasIncome);
                 expectLine('Workplace (DB) pension (gross)', r.pensionIncome);
@@ -511,7 +511,7 @@ describe('gross income section (section 1)', () => {
                     .filter(l => l.kind === undefined || l.kind === 'normal')
                     .reduce((sum, l) => sum + l.amount, 0);
                 const total = section.lines.find(l => l.kind === 'result')!;
-                expect(total.label).toBe('Total cash in');
+                expect(total.label).toBe('Total cash in (pre-tax)');
                 expect(total.amount, `${name} i=${i} total`).toBeCloseTo(addends, 6);
                 expect(section.check, `${name} i=${i} check`).toBeUndefined();
             }
@@ -560,7 +560,7 @@ describe('net income section (section 3)', () => {
                 // The carry-over must be section 1's own result, not a re-derivation
                 // (sub-cent totals are suppressed, hence the cent-level compare).
                 const cashIn = income.lines.find(l => l.kind === 'result')!.amount;
-                const carried = amountOf('Total cash in');
+                const carried = amountOf('Total cash in (pre-tax)');
                 expect(Math.abs(carried - cashIn), `${name} i=${i} carry-over`).toBeLessThan(0.01);
 
                 const tax = -amountOf('Less: income tax');
