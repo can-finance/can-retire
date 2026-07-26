@@ -159,7 +159,8 @@ function incomeSourcesSection(r: SimulationResult, oneTimeInflows: number): Audi
     add('CPP (gross)', r.cppIncome);
     add('OAS (gross)', r.oasIncome);
     add('Workplace (DB) pension (gross)', r.pensionIncome);
-    add('Investment income received', r.investmentIncome, 'Interest and dividend cash; growth stays in the account');
+    add('Investment income received', r.investmentIncome,
+        'Interest and dividends paid out by non-registered accounts only — RRSP and TFSA earnings stay inside those accounts. Capital growth stays in the account too.');
     add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal, 'RRIF minimum + meltdown + top-up draws');
     add('TFSA withdrawals', r.totalTFSAWithdrawal);
     add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Grossed up so the sale funds its own tax');
@@ -225,7 +226,10 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     part('Less: pension income splitting', -(r.taxSavingsFromSplit ?? 0),
         'Splitting re-prices the whole bill after the per-source slices are struck');
 
-    const partition = sumLines(lines);
+    // The partition sums to r.taxPaid by construction of the engine's pro-rata
+    // fields (see the comment above the slices) — there is no independent
+    // quantity here for a check to test. That identity is asserted directly in
+    // yearAudit.test.ts instead of rendered as a permanently-green row.
 
     const effectiveRate = r.grossIncome > 0 ? (r.taxPaid / r.grossIncome) * 100 : 0;
     lines.push({
@@ -279,13 +283,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     return {
         key: 'taxes',
         title: 'Taxes',
-        lines,
-        check: {
-            label: 'The per-source tax lines add up to the household income tax',
-            expected: r.taxPaid,
-            actual: partition,
-            residual: partition - r.taxPaid
-        }
+        lines
     };
 }
 
@@ -399,14 +397,19 @@ function accountSection(
     const growth = endBal - (startBal + spec.reinvested - spec.withdrawn - spec.terminalTax);
     const implausible = base > GROWTH_SANITY_MIN_BASE && Math.abs(growth) > GROWTH_SANITY_RATIO * base;
     lines.push({
-        label: 'Investment growth (derived)',
+        label: 'Investment growth',
         amount: growth,
         note: implausible
             ? 'Unusually large for the balance it grew on — the flows above may not fully explain this year'
             : undefined
     });
 
-    const actual = sumLines(lines);
+    // Growth is defined above as whatever residual makes the waterfall close, so
+    // opening balance + flows always equals the closing balance by construction —
+    // there is no independent quantity here for a check to test (the
+    // growth-implausibility note above is the real safeguard). The waterfall
+    // identity is asserted directly in yearAudit.test.ts instead of rendered as a
+    // permanently-green row.
     lines.push({ label: 'Closing balance', amount: endBal, kind: 'result' });
     lines.push(...extraLines);
 
@@ -416,14 +419,7 @@ function accountSection(
         lines,
         note: rolledOver > EPS
             ? 'Household totals combine both spouses, so the rollover from the deceased spouse nets out here.'
-            : undefined,
-        check: {
-            label: 'Opening balance plus flows equals the closing balance',
-            expected: endBal,
-            actual,
-            residual: actual - endBal,
-            note: 'Growth is derived as the residual, so this always reconciles — the growth line carries a warning instead when it looks implausible.'
-        }
+            : undefined
     };
 }
 
@@ -475,17 +471,16 @@ function estateSection(r: SimulationResult): AuditSection {
             : undefined
     });
 
+    // The engine computes gross as net + terminal tax (see SimulationResult), so
+    // gross − tax = net is tautological — there is no independent quantity here
+    // for a check to test. That identity is asserted directly against the engine
+    // fields in yearAudit.test.ts instead of rendered as a permanently-green row.
+
     return {
         key: 'estate',
         title: 'Estate',
         lines,
-        note: who.length > 0 ? `Death year — ${who.join(' and ')}.` : 'Death year.',
-        check: {
-            label: 'Assets before terminal tax less the tax equals the net estate',
-            expected: net,
-            actual: gross - totalTerminal,
-            residual: (gross - totalTerminal) - net
-        }
+        note: who.length > 0 ? `Death year — ${who.join(' and ')}.` : 'Death year.'
     };
 }
 

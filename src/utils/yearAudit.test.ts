@@ -170,21 +170,25 @@ const oneTimeInflow = (ins: SimulationInputs, age: number) =>
 
 describe('buildYearAudit — reconciliation across every year of every scenario', () => {
     for (const [name, ins, cashTolerance] of SCENARIOS) {
-        it(`${name}: every section reconciles`, () => {
+        it(`${name}: cashFlow reconciles — the only section whose identity can genuinely miss`, () => {
             const results = runSimulation(ins);
             expect(results.length).toBeGreaterThan(0);
 
             for (let i = 0; i < results.length; i++) {
                 const audit = buildYearAudit(ins, results, i);
                 const where = `${name} year index ${i} (age ${results[i].age})`;
+                const cashFlow = sectionOf(audit, 'cashFlow')!;
 
-                for (const section of audit.sections) {
-                    if (!section.check) continue;
-                    const tolerance = section.key === 'cashFlow' ? cashTolerance : 1;
-                    expect(
-                        Math.abs(section.check.residual),
-                        `${where} — section ${section.key} residual ${section.check.residual}`
-                    ).toBeLessThan(tolerance);
+                expect(
+                    Math.abs(cashFlow.check!.residual),
+                    `${where} — section cashFlow residual ${cashFlow.check!.residual}`
+                ).toBeLessThan(cashTolerance);
+
+                // Every other section holds by construction and no longer carries a
+                // check — see yearAudit.ts for why each identity is tautological.
+                for (const key of ['incomeSources', 'taxes', 'accountsRRSP', 'accountsTFSA', 'accountsNonReg'] as const) {
+                    const section = sectionOf(audit, key);
+                    if (section) expect(section.check, `${where} — section ${key}`).toBeUndefined();
                 }
             }
         });
@@ -198,7 +202,11 @@ describe('buildYearAudit — reconciliation across every year of every scenario'
                     // Growth is defined as the residual, so this is 0 by construction —
                     // the assertion guards the line-kind bookkeeping (an `info` line
                     // wrongly counted, a missing terminal-tax line) rather than the engine.
-                    expect(Math.abs(section.check!.residual), `${name} i=${i} ${key}`).toBeLessThan(1e-6);
+                    const sum = section.lines
+                        .filter(l => l.kind === undefined || l.kind === 'normal')
+                        .reduce((s, l) => s + l.amount, 0);
+                    const closing = section.lines.find(l => l.kind === 'result')!.amount;
+                    expect(Math.abs(sum - closing), `${name} i=${i} ${key}`).toBeLessThan(1e-6);
                 }
             }
         });
@@ -455,7 +463,7 @@ describe('estate section', () => {
         }
     });
 
-    it('the audit reports the engine figures directly and its check closes', () => {
+    it('the audit reports the engine figures directly', () => {
         const results = runSimulation(SINGLE);
         const i = results.length - 1;
         const r = results[i];
@@ -465,7 +473,11 @@ describe('estate section', () => {
         expect(estate.lines.find(l => l.label === 'Assets before terminal tax')!.amount)
             .toBeCloseTo(r.grossEstateValue!, 6);
         expect(estate.lines.find(l => l.kind === 'result')!.amount).toBeCloseTo(r.netEstateValue!, 6);
-        expect(Math.abs(estate.check!.residual)).toBeLessThan(1e-6);
+        expect(estate.check).toBeUndefined();
+        // gross − tax = net is tautological by construction of the engine's
+        // fields; the identity itself is covered across scenarios by "the estate
+        // fields deduct the terminal tax exactly once" below.
+        expect(r.grossEstateValue! - r.totalTerminalTax!).toBeCloseTo(r.netEstateValue!, 6);
     });
 
     it('the net estate never goes negative while the balances cannot', () => {
@@ -631,9 +643,8 @@ describe('income and tax sections', () => {
                 const partition = section.lines
                     .filter(l => l.kind === undefined || l.kind === 'normal')
                     .reduce((sum, l) => sum + l.amount, 0);
-                expect(section.check!.expected, `${name} i=${i} expected`).toBeCloseTo(results[i].taxPaid, 6);
-                expect(Math.abs(partition - section.check!.expected), `${name} i=${i}`).toBeLessThan(0.1);
-                expect(Math.abs(section.check!.residual), `${name} i=${i} residual`).toBeLessThan(0.1);
+                expect(section.check, `${name} i=${i} check`).toBeUndefined();
+                expect(Math.abs(partition - results[i].taxPaid), `${name} i=${i}`).toBeLessThan(0.1);
             }
         }
     });
@@ -669,8 +680,10 @@ describe('income and tax sections', () => {
         const i = results.length - 1;
         expect(results[i].totalTerminalTax!).toBeGreaterThan(1);
         const section = sectionOf(buildYearAudit(SINGLE, results, i), 'taxes')!;
-        expect(section.check!.expected).toBeCloseTo(results[i].taxPaid, 6);
-        expect(Math.abs(section.check!.residual)).toBeLessThan(0.1);
+        const partition = section.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((sum, l) => sum + l.amount, 0);
+        expect(Math.abs(partition - results[i].taxPaid)).toBeLessThan(0.1);
         expect(section.lines.some(l => l.label.toLowerCase().includes('terminal'))).toBe(false);
     });
 
@@ -721,7 +734,11 @@ describe('income and tax sections', () => {
         const results = runSimulation(ins);
         const i = results.findIndex(r => r.dividendTaxPaid < -1);
         expect(i, 'expected a year where the dividend credit goes negative').toBeGreaterThanOrEqual(0);
-        expect(Math.abs(sectionOf(buildYearAudit(ins, results, i), 'taxes')!.check!.residual)).toBeLessThan(0.1);
+        const section = sectionOf(buildYearAudit(ins, results, i), 'taxes')!;
+        const partition = section.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((sum, l) => sum + l.amount, 0);
+        expect(Math.abs(partition - results[i].taxPaid)).toBeLessThan(0.1);
     });
 });
 

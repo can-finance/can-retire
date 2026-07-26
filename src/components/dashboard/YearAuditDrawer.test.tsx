@@ -326,17 +326,23 @@ describe('YearAuditDrawer', () => {
         expect(screen.getByText(/unexplained:/i)).toBeInTheDocument();
     });
 
-    it('a fully reconciling section shows "balances" rather than an unexplained row', () => {
+    it('shows at most one check row — cashFlow is the only section with one — and it reads "balances" when the residual is small', () => {
         const results = runSimulation(INITIAL_INPUTS);
+        const { index: residualIndex } = findCashFlowResidualIndex(INITIAL_INPUTS);
+        // Pick a year other than the one with the known >=$1 residual, so the
+        // cashFlow check row reads as balancing.
+        const index = residualIndex === 0 ? 1 : 0;
         render(
             <YearAuditDrawer
-                inputs={INITIAL_INPUTS} results={results} index={0}
+                inputs={INITIAL_INPUTS} results={results} index={index}
                 inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
             />
         );
-        // Every account waterfall reconciles exactly by construction (growth is
-        // the residual) — its check row must read as balancing.
-        expect(screen.getAllByText(/— balances/).length).toBeGreaterThan(0);
+        // Only the cashFlow section (Net income & spending) still carries a check
+        // — taxes/accounts/estate hold by construction and no longer render one.
+        const checkRows = screen.getAllByText(/— balances|— unexplained:/);
+        expect(checkRows).toHaveLength(1);
+        expect(screen.getByText(/— balances/)).toBeInTheDocument();
     });
 });
 
