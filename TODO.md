@@ -133,8 +133,9 @@ cash-flow residual in the default scenario).
 
 ### Monte Carlo realism (from 2026-07-18 discussion)
 Current model: single `volatility`, one lognormal draw applied identically to
-`capitalGrowth`/`rrspGrowth`/`tfsaGrowth`; interest & dividend slices pay a fixed
-yield and their principal never moves.
+`capitalGrowth`/`rrspGrowth`/`tfsaGrowth`; the interest/bond and cash slices pay a
+fixed yield and their principal never moves. (The dividend slices no longer do —
+see below.)
 - **Lognormal draws — shipped 2026-07-25.** Replaced `mean + vol*Z` with
   `exp(mu + sigma*Z) - 1`, `mu = ln(1+mean) - sigma^2/2`. Fixes the missing
   volatility drag on median outcomes and makes sub-−100% returns impossible.
@@ -144,10 +145,21 @@ yield and their principal never moves.
   at ~13% vol × Z (dividend stocks are ~0.85+ market-correlated), interest/bond
   slice with its own small independent draw (~5% vol for bond funds, ~0 for GICs).
   Do NOT give each class an independent draw — uncorrelated shocks fake a
-  diversification benefit and inflate success rates. Implementation notes: the
-  slice-weight renormalization for uneven slice growth already exists
-  (`projection.ts` ~line 747) and generalizes; ACB stays untouched (price moves are
-  unrealized); keep yield income consistently on pre- or post-shock balances.
+  diversification benefit and inflate success rates.
+  **Partly delivered 2026-07-26:** the dividend and foreign-dividend slices now DO
+  appreciate, at `DIVIDEND_EQUITY_BETA * (capitalGrowth − yield)` with beta = 0.85
+  (`projection.ts`, `growNonReg`). Since `capitalGrowth` is already the shocked draw
+  and the yields are unshocked, those slices automatically carry an effective market
+  beta of ~0.85 — so the correlation half of this bullet is done, and what remains is
+  class-specific VOLATILITY (a wider/narrower sigma per class, and the bond slice's
+  own small independent draw), not adding price growth. Beta 0.85 was chosen to match
+  the ~13%-vs-15% relationship above; keep the two consistent if either moves.
+  Implementation notes: the slice-weight renormalization for uneven slice growth
+  already exists (`projection.ts`, `growNonReg`) and now covers the dividend slices
+  too; each slice's price rate is floored at −100% so a blended growth factor can
+  never go negative; ACB stays untouched (price moves are unrealized); keep yield
+  income consistently on pre- or post-shock balances (today it is charged on the
+  start-of-year balance in Step 1, before Step 6 growth).
   Yield-only volatility (shocking `returnRates.interest`/`dividend`) was considered
   and rejected — barely widens the fan, models the wrong risk.
 

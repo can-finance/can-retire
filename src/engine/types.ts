@@ -53,8 +53,9 @@ export interface NonRegisteredAccount extends AssetAccount {
     // distributions (0-1). Taxed annually and added to ACB (reinvested).
     equityTurnoverRate?: number;
     // Rebalance this account back to its target weights each year (default true).
-    // When false, only the Equity slice compounds: income slices stay flat in
-    // dollars and the equity share drifts up over time.
+    // When false, each slice compounds at its own price growth — equity at the full
+    // capitalGrowth, the two dividend slices at DIVIDEND_EQUITY_BETA x (capitalGrowth
+    // − their yield), bonds and cash not at all — so the equity share drifts up.
     rebalanceAnnually?: boolean;
     // Surplus cash is swept into this account. At most one per person; when none
     // is flagged the first account receives surplus.

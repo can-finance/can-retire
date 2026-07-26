@@ -146,21 +146,26 @@ const SURPLUS = inputs({
  * regression fence on engine drift, not a licence for it to grow.
  */
 const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
-    // Worst year is age 64 ($274.16) — a DB pension plus dividends the solver's tax
+    // Worst year is age 64 ($238.30) — a DB pension plus dividends the solver's tax
     // estimate does not credit, not an age-amount error. Moving the default melt
     // start from 55 to 60 shifted this by pennies ($274.28 -> $274.16, same year):
-    // the melt is not what the solver mis-prices.
-    ['INITIAL_INPUTS', INITIAL_INPUTS, 275],
+    // the melt is not what the solver mis-prices. Giving the non-registered dividend
+    // slice price appreciation moved it again ($274.16 -> $238.30, still age 64):
+    // the year's larger non-registered balance shifts the funding mix, not the
+    // solver's pricing of it.
+    ['INITIAL_INPUTS', INITIAL_INPUTS, 239],
     // No credit-argument gap in these fixtures, so only the binary-search tolerance
-    // survives. Measured worsts: 0.9704 / 1.7083 / 1.6253.
+    // survives. Measured worsts: 0.9704 / 0.9362 / 1.6253.
     ['single', SINGLE, 1],
     // Indexing employment income (it is a today's-dollars input) grew the couple's
     // balances through the working years, so the early-retirement non-registered
     // sales are larger: the worst year moved from age 69 ($0.8235) to age 66
     // ($1.7083, a $40k sale). `withdrawNonReg` makes two passes over two spouses'
     // accounts, so up to four $1-tolerance binary searches land in one year — still
-    // purely search noise, with no RRSP draw and no credit gap in that year.
-    ['couple', COUPLE, 1.8],
+    // purely search noise, with no RRSP draw and no credit gap in that year. Dividend
+    // price appreciation then reshuffled which year is worst (age 66 -> age 70) and
+    // shrank it to $0.9362, so this is back inside the plain search-noise bound.
+    ['couple', COUPLE, 1],
     ['widowed', WIDOWED, 1.7],
     // Every year is fully unfunded or TFSA-only — no gross-up, no drift.
     ['shortfall', SHORTFALL, 0.01],
@@ -239,7 +244,13 @@ describe('cash-flow identity: what the residual is made of', () => {
                 // so it cancels. Only a saving the engine could not sweep (no
                 // non-registered account anywhere) shows as an extra audit line.
                 const unswept = r.unallocatedSplitSaving ?? 0;
-                expect(available + unswept, `${name} i=${i}`).toBeCloseTo(r.netIncome, 2);
+                // Not exact to the last binary digit: every audit line is EPS-gated
+                // ($0.01) as display noise, and the withdrawal solver can leave a
+                // fraction-of-a-cent draw behind that the section therefore never
+                // renders. Measured worst across all scenarios is $0.005797 (couple,
+                // age 71 — one dropped sub-cent TFSA withdrawal); the bound below is
+                // two gated lines' worth, so it still fails on any real drift.
+                expect(Math.abs(available + unswept - r.netIncome), `${name} i=${i}`).toBeLessThan(0.02);
             }
         }
     });

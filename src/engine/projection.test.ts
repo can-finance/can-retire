@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runSimulation, runMonteCarlo, lognormalReturn } from './projection';
+import { runSimulation, runMonteCarlo, lognormalReturn, DIVIDEND_EQUITY_BETA } from './projection';
 import { calculateIncomeTax, calculateOASClawback, calculateTotalTax } from './tax';
 import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult } from './types';
 import { INITIAL_INPUTS } from '../utils/inputSanitizer';
@@ -506,17 +506,168 @@ describe('non-reg rebalancing vs drift', () => {
         expect(res[10].nonRegMix!.capitalGain).toBeCloseTo(0.5, 5);
     });
 
-    it('drift: dividend income stays flat in dollars; equity share climbs', () => {
+    it('drift: the dividend sleeve compounds too, but slower, so the equity share still climbs', () => {
         const res = runSimulation(driftInputs(false));
-        expect(res[0].investmentIncome).toBeCloseTo(20_000, 0);
-        // Dividend sleeve never grows → flat income
-        expect(res[5].investmentIncome).toBeCloseTo(20_000, 0);
-        expect(res[14].investmentIncome).toBeCloseTo(20_000, 0);
-        // Equity weight drifts up: 0.5 → 0.5(1.06)^n / (0.5(1.06)^n + 0.5)
+        // The dividend sleeve's PRICE grows at beta*(capitalGrowth − yield) =
+        // 0.85*(6% − 4%) = 1.7%/yr, so its income compounds at that rate rather than
+        // staying flat. (The surplus this creates is swept to the TFSA, not back into
+        // the account, so the sleeve's dollars are pure growth.)
+        const divPrice = DIVIDEND_EQUITY_BETA * (0.06 - 0.04);
+        expect(res[0].investmentIncome).toBeCloseTo(20_000, 6);
+        expect(res[5].investmentIncome).toBeCloseTo(20_000 * Math.pow(1 + divPrice, 5), 4);
+        expect(res[14].investmentIncome).toBeCloseTo(20_000 * Math.pow(1 + divPrice, 14), 4);
+        // ...but the 6% equity sleeve still outruns it, so the weights still drift:
+        // 0.5(1.06)^n / (0.5(1.06)^n + 0.5(1.017)^n)
         const y10 = res[10].nonRegMix!;
-        const expected = (0.5 * Math.pow(1.06, 11)) / (0.5 * Math.pow(1.06, 11) + 0.5);
-        expect(y10.capitalGain).toBeCloseTo(expected, 4);
+        const eq = 0.5 * Math.pow(1.06, 11);
+        const div = 0.5 * Math.pow(1 + divPrice, 11);
+        expect(y10.capitalGain).toBeCloseTo(eq / (eq + div), 6);
         expect(y10.capitalGain).toBeGreaterThan(0.6);
+        // Renormalized weights are still a partition: factor is exactly the
+        // weight-weighted sum of the per-slice growth factors, so they sum to 1.
+        for (const r of res) {
+            const m = r.nonRegMix!;
+            expect(m.bonds + m.cash + m.dividend + m.foreignDividend + m.capitalGain).toBeCloseTo(1, 12);
+        }
+        // Price moves are unrealized: growth never touches ACB, and no sale happens here.
+        for (const r of res) expect(r.accounts.nonRegisteredACB).toBeCloseTo(1_000_000, 6);
+    });
+});
+
+describe('dividend-equity price appreciation', () => {
+    // One account, one slice, no CPP/OAS, ACB = balance. `spend` is set per run so
+    // the slice's own yield is exactly consumed: no surplus sweep, no sale, no
+    // shortfall — the closing balance is purely the price move.
+    const sliceRun = (mix: NonRegisteredAccount['assetMix'], g: number, spend: number) => runSimulation(inputs({
+        province: 'AB', // no health premium to force a nuisance sale
+        person: person({
+            lifeExpectancy: 80, oasStartAge: 99,
+            nonRegisteredAccounts: [nonReg({ balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: mix })]
+        }),
+        postRetirementSpend: spend,
+        returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: g, rrspGrowth: 0, tfsaGrowth: 0 }
+    }))[0];
+
+    const EQUITY = { bonds: 0, cash: 0, dividend: 0, foreignDividend: 0, capitalGain: 1 };
+    const DIVIDEND = { bonds: 0, cash: 0, dividend: 1, foreignDividend: 0, capitalGain: 0 };
+    // The all-dividend run spends exactly its 4% yield; the all-equity run pays none.
+    const equityAt = (g: number) => sliceRun(EQUITY, g, 0);
+    const dividendAt = (g: number) => sliceRun(DIVIDEND, g, 40_000);
+
+    it('a dividend slice appreciates at beta*(capitalGrowth − yield) on top of paying its yield', () => {
+        const r = dividendAt(0.06);
+        expect(r.investmentIncome).toBeCloseTo(40_000, 6);           // the yield, paid as cash
+        expect(r.accounts.nonRegistered)                             // ...and the price moved too
+            .toBeCloseTo(1_000_000 * (1 + DIVIDEND_EQUITY_BETA * (0.06 - 0.04)), 6);
+        // Price moves are unrealized: growth never touches ACB.
+        expect(r.accounts.nonRegisteredACB).toBeCloseTo(1_000_000, 6);
+        expect(r.totalNonRegWithdrawal).toBe(0);
+        expect(r.reinvestedNonReg).toBe(0);
+        expect(r.shortfall).toBe(0);
+    });
+
+    it('a foreign-dividend slice uses its own yield', () => {
+        const r = runSimulation(inputs({
+            province: 'AB',
+            person: person({
+                lifeExpectancy: 80, oasStartAge: 99,
+                nonRegisteredAccounts: [nonReg({
+                    balance: 1_000_000, adjustedCostBase: 1_000_000,
+                    assetMix: { bonds: 0, cash: 0, dividend: 0, foreignDividend: 1, capitalGain: 0 }
+                })]
+            }),
+            postRetirementSpend: 0,
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, foreignYield: 0.02, capitalGrowth: 0.06, rrspGrowth: 0, tfsaGrowth: 0 }
+        }))[0];
+        // Balance = 1M grown at beta*(6% − 2%), plus whatever of the 2% yield the
+        // surplus sweep put back; the growth rate itself is what this pins down.
+        const swept = r.reinvestedNonReg;
+        expect(r.accounts.nonRegistered)
+            .toBeCloseTo((1_000_000 + swept) * (1 + DIVIDEND_EQUITY_BETA * (0.06 - 0.02)), 4);
+    });
+
+    it('bonds and cash stay income-only — their principal does not appreciate', () => {
+        const r = sliceRun({ bonds: 0.5, cash: 0.5, dividend: 0, foreignDividend: 0, capitalGain: 0 }, 0.06, 0);
+        expect(r.accounts.nonRegistered).toBeCloseTo(1_000_000, 6);
+    });
+
+    // Monte Carlo shocks `capitalGrowth` and deliberately leaves the yields
+    // unshocked, so a shocked year IS a deterministic year run at the shocked rate.
+    // These two runs are therefore an up-draw and a down-draw, and they prove the
+    // dividend slice moves WITH the market rather than acting as an uncorrelated
+    // sleeve that would fake a diversification benefit in the success rate.
+    it('under a market shock the dividend slice moves WITH the market, but less than the capital-gain slice', () => {
+        // TOTAL return, not price: the dividend run's yield left the account as cash
+        // (it funded the year's spending), so it has to be added back before the two
+        // slices are comparable. On price alone the dividend slice looks WORSE in a
+        // down year — its price rate is beta*(g − y), which for g = −20%, y = 4% is
+        // −20.4% — and that is exactly the split the model is making: the wealth is
+        // in the payout, not the price.
+        const value = (g: number, run: (g: number) => SimulationResult) => {
+            const r = run(g);
+            return r.accounts.nonRegistered + r.investmentIncome;
+        };
+        const eqUp = value(0.2, equityAt);
+        const eqDown = value(-0.2, equityAt);
+        const divUp = value(0.2, dividendAt);
+        const divDown = value(-0.2, dividendAt);
+
+        // Up year: both gain. Down year: both lose. Same direction as the draw —
+        // the dividend slice is not an uncorrelated sleeve.
+        expect(divUp).toBeGreaterThan(1_000_000);
+        expect(divDown).toBeLessThan(1_000_000);
+        expect(eqUp).toBeGreaterThan(divUp);     // ...but the dividend slice gains less
+        expect(eqDown).toBeLessThan(divDown);    // ...and loses less
+        // 1M x (4% + 0.85 x (g − 4%))
+        expect(divUp).toBeCloseTo(1_176_000, 6);
+        expect(divDown).toBeCloseTo(836_000, 6);
+
+        // Sensitivity to the same draw is exactly beta.
+        expect((divUp - divDown) / (eqUp - eqDown)).toBeCloseTo(DIVIDEND_EQUITY_BETA, 12);
+    });
+
+    it('a slice price rate is floored at −100%, so no draw can drive a balance negative', () => {
+        // A 30% yield against a −95% capital-growth draw: the raw price rate is
+        // 0.85 * (−0.95 − 0.30) = −106.25%, so an unclamped blended factor would be
+        // 1 − 1.0625 = −0.0625 and the account would flip NEGATIVE. Clamped, the
+        // slice loses exactly 100% and the factor bottoms out at zero.
+        const rawRate = DIVIDEND_EQUITY_BETA * (-0.95 - 0.30);
+        expect(rawRate).toBeLessThan(-1);
+        expect(1 + rawRate).toBeLessThan(0);
+
+        const run = (mix: NonRegisteredAccount['assetMix']) => runSimulation(inputs({
+            province: 'AB',
+            person: person({
+                lifeExpectancy: 68, oasStartAge: 99,
+                nonRegisteredAccounts: [nonReg({
+                    balance: 1_000_000, adjustedCostBase: 1_000_000, assetMix: mix, rebalanceAnnually: false
+                })]
+            }),
+            postRetirementSpend: 0,
+            returnRates: {
+                bondReturn: 0, cashInterest: 0, dividend: 0.30, foreignYield: 0.25,
+                capitalGrowth: -0.95, rrspGrowth: 0, tfsaGrowth: 0
+            }
+        }));
+
+        for (const mix of [
+            { bonds: 0, cash: 0, dividend: 1, foreignDividend: 0, capitalGain: 0 },
+            { bonds: 0, cash: 0, dividend: 0.5, foreignDividend: 0.5, capitalGain: 0 },
+            { bonds: 0, cash: 0.5, dividend: 0.5, foreignDividend: 0, capitalGain: 0 }
+        ]) {
+            const res = run(mix);
+            for (const r of res) {
+                expect(r.accounts.nonRegistered).toBeGreaterThanOrEqual(0);
+                expect(Number.isFinite(r.accounts.nonRegistered)).toBe(true);
+            }
+        }
+
+        // Fully wiped slices: the factor is exactly 0 and the balance lands on zero,
+        // not below it.
+        expect(run({ bonds: 0, cash: 0, dividend: 1, foreignDividend: 0, capitalGain: 0 })[0]
+            .accounts.nonRegistered).toBeCloseTo(0, 6);
+        expect(run({ bonds: 0, cash: 0, dividend: 0.5, foreignDividend: 0.5, capitalGain: 0 })[0]
+            .accounts.nonRegistered).toBeCloseTo(0, 6);
     });
 });
 
@@ -857,7 +1008,12 @@ describe('death-year terminal tax (no surviving spouse)', () => {
                 })]
             }),
             postRetirementSpend: 60_000,
-            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: 0 }
+            // capitalGrowth == the dividend yield, so the dividend sleeve's price rate
+            // (DIVIDEND_EQUITY_BETA * (capitalGrowth − yield)) is exactly zero: the
+            // sleeve pays 4% and never moves, keeping balance == ACB so the deemed
+            // disposition is purely the RRSP. rrspGrowth/tfsaGrowth are pinned to 0
+            // rather than inheriting capitalGrowth so nothing else in the scenario moves.
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: 0.04, rrspGrowth: 0, tfsaGrowth: 0 }
         }));
         const last = res[res.length - 1];
         expect(last.personDeathThisYear).toBe(true);

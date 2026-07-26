@@ -241,7 +241,7 @@ export function HowItWorks() {
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>RRSP/TFSA:</strong> each account grows at its own whole-account return, reinvested and tax-sheltered — no yield/gains split needed.</li>
-                        <li><strong>Non-Registered:</strong> yield is paid out as cash (and taxed) each year; only the equity slice appreciates. Growth doesn't raise the ACB, so unrealized gains build up until realized by sales, Fund Turnover, or death.</li>
+                        <li><strong>Non-Registered:</strong> yield is paid out as cash (and taxed) each year. The Equity slice appreciates at the full Capital Growth rate. Dividend-paying stocks appreciate too — paying a dividend doesn't stop a share price rising, it just splits the return between cash and price — so the Canadian- and foreign-dividend slices grow at 85% of Capital Growth less their own yield, leaving them a slightly lower total return than pure growth equity. Bonds and cash are income-only: their principal doesn't move. Growth doesn't raise the ACB, so unrealized gains build up until realized by sales, Fund Turnover, or death.</li>
                     </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Multiple non-registered accounts</h3>
                     <p>
@@ -254,7 +254,7 @@ export function HowItWorks() {
                     </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Rebalancing vs. drift</h3>
                     <p>
-                        The <strong>Rebalance Annually</strong> toggle controls each account's mix over time: <strong>on</strong> pulls it back to your chosen weights every year; <strong>off</strong> lets the equity share drift up while yield income stays flat in dollars. The separate Fund Turnover input models the annual tax drag of funds that realize gains internally — it applies every year, whether or not rebalancing is on.
+                        The <strong>Rebalance Annually</strong> toggle controls each account's mix over time: <strong>on</strong> pulls it back to your chosen weights every year; <strong>off</strong> lets the equity share drift up, because the Equity slice compounds faster than the dividend slices and the bond/cash slices don't compound at all. The separate Fund Turnover input models the annual tax drag of funds that realize gains internally — it applies every year, whether or not rebalancing is on.
                     </p>
                 </div>
             </details>

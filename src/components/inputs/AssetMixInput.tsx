@@ -114,7 +114,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                 label="Rebalance Annually"
                 checked={rebalanceAnnually}
                 onChange={onRebalanceChange}
-                tooltip={'ON = the account is rebalanced to these weights each year, so income grows with the account.\nOFF = only the Equity slice compounds — income stays flat in dollars and equity drifts up.'}
+                tooltip={'ON = the account is rebalanced to these weights each year, so every slice grows with the account.\nOFF = each slice compounds at its own price growth — Equity fastest, the dividend slices slower, bonds and cash not at all — so the equity share drifts up.'}
             />
         </div>
     );

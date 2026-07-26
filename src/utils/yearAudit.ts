@@ -547,8 +547,15 @@ function accountSection(
 
     // Growth is the residual: the engine reports no per-account growth figure, and
     // every other flow is known, so this is exactly what is left over.
+    //
+    // It is taken against the lines ACTUALLY RENDERED above, not against the raw
+    // flows, because each of those lines is EPS-gated. A flow smaller than EPS (the
+    // withdrawal solver can leave a fraction-of-a-cent draw behind) is suppressed as
+    // display noise; subtracting it from the residual anyway would leave the
+    // waterfall failing to sum to its own closing balance by that amount. Folding it
+    // into growth instead keeps "opening + flows = closing" exact by construction.
     const base = startBal + spec.reinvested;
-    const growth = endBal - (startBal + spec.reinvested - spec.withdrawn - spec.terminalTax);
+    const growth = endBal - sumLines(lines);
     const implausible = base > GROWTH_SANITY_MIN_BASE && Math.abs(growth) > GROWTH_SANITY_RATIO * base;
     lines.push({
         label: 'Investment growth',

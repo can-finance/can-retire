@@ -25,6 +25,19 @@ export function lognormalReturn(meanRate: number, sigma: number, z: number): num
     return Math.exp(mu + sigma * z) - 1;
 }
 
+// How much of the equity market's *price* move a dividend-paying equity slice
+// takes. A dividend stock's total return is modelled as
+//     yield + DIVIDEND_EQUITY_BETA * (capitalGrowth − yield)
+// so its PRICE appreciation is `beta * (capitalGrowth − yield)`: the yield is
+// the stable component (firms smooth payouts, so dividends are far less volatile
+// than prices) and the beta applies only to the volatile remainder.
+//
+// 0.85 matches the ~13%-vs-15% volatility relationship specced for the
+// per-asset-class phase in TODO.md, so the two stay consistent when that lands.
+// beta = 0 reproduces the pre-2026-07 behaviour (dividend principal never grew);
+// beta = 1 would give every equity slice an identical total return.
+export const DIVIDEND_EQUITY_BETA = 0.85;
+
 function calculateTaxableCapitalGains(totalGains: number): number {
     // Flat 50% inclusion rate. The June 2024 proposal to raise the rate to 2/3
     // above $250,000 was deferred and then cancelled (March 2025) — never enacted.
@@ -914,27 +927,56 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
 
         // --- Step 6: Asset Growth (End of Year) ---
 
-        // Non-Reg: interest/dividends were already paid out as cash above, so only the
-        // capital-gain share of the balance appreciates: mix.capitalGain * capitalGrowth.
+        // Non-Reg: every slice appreciates by its own PRICE rate, applied to the
+        // start-of-year balance the Step-1 yield income was already taken from.
+        //   - bonds / cash: income-only. The coupon or interest is the whole return
+        //     and it left as cash above, so the principal does not move.
+        //   - capital-gain slice: pays nothing, so its price rate is the full
+        //     `capitalGrowth`.
+        //   - dividend / foreign-dividend: paying a dividend does not stop a stock
+        //     appreciating, it only splits the total return between cash and price.
+        //     Total return is `yield + beta * (capitalGrowth − yield)`, so the price
+        //     rate is `beta * (capitalGrowth − yield)` — see DIVIDEND_EQUITY_BETA.
+        // Each price rate is floored at −100%: a holding cannot lose more than its
+        // value, and without the floor a high yield plus a severe negative draw could
+        // drive the blended factor (and so an account balance) below zero.
         // RRSP/TFSA grow at their own whole-account rates (default: capitalGrowth).
         const rrspRate = currentYearRates.rrspGrowth ?? currentYearRates.capitalGrowth;
         const tfsaRate = currentYearRates.tfsaGrowth ?? currentYearRates.capitalGrowth;
 
-        // Without annual rebalancing, the weights are state: the equity slice's growth
+        // Monte Carlo needs nothing extra here: `capitalGrowth` is already the shocked
+        // draw and the yields are deliberately unshocked, so `beta * (g_shocked − y)`
+        // hands the dividend slices an effective market beta of ~0.85 automatically —
+        // they move WITH the market, just less than the capital-gain slice. (An
+        // independent draw per slice would fake a diversification benefit.)
+        const g = currentYearRates.capitalGrowth;
+        // A holding can fall 100% and no further.
+        const priceRate = (yieldRate: number) => Math.max(-1, DIVIDEND_EQUITY_BETA * (g - yieldRate));
+        const gainRate = Math.max(-1, g);
+        const divRate = priceRate(currentYearRates.dividend);
+        // Same fallback the income side uses (simulatePersonBaseYear) and the UI
+        // displays: an unset `foreignYield` means "same as Canadian dividends". A
+        // slice's price growth is struck against the yield it actually pays, so the
+        // two must agree.
+        const foreignRate = priceRate(currentYearRates.foreignYield ?? currentYearRates.dividend);
+
+        // Without annual rebalancing, the weights are state: uneven slice growth
         // shifts the composition each year (sales and reinvestment are pro-rata, so
         // only growth moves the weights). With rebalancing (the per-account default),
         // weights are reset to the inputs every year — the historical behavior.
+        // The renormalized weights still sum to 1: factor is exactly the
+        // weight-weighted sum of the same per-slice growth factors.
         const growNonReg = (acct: NonRegisteredAccount) => {
             const w = acct.assetMix;
-            const g = currentYearRates.capitalGrowth;
-            const factor = 1 + (w.capitalGain * g);
+            const foreignW = w.foreignDividend || 0;
+            const factor = 1 + (w.capitalGain * gainRate) + (w.dividend * divRate) + (foreignW * foreignRate);
             acct.balance *= factor;
             if (acct.rebalanceAnnually === false && factor > 0) {
-                w.capitalGain = (w.capitalGain * (1 + g)) / factor;
+                w.capitalGain = (w.capitalGain * (1 + gainRate)) / factor;
                 w.bonds /= factor;
                 w.cash /= factor;
-                w.dividend /= factor;
-                w.foreignDividend = (w.foreignDividend || 0) / factor;
+                w.dividend = (w.dividend * (1 + divRate)) / factor;
+                w.foreignDividend = (foreignW * (1 + foreignRate)) / factor;
             }
         };
 

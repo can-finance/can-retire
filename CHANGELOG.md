@@ -38,6 +38,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Carlo may shift.
 
 ### Fixed
+- **Dividend-paying stocks in a non-registered account now grow in price as well as
+  paying their dividend.** Previously they only ever paid their yield — their
+  principal never moved — so a Canadian-dividend slice was modelled as earning 3.0%
+  a year and a foreign-dividend slice 2.0%, against 5.0% for the growth-equity
+  slice. Paying a dividend does not stop a share price rising; it just splits the
+  return between cash and price. Each dividend slice now appreciates at 85% of the
+  capital-growth rate less its own yield, giving it a total return just below pure
+  growth equity (4.7% and 4.55% at the default rates, versus 5.0%). Non-registered
+  savings therefore grow faster than before and the plan no longer understates their
+  value; bonds and cash are unchanged (still income-only). Any projection holding
+  non-registered dividend or foreign-dividend holdings changes — larger balances,
+  more capital gains realized on sales, and slightly more tax.
 - **Your salary now keeps pace with inflation over your working years instead of
   staying frozen in today's dollars.** Every other figure in a plan — spending,
   CPP, OAS, tax brackets, contribution limits — was indexed for inflation, but

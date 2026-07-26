@@ -107,7 +107,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip={'Price appreciation ONLY, on the Equity (Growth) share of the non-registered mix. Do not add dividend or interest yield here — those are entered in the fields below and would be counted twice.\nUnlike RRSP/TFSA Return above, which is a whole-account total return, this is the capital-gains half of an equity return.'}
+                tooltip={'Price appreciation ONLY, on the Equity (Growth) share of the non-registered mix — it pays no yield, so this is also its total return. Do not add dividend or interest yield here — those are entered in the fields below and would be counted twice.\nUnlike RRSP/TFSA Return above, which is a whole-account total return, this is the capital-gains half of an equity return.\nThe dividend slices are priced off this too: each appreciates at 85% of this rate less its own yield, so its total return lands just below this figure.'}
             />
             <FinancialInput
                 label="Non-Reg Bonds Total Return"
