@@ -1,9 +1,13 @@
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+// Imported rather than read with readFileSync so Vite records package.json as a
+// config dependency and restarts the dev server when the version is bumped. A
+// readFileSync is invisible to that watcher, so a long-running container kept
+// serving the version that was current when it started (see the footer's
+// __APP_VERSION__).
+import pkg from './package.json'
 
 // https://vite.dev/config/
 export default defineConfig({

@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
+// Matches vite.config.ts — see the note there on why this is an import.
+import pkg from './package.json'
 
 // Dedicated SSR build for build-time prerendering of the standalone MPA pages
 // (/how-it-works/, /rrsp-withdrawal-strategy/, and /cpp-calculator/). The first
