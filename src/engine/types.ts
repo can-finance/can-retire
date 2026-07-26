@@ -191,6 +191,10 @@ export interface SimulationResult {
     // Income Splitting
     pensionSplitAmount?: number;     // Amount of pension income split to spouse
     taxSavingsFromSplit?: number;    // Tax savings achieved from income splitting
+    // Part of taxSavingsFromSplit that could not be swept into a non-registered
+    // account because neither spouse holds one. Normally 0 — the saving is
+    // reinvested (and so counted in reinvestedNonReg) the year it is elected.
+    unallocatedSplitSaving?: number;
 
     // Non-reg composition at end of year, per person: balance-weighted blend of
     // that person's accounts (drifts when an account's annual rebalancing is off).

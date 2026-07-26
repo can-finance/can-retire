@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useId, useMemo, useRef } from 'react';
 import type { SimulationInputs, SimulationResult } from '../../engine/types';
-import { buildYearAudit } from '../../utils/yearAudit';
+import { buildYearAudit, NOTE_AMOUNT_TOKEN } from '../../utils/yearAudit';
 import type { AuditCheck, AuditLine, AuditSection, AuditSectionKey, AuditBadge } from '../../utils/yearAudit';
 import { formatCurrencyCAD } from '../../utils/formatters';
 
@@ -67,6 +67,9 @@ function LineRow({
     line, sectionKey, showSplit, scale,
 }: { line: AuditLine; sectionKey: AuditSectionKey; showSplit: boolean; scale: number }) {
     const heavy = line.kind === 'subtotal' || line.kind === 'result';
+    // 'reference' is excluded from the section's arithmetic exactly like 'info'
+    // (see sumLines/AuditLineKind), but it is the headline figure of its section,
+    // not a mere annotation — so unlike 'info' it keeps the normal palette.
     const isInfo = line.kind === 'info';
     const amt = line.amount / scale;
     const redTint = amt < 0 && DEDUCTION_SECTIONS.has(sectionKey);
@@ -76,11 +79,18 @@ function LineRow({
     const rowClass = heavy ? 'border-t-2 border-slate-200' : '';
     const weightClass = heavy ? 'font-semibold' : '';
 
+    // A note may cite a specific dollar figure via NOTE_AMOUNT_TOKEN rather than
+    // baking a nominal string into the data layer, so it can be scaled by the same
+    // real/nominal factor as every other amount on the row.
+    const noteText = line.note && line.noteAmount !== undefined
+        ? line.note.replace(NOTE_AMOUNT_TOKEN, fmtAmt(line.noteAmount / scale))
+        : line.note;
+
     return (
         <tr className={rowClass}>
             <td className={`px-3 py-2 align-top ${labelClass} ${weightClass}`}>
                 <div>{line.label}</div>
-                {line.note && <div className="text-[11px] text-slate-400 mt-0.5 font-normal">{line.note}</div>}
+                {noteText && <div className="text-[11px] text-slate-400 mt-0.5 font-normal">{noteText}</div>}
             </td>
             {showSplit && (
                 <>

@@ -1070,3 +1070,71 @@ describe('full-run pin (default inputs)', () => {
         expect(pinned).toMatchSnapshot();
     });
 });
+
+// Step 5.5 re-prices the household bill AFTER Step 3 sized withdrawals against the
+// pre-split bill, so the saving is cash that arrives late — like the RRSP-deduction
+// refund, it has to land in an account or it evaporates from the projection.
+describe('the pension-splitting saving is real cash and gets banked', () => {
+    // Zero returns and no inflation: nothing but a surplus sweep can move an ACB,
+    // and the surplus sweep splits evenly between the two spouses' accounts — so
+    // the DIFFERENCE between the two ACB moves isolates the splitting saving.
+    const splittingCouple = (
+        personOver: Partial<Person> = {},
+        spouseOver: Partial<Person> = {}
+    ): SimulationInputs => inputs({
+        useIncomeSplitting: true,
+        postRetirementSpend: 40_000,
+        person: person({
+            age: 65, lifeExpectancy: 70,
+            pension: { annualAmount: 90_000, startAge: 65, indexedToInflation: false },
+            nonRegisteredAccounts: [nonReg({ balance: 10_000, adjustedCostBase: 10_000, receivesSurplus: true })],
+            ...personOver
+        }),
+        spouse: person({
+            age: 65, lifeExpectancy: 70,
+            nonRegisteredAccounts: [nonReg({ id: 'nr-s', balance: 10_000, adjustedCostBase: 10_000, receivesSurplus: true })],
+            ...spouseOver
+        })
+    });
+
+    const firstSplitYear = (res: SimulationResult[]) =>
+        res.findIndex((r, i) => i > 0 && (r.taxSavingsFromSplit ?? 0) > 100);
+
+    it('lands in the transferor\'s non-registered account, at cost', () => {
+        const res = runSimulation(splittingCouple());
+        const i = firstSplitYear(res);
+        expect(i, 'expected a year with a material splitting saving').toBeGreaterThan(0);
+        const saving = res[i].taxSavingsFromSplit!;
+
+        // Only the pension-holder (the transferor) should get the saving on top of
+        // their half of the ordinary surplus sweep.
+        const dACB = res[i].accounts.nonRegisteredACB - res[i - 1].accounts.nonRegisteredACB;
+        const dSpouseACB = res[i].spouseAccounts!.spouseNonRegisteredACB
+            - res[i - 1].spouseAccounts!.spouseNonRegisteredACB;
+        expect(dACB - dSpouseACB).toBeCloseTo(saving, 2);
+
+        // Contributed at cost, so balance and ACB move together, and it is reported
+        // as surplus reinvestment rather than vanishing.
+        const dBal = res[i].accounts.nonRegistered - res[i - 1].accounts.nonRegistered;
+        expect(dBal).toBeCloseTo(dACB, 2);
+        expect(res[i].reinvestedNonReg).toBeGreaterThanOrEqual(saving);
+        expect(res[i].unallocatedSplitSaving ?? 0).toBe(0);
+    });
+
+    it('falls back to the other spouse when the transferor holds no non-registered account', () => {
+        const res = runSimulation(splittingCouple({ nonRegisteredAccounts: [] }));
+        const i = firstSplitYear(res);
+        expect(i).toBeGreaterThan(0);
+        expect(res[i].unallocatedSplitSaving ?? 0).toBe(0);
+        expect(res[i].reinvestedNonReg).toBeGreaterThanOrEqual(res[i].taxSavingsFromSplit!);
+    });
+
+    it('is reported as unallocated when neither spouse holds a non-registered account', () => {
+        // No account to invent one into — the engine must say so rather than let the
+        // cash disappear silently (the year audit shows it as its own line).
+        const res = runSimulation(splittingCouple({ nonRegisteredAccounts: [] }, { nonRegisteredAccounts: [] }));
+        const i = firstSplitYear(res);
+        expect(i).toBeGreaterThan(0);
+        expect(res[i].unallocatedSplitSaving).toBeCloseTo(res[i].taxSavingsFromSplit!, 6);
+    });
+});

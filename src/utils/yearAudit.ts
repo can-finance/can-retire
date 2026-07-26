@@ -1,4 +1,4 @@
-import type { Person, SimulationInputs, SimulationResult } from '../engine/types';
+import type { OneTimeEvent, Person, SimulationInputs, SimulationResult } from '../engine/types';
 import { calculatePayrollContributions } from '../engine/tax';
 
 // Pure, presentation-mechanical audit of a single projection year: the drawer
@@ -12,7 +12,16 @@ export type AuditLineKind =
     | 'normal'    // participates in the section's arithmetic
     | 'subtotal'  // running total of the lines above it
     | 'result'    // the section's final figure (what the check tests)
-    | 'info';     // context only — never part of the section's arithmetic
+    | 'info'      // context only — never part of the section's arithmetic; rendered muted
+    | 'reference';// the section's headline number, shown for context only — excluded from
+                  // arithmetic exactly like 'info', but rendered at normal weight/colour
+                  // because it IS the figure the reader is meant to notice (e.g. "Assets
+                  // before terminal tax", "Target spending")
+
+// Substituted by the drawer with `noteAmount` (scaled the same way as every other
+// figure, so it moves correctly with the real/nominal toggle) — lets a note cite a
+// specific dollar figure without baking a stale nominal value into the string.
+export const NOTE_AMOUNT_TOKEN = '{amount}';
 
 export interface AuditLine {
     label: string;
@@ -24,6 +33,10 @@ export interface AuditLine {
     person?: number;
     spouse?: number;
     note?: string;
+    // A nominal dollar figure `note` references via `NOTE_AMOUNT_TOKEN` — e.g. the
+    // denominator behind a percentage the note quotes. Kept separate from `note`
+    // itself so the drawer can scale it like any other amount.
+    noteAmount?: number;
     kind?: AuditLineKind;
 }
 
@@ -135,7 +148,9 @@ function payrollWithheld(inputs: SimulationInputs, r: SimulationResult): { payro
 }
 
 const sumLines = (lines: AuditLine[]) =>
-    lines.reduce((s, l) => s + (l.kind === 'info' || l.kind === 'result' || l.kind === 'subtotal' ? 0 : l.amount), 0);
+    lines.reduce((s, l) => s + (
+        l.kind === 'info' || l.kind === 'result' || l.kind === 'subtotal' || l.kind === 'reference' ? 0 : l.amount
+    ), 0);
 
 /**
  * Section 1 — every dollar of gross cash the household takes in this year.
@@ -147,7 +162,12 @@ const sumLines = (lines: AuditLine[]) =>
  * reconciles to the cent. Nothing here is netted down — tax comes off in the two
  * sections below.
  */
-function incomeSourcesSection(r: SimulationResult, oneTimeInflows: number): AuditSection {
+function incomeSourcesSection(
+    r: SimulationResult,
+    oneTimeInflows: number,
+    hasSpouse: boolean,
+    events: OneTimeEvent[]
+): AuditSection {
     const lines: AuditLine[] = [];
 
     const add = (label: string, amount: number, note?: string) => {
@@ -155,16 +175,49 @@ function incomeSourcesSection(r: SimulationResult, oneTimeInflows: number): Audi
         lines.push({ label, amount, note });
     };
 
+    // The engine reports per-person NET benefit figures but this section is
+    // gross, so the split can never be attached to the gross line itself (that
+    // would misrepresent it as the gross line's own split). Instead it is a
+    // separate `info` line, gated on the same gross figure being present, and
+    // labelled unambiguously as net so it cannot be mistaken for a breakdown of
+    // the gross amount above it.
+    const addNetSplit = (label: string, personNet: number, spouseNet: number, gate: number) => {
+        if (!hasSpouse || Math.abs(gate) < EPS) return;
+        lines.push({
+            label,
+            amount: personNet + spouseNet,
+            person: personNet,
+            spouse: spouseNet,
+            kind: 'info',
+            note: 'Net of tax, per person — not a split of the gross line above. Tax is assessed pro-rata across every income source (see Taxes), not per benefit.'
+        });
+    };
+
     add('Employment income', r.employmentIncome);
     add('CPP (gross)', r.cppIncome);
+    addNetSplit('Net CPP received — You / Spouse', r.personNetCPP, r.spouseNetCPP, r.cppIncome);
     add('OAS (gross)', r.oasIncome);
+    addNetSplit('Net OAS received — You / Spouse', r.personNetOAS, r.spouseNetOAS, r.oasIncome);
     add('Workplace (DB) pension (gross)', r.pensionIncome);
+    addNetSplit('Net DB pension received — You / Spouse', r.personNetPension, r.spouseNetPension, r.pensionIncome);
     add('Investment income received', r.investmentIncome,
         'Interest and dividends paid out by non-registered accounts only — RRSP and TFSA earnings stay inside those accounts. Capital growth stays in the account too.');
     add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal, 'RRIF minimum + meltdown + top-up draws');
     add('TFSA withdrawals', r.totalTFSAWithdrawal);
     add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Grossed up so the sale funds its own tax');
     add('One-time inflows', oneTimeInflows, 'Household cash — not attributed to either person');
+
+    // Name each inflow event as its own `info` line under the summed addend
+    // above — informational only, so multiple events in one year cannot change
+    // the section total.
+    for (const e of events.filter(ev => ev.type === 'inflow')) {
+        if (Math.abs(e.amount) < EPS) continue;
+        lines.push({
+            label: `Includes one-time: ${e.name?.trim() || 'One-time inflow'}`,
+            amount: e.amount,
+            kind: 'info'
+        });
+    }
 
     // Every line above is an addend, so the total is exact by construction — there
     // is no independent quantity left for a check to test.
@@ -202,10 +255,9 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     // income tax alone.
     part('Employment income tax', (r.employmentIncome - r.netEmploymentIncome) - payroll);
     part('Tax on CPP', r.cppIncome - r.netCPPIncome);
-    part('Tax on OAS', r.oasIncome - r.netOASIncome,
-        r.oasClawbackPaid > EPS
-            ? 'The OAS recovery tax is inside the household bill, but the pro-rata split spreads it over every line — not just this one'
-            : undefined);
+    // The OAS clawback is explained once, on the info line below the result — not
+    // here too (see the 'Includes OAS recovery tax' line further down).
+    part('Tax on OAS', r.oasIncome - r.netOASIncome);
     part('Tax on DB pension', r.pensionIncome - r.netPensionIncome);
     part('Tax on investment income', r.investmentIncome - r.netInvestmentIncome,
         'Interest, dividends and foreign dividends');
@@ -231,6 +283,12 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     // quantity here for a check to test. That identity is asserted directly in
     // yearAudit.test.ts instead of rendered as a permanently-green row.
 
+    // The denominator is the engine's `finalTaxable` — taxable income, not cash
+    // received: it includes the 38% dividend gross-up and only half of realized
+    // capital gains, so it will not match 'Total cash in (pre-tax)' a few lines
+    // above. Naming the figure via NOTE_AMOUNT_TOKEN (rather than baking a nominal
+    // dollar string into the note) lets a reader see exactly which number the
+    // percentage is against, and keeps it correct under the real/nominal toggle.
     const effectiveRate = r.grossIncome > 0 ? (r.taxPaid / r.grossIncome) * 100 : 0;
     lines.push({
         label: 'Household income tax',
@@ -238,8 +296,9 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
         ...(hasSpouse ? { person: r.personTaxPaid, spouse: r.spouseTaxPaid } : {}),
         kind: 'result',
         note: r.grossIncome > 0
-            ? `Effective rate ${effectiveRate.toFixed(1)}% of taxable income`
-            : undefined
+            ? `Effective rate ${effectiveRate.toFixed(1)}% of ${NOTE_AMOUNT_TOKEN} taxable income — not the same figure as 'Total cash in (pre-tax)' above, since taxable income includes the 38% dividend gross-up and only half of realized capital gains`
+            : undefined,
+        noteAmount: r.grossIncome > 0 ? r.grossIncome : undefined
     });
 
     // --- Context below the result — none of these are addends ----------------
@@ -293,11 +352,17 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
  *
  * `cashIn` is the *result line of section 1*, not a re-derivation, so the two
  * sections cannot drift. The arithmetic below is the same sequence the single old
- * `cashFlowSection` performed — gross lines summed, then income tax, payroll, the
- * unallocated splitting saving and reinvestment subtracted — which is what keeps
- * the check's expected/actual construction, and so its residual, unchanged.
+ * `cashFlowSection` performed — gross lines summed, then income tax, payroll, any
+ * splitting saving the engine could not allocate, and reinvestment subtracted —
+ * which is what keeps the check's expected/actual construction, and so its
+ * residual, unchanged.
  */
-function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, cashIn: number): AuditSection {
+function cashFlowSection(
+    inputs: SimulationInputs,
+    r: SimulationResult,
+    cashIn: number,
+    expenseEvents: OneTimeEvent[]
+): AuditSection {
     const lines: AuditLine[] = [];
     const { payroll } = payrollWithheld(inputs, r);
 
@@ -307,19 +372,29 @@ function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, cashIn: 
     };
 
     add('Total cash in (pre-tax)', cashIn, 'Carried down from Income & withdrawals above');
+
+    // Track whether either withholding actually rendered a line: a TFSA-only
+    // retirement year (or any year with no taxable income and no payroll) has
+    // neither, and in that case "Net income" would print the exact same figure as
+    // "Total cash in (pre-tax)" immediately above it under a different name — a
+    // subtotal with nothing subtracted. Only show it when it has something to say.
+    const beforeDeductions = lines.length;
     add('Less: income tax', -r.taxPaid);
     add('Less: CPP/EI contributions', -payroll,
         'Withheld on employment income; derived from the inputs — the engine folds it into net employment income');
+    const hadDeduction = lines.length > beforeDeductions;
 
-    lines.push({ label: 'Net income', amount: sumLines(lines), kind: 'subtotal' });
+    if (hadDeduction) {
+        lines.push({ label: 'Net income', amount: sumLines(lines), kind: 'subtotal' });
+    }
 
-    // Step 5.5 re-optimises tax after Step 3 has already sized withdrawals on the
-    // pre-split tax bill, so the saving is cash the engine neither spends nor
-    // reinvests. (Contrast the RRSP-deduction refund, which Step 5 sweeps into a
-    // non-registered account.) Naming it keeps the residual honest.
-    const splitSavings = r.taxSavingsFromSplit ?? 0;
-    add('Pension-splitting saving left unallocated', -splitSavings,
-        'The engine lowers the tax bill after withdrawals were sized, and never spends or reinvests the difference');
+    // The pension-splitting saving is normally swept into a non-registered account
+    // by Step 5.5, so it arrives below inside "Surplus reinvested". It can only
+    // stay unallocated when neither spouse holds a non-registered account to
+    // receive it; naming that case keeps the residual honest instead of passing
+    // real cash off as solver drift.
+    add('Pension-splitting saving left unallocated', -(r.unallocatedSplitSaving ?? 0),
+        'Neither spouse holds a non-registered account, so the engine had nowhere to put the refund');
 
     const reinvested = r.reinvestedTFSA + r.reinvestedRRSP + r.reinvestedNonReg;
     add('Surplus reinvested', -reinvested, 'Swept to TFSA / RRSP / non-registered rather than spent');
@@ -327,7 +402,22 @@ function cashFlowSection(inputs: SimulationInputs, r: SimulationResult, cashIn: 
     const available = sumLines(lines);
     lines.push({ label: 'Cash available to spend', amount: available, kind: 'result' });
 
-    lines.push({ label: 'Target spending (incl. one-time expenses)', amount: r.spending, kind: 'info' });
+    // The number the whole section builds toward — excluded from the arithmetic
+    // like an `info` line, but rendered at normal weight so it doesn't read as a
+    // mere annotation (see AuditLineKind).
+    lines.push({ label: 'Target spending (incl. one-time expenses)', amount: r.spending, kind: 'reference' });
+
+    // Named `info` lines only — the amount is already folded into r.spending
+    // above, so these must never be addends or the check would double-count them.
+    for (const e of expenseEvents) {
+        if (Math.abs(e.amount) < EPS) continue;
+        lines.push({
+            label: `Includes one-time: ${e.name?.trim() || 'One-time expense'}`,
+            amount: e.amount,
+            kind: 'info'
+        });
+    }
+
     if (r.shortfall > EPS) {
         lines.push({
             label: 'Unfunded shortfall',
@@ -441,33 +531,43 @@ function estateSection(r: SimulationResult): AuditSection {
             label: 'RRSP/RRIF rolled over to the surviving spouse',
             amount: r.rrspRolledToSpouse!,
             kind: 'info',
-            note: 'Tax-free rollover — no deemed disposition, so no terminal tax on it'
+            note: 'Tax-free rollover — no deemed disposition, so no terminal tax on it. TFSA and non-registered ' +
+                'balances transfer to the survivor the same way (also tax-free) but have no rollover amount of ' +
+                'their own to report — the household totals in the account sections above simply continue unbroken.'
         });
     }
-    if (r.terminalRealizedGains > EPS) {
-        lines.push({
-            label: 'Capital gains deemed realized at death',
-            amount: r.terminalRealizedGains,
-            kind: 'info',
-            note: 'Full gain; half is taxable'
-        });
-    }
+    // Capital gains deemed realized at death are reported once, in the
+    // Non-registered section (it sits with the ACB and realized-gains context) —
+    // not duplicated here.
 
+    // This is the section's starting figure, reconstructed rather than observed:
+    // the account sections above already report the deceased's balances NET of
+    // terminal tax (the engine deducts it before closing the books), so this line
+    // adds the tax back on to show what the estate was worth before it. It is not
+    // a number still waiting to be taxed.
     lines.push({
         label: 'Assets before terminal tax',
         amount: gross,
-        kind: 'info'
+        kind: 'reference',
+        note: totalTerminal > EPS
+            ? 'Reconstructed by adding the terminal tax below back onto the post-tax balances the account sections above already report'
+            : undefined
     });
     if (terminalRRSP > EPS) lines.push({ label: 'Terminal tax on RRSP/RRIF', amount: -terminalRRSP });
     if (terminalGains > EPS) lines.push({ label: 'Terminal tax on capital gains', amount: -terminalGains });
-    if (totalTerminal > EPS) lines.push({ label: 'Total terminal tax', amount: -totalTerminal, kind: 'subtotal' });
+    // A subtotal only earns its keep when it is actually totalling two things —
+    // with just one component nonzero it would print the same number twice in a
+    // row under different labels.
+    if (terminalRRSP > EPS && terminalGains > EPS) {
+        lines.push({ label: 'Total terminal tax', amount: -totalTerminal, kind: 'subtotal' });
+    }
 
     lines.push({
         label: 'Net estate to heirs',
         amount: net,
         kind: 'result',
         note: totalTerminal > EPS
-            ? 'The terminal tax was already deducted from the account balances shown above'
+            ? 'Matches the post-tax closing balances in the account sections above — the terminal tax was deducted there, not in this section'
             : undefined
     });
 
@@ -504,7 +604,11 @@ export function buildYearAudit(
 
     // The engine matches one-time events on the PRIMARY person's age only.
     const events = (inputs.oneTimeExpenses ?? []).filter(e => e.age === r.age);
-    const oneTimeInflows = events.filter(e => e.type === 'inflow').reduce((s, e) => s + e.amount, 0);
+    // Same partition the engine itself uses in projection.ts (expense = anything
+    // not explicitly typed 'inflow').
+    const inflowEvents = events.filter(e => e.type === 'inflow');
+    const expenseEvents = events.filter(e => e.type !== 'inflow');
+    const oneTimeInflows = inflowEvents.reduce((s, e) => s + e.amount, 0);
 
     const badges: AuditBadge[] = [];
     if (index === 0) badges.push('first-year');
@@ -531,19 +635,20 @@ export function buildYearAudit(
         nonRegExtras.push({
             label: 'Capital gains deemed realized at death',
             amount: r.terminalRealizedGains,
-            kind: 'info'
+            kind: 'info',
+            note: 'Full gain; half is taxable'
         });
     }
 
     // Section 3 starts from section 1's own result line rather than recomputing the
     // gross total, so the two can never disagree.
-    const income = incomeSourcesSection(r, oneTimeInflows);
+    const income = incomeSourcesSection(r, oneTimeInflows, hasSpouse, events);
     const cashIn = income.lines.find(l => l.kind === 'result')!.amount;
 
     const sections: AuditSection[] = [
         income,
         taxesSection(inputs, r, hasSpouse),
-        cashFlowSection(inputs, r, cashIn),
+        cashFlowSection(inputs, r, cashIn, expenseEvents),
         accountSection({
             key: 'accountsRRSP', title: 'RRSP / RRIF', balance: b => b.rrsp,
             reinvested: r.reinvestedRRSP, withdrawn: r.totalRRSPWithdrawal,

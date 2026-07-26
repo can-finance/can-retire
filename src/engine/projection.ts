@@ -827,10 +827,14 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         let sTaxPaid = sFinal?.finalTax || 0;
         let pensionSplitAmount = 0;
         let taxSavingsFromSplit = 0;
+        // Splitting saving the engine could not put anywhere (neither spouse holds a
+        // non-registered account). Reported so the year audit can name it instead of
+        // burying real cash in its residual.
+        let unallocatedSplitSaving = 0;
 
         // --- Step 5.5: Income Splitting Optimization ---
         // Apply pension income splitting if enabled and both spouses are alive
-        if (inputs.useIncomeSplitting && pAlive && sAlive && pFinal && sFinal && pBase && sBase) {
+        if (inputs.useIncomeSplitting && pAlive && sAlive && s && pFinal && sFinal && pBase && sBase) {
             const pSplitInfo: SplitPerson = {
                 taxableIncome: pFinal.finalTaxable,
                 dbPensionIncome: pFinal.dbPensionIncome,
@@ -857,6 +861,38 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 totalTaxPaid = splitResult.person1NewTax + splitResult.person2NewTax;
                 pTaxPaid = splitResult.person1NewTax;
                 sTaxPaid = splitResult.person2NewTax;
+
+                // Sweep the saving into a non-registered account, exactly as the
+                // RRSP-deduction refund is swept above (and, like it, before Step 6,
+                // so the cash grows this year). Splitting is elected on the tax return
+                // after the year ends, so the saving genuinely arrives as a refund long
+                // after Step 3 sized withdrawals against the PRE-split bill: the same
+                // category of late cash as the RRSP deduction, and it belongs in an
+                // account rather than evaporating. (Re-sizing the withdrawals against
+                // the post-split bill would need a fixed-point solve — out of scope.)
+                //
+                // WHOSE account: the transferor's. `fromPerson` is the spouse whose
+                // income was split away, so it is their return whose tax fell while the
+                // recipient's rose; the engine only carries the net household figure,
+                // and the transferor is who the refund side of that net accrues to.
+                // It is also the conservative landing spot — the transferor is by
+                // construction the higher-taxable-income spouse, so future investment
+                // income on this cash is taxed at the higher rate rather than flattered
+                // by an arbitrary 50/50 allocation. Per-person balances feed terminal
+                // tax and future splitting, so the choice is not cosmetic.
+                const transferor = splitResult.fromPerson === 1 ? p : s;
+                const recipient = splitResult.fromPerson === 1 ? s : p;
+                // Fall back to the other spouse when the transferor holds no
+                // non-registered account; if neither does, leave the cash unallocated
+                // rather than inventing an account, and report it.
+                const target = surplusAccount(transferor) ?? surplusAccount(recipient);
+                if (target) {
+                    target.balance += taxSavingsFromSplit;
+                    target.adjustedCostBase += taxSavingsFromSplit; // contributed at cost
+                    reinvestedNonReg += taxSavingsFromSplit;
+                } else {
+                    unallocatedSplitSaving = taxSavingsFromSplit;
+                }
             }
         }
 
@@ -1215,6 +1251,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             // Income Splitting
             pensionSplitAmount,
             taxSavingsFromSplit,
+            unallocatedSplitSaving,
 
             // Estate / Death Year
             isDeathYear,

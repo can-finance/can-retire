@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Carlo may shift.
 
 ### Fixed
+- **The tax saved by pension income splitting is no longer dropped from the
+  projection.** Splitting lowered the household's tax bill, but the cash it freed
+  up was never added to savings — it simply disappeared from the year. The saving
+  is now reinvested in a non-registered account like any other unspent surplus, so
+  couples using income splitting will see slightly higher balances and estates, and
+  previously computed projections change.
 - **The projected net estate no longer double-counts the terminal tax bill.** The
   tax due on the deemed disposition at death was subtracted twice — once from the
   account balances and again from the estate figure — so the estate left to heirs

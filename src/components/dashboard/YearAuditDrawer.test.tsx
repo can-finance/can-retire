@@ -75,6 +75,21 @@ const ONE_TIME = inputs({
     ]
 });
 
+// No RRSP, no employment, and CPP/OAS start ages past life expectancy so they
+// never trigger — every year's cash-in is a tax-free TFSA withdrawal, so
+// taxPaid and payroll are both exactly zero (see yearAudit.test.ts's identical
+// fixture for the data-layer coverage of this case).
+const TFSA_ONLY = inputs({
+    person: person({
+        age: 65, retirementAge: 60, lifeExpectancy: 75,
+        cppStartAge: 80, oasStartAge: 80,
+        rrsp: { type: 'RRSP', balance: 0 },
+        tfsa: { type: 'TFSA', balance: 500_000 },
+        nonRegisteredAccounts: []
+    }),
+    postRetirementSpend: 40_000
+});
+
 // First INITIAL_INPUTS year whose cash-flow check has residual >= $1 — the
 // engine-inherent gap documented in yearAudit.test.ts (stale-age solver estimate
 // vs. final assessed tax). Located at test time rather than hardcoded so this
@@ -315,6 +330,29 @@ describe('YearAuditDrawer', () => {
         expect(screen.getByText('Death year')).toBeInTheDocument();
     });
 
+    it('renders the one-time expense as a named info line, and the one-time inflow named alongside its addend', () => {
+        const results = runSimulation(ONE_TIME);
+        const expenseIndex = results.findIndex(r => r.age === 66);
+        render(
+            <YearAuditDrawer
+                inputs={ONE_TIME} results={results} index={expenseIndex}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Includes one-time: Roof')).toBeInTheDocument();
+        cleanup();
+
+        const inflowIndex = results.findIndex(r => r.age === 67);
+        render(
+            <YearAuditDrawer
+                inputs={ONE_TIME} results={results} index={inflowIndex}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Includes one-time: Inheritance')).toBeInTheDocument();
+        expect(screen.getByText('One-time inflows')).toBeInTheDocument();
+    });
+
     it('shows an "unexplained" residual row when a section check does not balance', () => {
         const { index, results } = findCashFlowResidualIndex(INITIAL_INPUTS);
         render(
@@ -343,6 +381,97 @@ describe('YearAuditDrawer', () => {
         const checkRows = screen.getAllByText(/— balances|— unexplained:/);
         expect(checkRows).toHaveLength(1);
         expect(screen.getByText(/— balances/)).toBeInTheDocument();
+    });
+
+    it('the effective-rate note substitutes the taxable-income figure, scaled with the real/nominal toggle', () => {
+        const results = runSimulation(INITIAL_INPUTS);
+        const i = results.findIndex(r => r.taxPaid > 1 && r.grossIncome > 0);
+        expect(i, 'expected a taxed year').toBeGreaterThanOrEqual(0);
+
+        render(
+            <YearAuditDrawer
+                inputs={INITIAL_INPUTS} results={results} index={i}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        // The note must not still contain the raw token, and must show a dollar
+        // figure — proof the substitution ran rather than just leaving the label.
+        expect(screen.queryByText(/\{amount\}/)).toBeNull();
+        expect(screen.getByText(/Effective rate .*% of \$[\d,]+ taxable income/)).toBeInTheDocument();
+    });
+
+    it('reference lines (Assets before terminal tax, Target spending) render legibly, not muted like info', () => {
+        const results = runSimulation(ONE_TIME);
+        const deathIndex = results.length - 1;
+        expect(results[deathIndex].totalTerminalTax).toBeGreaterThan(0);
+
+        render(
+            <YearAuditDrawer
+                inputs={ONE_TIME} results={results} index={deathIndex}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        const assetsCell = screen.getByText('Assets before terminal tax').closest('td')!;
+        expect(assetsCell.className).not.toContain('text-slate-400');
+
+        const targetCell = screen.getByText(/Target spending/).closest('td')!;
+        expect(targetCell.className).not.toContain('text-slate-400');
+
+        // A genuine info annotation alongside it must stay muted, so the contrast
+        // is deliberate rather than the muted styling having been removed outright.
+        const oneTimeIdx = results.findIndex(r => r.age === 66);
+        cleanup();
+        render(
+            <YearAuditDrawer
+                inputs={ONE_TIME} results={results} index={oneTimeIdx}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        const infoCell = screen.getByText('Includes one-time: Roof').closest('td')!;
+        expect(infoCell.className).toContain('text-slate-400');
+    });
+
+    it('a TFSA-only year omits "Net income" — nothing was deducted between it and "Total cash in"', () => {
+        const results = runSimulation(TFSA_ONLY);
+        render(
+            <YearAuditDrawer
+                inputs={TFSA_ONLY} results={results} index={0}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        // Appears twice by design (section 1's result and section 3's carry-over
+        // line) — see the "reads as one flow" test above.
+        expect(screen.getAllByText('Total cash in (pre-tax)').length).toBeGreaterThan(0);
+        expect(screen.queryByText('Net income')).toBeNull();
+        expect(screen.queryByText('Less: income tax')).toBeNull();
+        expect(screen.queryByText('Less: CPP/EI contributions')).toBeNull();
+    });
+
+    it('the estate section shows the deemed-gains line once (in Non-registered), and the rollover note names TFSA/non-reg', () => {
+        const results = runSimulation(WIDOWED);
+        const rolloverIndex = results.findIndex(r => r.spouseDeathThisYear);
+        expect(rolloverIndex).toBeGreaterThanOrEqual(0);
+        render(
+            <YearAuditDrawer
+                inputs={WIDOWED} results={results} index={rolloverIndex}
+                inflationAdjusted={false} hasSpouse onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        // A specific phrase from the rollover note, not just "TFSA" or
+        // "non-registered" alone — both also appear as section headings on this
+        // page, which would make a bare substring match ambiguous.
+        expect(screen.getByText(/TFSA and non-registered balances transfer/i)).toBeInTheDocument();
+        cleanup();
+
+        const terminalIndex = results.length - 1;
+        expect(results[terminalIndex].terminalRealizedGains).toBeGreaterThan(0);
+        render(
+            <YearAuditDrawer
+                inputs={WIDOWED} results={results} index={terminalIndex}
+                inflationAdjusted={false} hasSpouse onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getAllByText('Capital gains deemed realized at death')).toHaveLength(1);
     });
 });
 

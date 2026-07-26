@@ -3,7 +3,7 @@ import { runSimulation } from '../engine/projection';
 import { calculatePayrollContributions } from '../engine/tax';
 import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult } from '../engine/types';
 import { INITIAL_INPUTS } from './inputSanitizer';
-import { buildYearAudit } from './yearAudit';
+import { buildYearAudit, NOTE_AMOUNT_TOKEN } from './yearAudit';
 import type { AuditSectionKey, YearAudit } from './yearAudit';
 
 // Same fixture style as projection.test.ts: a blank-slate retired 65-year-old with
@@ -134,9 +134,13 @@ const SURPLUS = inputs({
  *     age, which is what dropped that scenario's worst year to ~$275.)
  *  2. The binary searches stop at a $1 tolerance, up to four calls per year.
  *
- * The pension-splitting saving is a third source, but it is exactly
- * `taxSavingsFromSplit` (asserted below) so the audit shows it as its own line
- * rather than burying it in the residual.
+ * The pension-splitting saving is NOT a third source. Step 5.5 re-prices the bill
+ * after Step 3 sized withdrawals, but it then sweeps the saving into the
+ * transferor's non-registered account, so it leaves through `reinvestedNonReg`
+ * (the audit's "Surplus reinvested") like any other unspent cash. It can only
+ * escape into the residual when neither spouse holds a non-registered account to
+ * receive it, and the engine reports that remnant as `unallocatedSplitSaving` so
+ * the audit still names it.
  *
  * Bounds are set just above each scenario's observed worst year: they are a
  * regression fence on engine drift, not a licence for it to grow.
@@ -144,16 +148,16 @@ const SURPLUS = inputs({
 const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
     // Worst year is age 64 (~$274) — a DB pension plus dividends the solver's tax
     // estimate does not credit, not an age-amount error.
-    ['INITIAL_INPUTS', INITIAL_INPUTS, 300],
+    ['INITIAL_INPUTS', INITIAL_INPUTS, 275],
     // No credit-argument gap in these fixtures, so only the binary-search tolerance
     // survives.
     ['single', SINGLE, 1],
-    ['couple', COUPLE, 1],
-    ['widowed', WIDOWED, 2],
+    ['couple', COUPLE, 0.9],
+    ['widowed', WIDOWED, 1.7],
     // Every year is fully unfunded or TFSA-only — no gross-up, no drift.
-    ['shortfall', SHORTFALL, 1],
-    ['one-time events', ONE_TIME, 1],
-    ['surplus', SURPLUS, 1]
+    ['shortfall', SHORTFALL, 0.01],
+    ['one-time events', ONE_TIME, 0.7],
+    ['surplus', SURPLUS, 0.6]
 ];
 
 const SCENARIOS = CASH_FLOW_TOLERANCE;
@@ -222,10 +226,11 @@ describe('cash-flow identity: what the residual is made of', () => {
                 const audit = buildYearAudit(ins, results, i);
                 const cash = sectionOf(audit, 'cashFlow')!;
                 const available = cash.lines.find(l => l.kind === 'result')!.amount;
-                // netIncome already nets the splitting saving out of the tax bill, so
-                // add the audit's explicit unallocated-saving line back to compare.
-                const splitSaving = r.taxSavingsFromSplit ?? 0;
-                expect(available + splitSaving, `${name} i=${i}`).toBeCloseTo(r.netIncome, 2);
+                // The swept splitting saving is inside reinvestedNonReg on both sides,
+                // so it cancels. Only a saving the engine could not sweep (no
+                // non-registered account anywhere) shows as an extra audit line.
+                const unswept = r.unallocatedSplitSaving ?? 0;
+                expect(available + unswept, `${name} i=${i}`).toBeCloseTo(r.netIncome, 2);
             }
         }
     });
@@ -250,19 +255,61 @@ describe('cash-flow identity: what the residual is made of', () => {
         }
     });
 
-    it('the pension-splitting saving accounts for the whole surplus-year gap', () => {
+    it('the pension-splitting saving is swept into an account, not left in the gap', () => {
         const results = runSimulation(COUPLE);
         let splitYears = 0;
         for (const r of results) {
             const saving = r.taxSavingsFromSplit ?? 0;
             if (saving <= 1) continue;
             splitYears++;
-            // netIncome exceeds funded spending by exactly the splitting saving: Step
-            // 5.5 lowers the tax bill after Step 3/4 already allocated the cash, and
-            // nothing sweeps the difference into an account.
-            expect(r.netIncome - (r.spending - r.shortfall)).toBeCloseTo(saving, 2);
+            // Step 5.5 lowers the tax bill after Step 3/4 already sized withdrawals,
+            // so the saving is cash the household holds. It is swept into the
+            // transferor's non-registered account, which is why it lands in
+            // reinvestedNonReg instead of inflating netIncome past funded spending.
+            expect(r.unallocatedSplitSaving ?? 0).toBe(0);
+            expect(r.reinvestedNonReg).toBeGreaterThanOrEqual(saving - 0.01);
+            // Only the solver's own gross-up drift is left (see CASH_FLOW_TOLERANCE).
+            expect(Math.abs(r.netIncome - (r.spending - r.shortfall))).toBeLessThan(1);
         }
         expect(splitYears).toBeGreaterThan(0);
+    });
+
+    it('names the splitting saving only when there is no account to sweep it into', () => {
+        // Normal case: it is inside "Surplus reinvested", so no line of its own.
+        const couple = runSimulation(COUPLE);
+        const ci = couple.findIndex(r => (r.taxSavingsFromSplit ?? 0) > 100);
+        expect(ci, 'expected a split year in COUPLE').toBeGreaterThanOrEqual(0);
+        expect(sectionOf(buildYearAudit(COUPLE, couple, ci), 'cashFlow')!.lines
+            .some(l => l.label.includes('left unallocated'))).toBe(false);
+
+        // Degenerate case: neither spouse holds a non-registered account, so the
+        // refund has nowhere to go and the section must say so rather than pass real
+        // cash off as solver drift.
+        // Spending outruns income every year, so there is no ordinary surplus to
+        // muddy the residual — the only unallocated cash is the splitting saving.
+        const noNonReg = inputs({
+            useIncomeSplitting: true, postRetirementSpend: 120_000,
+            person: person({
+                lifeExpectancy: 70, nonRegisteredAccounts: [],
+                rrsp: { type: 'RRSP', balance: 600_000 },
+                pension: { annualAmount: 90_000, startAge: 65, indexedToInflation: false }
+            }),
+            spouse: person({
+                lifeExpectancy: 70, nonRegisteredAccounts: [],
+                rrsp: { type: 'RRSP', balance: 100_000 }
+            })
+        });
+        const results = runSimulation(noNonReg);
+        const i = results.findIndex(r => (r.unallocatedSplitSaving ?? 0) > 100);
+        expect(i, 'expected an unswept saving').toBeGreaterThanOrEqual(0);
+        const section = sectionOf(buildYearAudit(noNonReg, results, i), 'cashFlow')!;
+        const line = section.lines.find(l => l.label.includes('left unallocated'))!;
+        expect(line.amount).toBeCloseTo(-results[i].unallocatedSplitSaving!, 6);
+        // ...and naming it is what keeps the reconciliation honest: what is left is
+        // the solver's own gross-up drift (this fixture pairs a DB pension with RRSP
+        // draws, like INITIAL_INPUTS), orders of magnitude below the saving itself.
+        expect(Math.abs(section.check!.residual)).toBeLessThan(100);
+        expect(Math.abs(section.check!.residual)).toBeLessThan(results[i].unallocatedSplitSaving! / 10);
     });
 
     it('years with no grossed-up withdrawal reconcile exactly', () => {
@@ -470,8 +517,12 @@ describe('estate section', () => {
         expect(r.totalTerminalTax!).toBeGreaterThan(0);
 
         const estate = sectionOf(buildYearAudit(SINGLE, results, i), 'estate')!;
-        expect(estate.lines.find(l => l.label === 'Assets before terminal tax')!.amount)
-            .toBeCloseTo(r.grossEstateValue!, 6);
+        const assets = estate.lines.find(l => l.label === 'Assets before terminal tax')!;
+        expect(assets.amount).toBeCloseTo(r.grossEstateValue!, 6);
+        // Reference, not info: it is the section's headline figure, so it must
+        // render legibly rather than muted — but still stay out of the arithmetic
+        // (see the 'reference' kind coverage below).
+        expect(assets.kind).toBe('reference');
         expect(estate.lines.find(l => l.kind === 'result')!.amount).toBeCloseTo(r.netEstateValue!, 6);
         expect(estate.check).toBeUndefined();
         // gross − tax = net is tautological by construction of the engine's
@@ -489,6 +540,111 @@ describe('estate section', () => {
         expect(r.totalTerminalTax!).toBeGreaterThan(r.netEstateValue!);
         expect(r.totalAssets).toBeGreaterThanOrEqual(0);
         expect(r.netEstateValue!).toBeGreaterThanOrEqual(0);
+    });
+
+    it('the deemed-gains line appears exactly once, in the Non-registered section, not duplicated in Estate', () => {
+        const results = runSimulation(WIDOWED);
+        const i = results.length - 1;
+        const r = results[i];
+        expect(r.terminalRealizedGains).toBeGreaterThan(0);
+
+        const audit = buildYearAudit(WIDOWED, results, i);
+        const allMatches = audit.sections.flatMap(s =>
+            s.lines.filter(l => l.label === 'Capital gains deemed realized at death'));
+        expect(allMatches).toHaveLength(1);
+        // The note explaining the figure must survive the move.
+        expect(allMatches[0].note).toBe('Full gain; half is taxable');
+
+        const nonReg = sectionOf(audit, 'accountsNonReg')!;
+        expect(nonReg.lines.some(l => l.label === 'Capital gains deemed realized at death')).toBe(true);
+        const estate = sectionOf(audit, 'estate')!;
+        expect(estate.lines.some(l => l.label === 'Capital gains deemed realized at death')).toBe(false);
+    });
+
+    it('"Total terminal tax" only appears when both RRSP and capital-gains terminal tax are nonzero', () => {
+        // WIDOWED's terminal death year has both components — the subtotal earns
+        // its keep there.
+        const both = runSimulation(WIDOWED);
+        const bothIdx = both.length - 1;
+        expect(both[bothIdx].terminalTaxOnRRSP!).toBeGreaterThan(0);
+        expect(both[bothIdx].terminalTaxOnCapGains!).toBeGreaterThan(0);
+        const bothEstate = sectionOf(buildYearAudit(WIDOWED, both, bothIdx), 'estate')!;
+        expect(bothEstate.lines.some(l => l.label === 'Total terminal tax')).toBe(true);
+
+        // A death with RRSP but no unrealized non-reg gain (ACB equals balance) has
+        // only one nonzero component — the subtotal must not print the same figure
+        // as the single line above it under a second name. Spending is kept small
+        // relative to the RRSP balance so there is still RRSP left to tax at death.
+        const oneComponent = inputs({
+            postRetirementSpend: 20_000,
+            person: person({
+                rrsp: { type: 'RRSP', balance: 500_000 },
+                nonRegisteredAccounts: [nonReg({ balance: 10_000, adjustedCostBase: 10_000 })]
+            })
+        });
+        const results = runSimulation(oneComponent);
+        const i = results.length - 1;
+        const r = results[i];
+        expect(r.totalTerminalTax!).toBeGreaterThan(0);
+        expect(r.terminalTaxOnRRSP!).toBeGreaterThan(0);
+        expect(r.terminalTaxOnCapGains ?? 0).toBeCloseTo(0, 6);
+
+        const estate = sectionOf(buildYearAudit(oneComponent, results, i), 'estate')!;
+        expect(estate.lines.some(l => l.label === 'Terminal tax on RRSP/RRIF')).toBe(true);
+        expect(estate.lines.some(l => l.label === 'Terminal tax on capital gains')).toBe(false);
+        expect(estate.lines.some(l => l.label === 'Total terminal tax')).toBe(false);
+    });
+
+    it('the rollover note names TFSA and non-registered transfers without fabricating an amount', () => {
+        const results = runSimulation(WIDOWED);
+        const i = results.findIndex(r => r.spouseDeathThisYear);
+        const estate = sectionOf(buildYearAudit(WIDOWED, results, i), 'estate')!;
+        const line = estate.lines.find(l => l.label.startsWith('RRSP/RRIF rolled over'))!;
+        expect(line.note).toMatch(/TFSA/);
+        expect(line.note).toMatch(/non-registered/i);
+        // Only the RRSP figure is asserted — no invented TFSA/non-reg dollar amount.
+        expect(line.amount).toBeCloseTo(results[i].rrspRolledToSpouse!, 6);
+    });
+});
+
+describe("the 'reference' line kind", () => {
+    it('is excluded from section arithmetic exactly like info, but is not the muted info', () => {
+        const results = runSimulation(SINGLE);
+        const i = results.length - 1;
+        const estate = sectionOf(buildYearAudit(SINGLE, results, i), 'estate')!;
+        const assets = estate.lines.find(l => l.label === 'Assets before terminal tax')!;
+        expect(assets.kind).toBe('reference');
+        expect(assets.kind).not.toBe('info');
+    });
+
+    it("'Target spending' is a reference line in every scenario/year it appears", () => {
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            for (let i = 0; i < results.length; i++) {
+                const cash = sectionOf(buildYearAudit(ins, results, i), 'cashFlow')!;
+                const target = cash.lines.find(l => l.label.startsWith('Target spending'));
+                if (target) expect(target.kind, `${name} i=${i}`).toBe('reference');
+            }
+        }
+    });
+
+    it('reference lines never contribute to a section\'s addend-only sum', () => {
+        // Mirrors sumLines(): every existing addend filter already excludes any
+        // kind other than undefined/normal, so this just pins that 'reference'
+        // continues to be excluded rather than silently becoming an addend.
+        const results = runSimulation(SINGLE);
+        const i = results.length - 1;
+        const estate = sectionOf(buildYearAudit(SINGLE, results, i), 'estate')!;
+        const addendLabels = estate.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .map(l => l.label);
+        expect(addendLabels).not.toContain('Assets before terminal tax');
+
+        const cash = sectionOf(buildYearAudit(SINGLE, results, 0), 'cashFlow')!;
+        const cashAddendLabels = cash.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .map(l => l.label);
+        expect(cashAddendLabels.some(l => l.startsWith('Target spending'))).toBe(false);
     });
 });
 
@@ -530,13 +686,16 @@ describe('gross income section (section 1)', () => {
         }
     });
 
-    it('shows no nets and no per-person split columns', () => {
-        // Section 1 is a pure gross cash-in statement now: the pro-rata per-source
-        // nets (and the You/Spouse columns that displayed them) are gone.
+    it('addend/result lines carry no per-person split — only the informational net-benefit lines may', () => {
+        // Section 1's gross cash-in addends are still a pure household total; the
+        // per-person split that exists is the net-of-tax `info` line beneath CPP/OAS/
+        // pension (see the "per-person net benefit lines" describe block below),
+        // which must never be read as a breakdown of the gross addend itself.
         for (const [name, ins] of SCENARIOS) {
             const results = runSimulation(ins);
             for (let i = 0; i < results.length; i++) {
                 for (const line of sectionOf(buildYearAudit(ins, results, i), 'incomeSources')!.lines) {
+                    if (line.kind === 'info') continue;
                     expect(line.person, `${name} i=${i} ${line.label}`).toBeUndefined();
                     expect(line.spouse, `${name} i=${i} ${line.label}`).toBeUndefined();
                 }
@@ -579,11 +738,55 @@ describe('net income section (section 3)', () => {
                 const payroll = -amountOf('Less: CPP/EI contributions');
                 expect(Math.abs(tax - r.taxPaid), `${name} i=${i} tax`).toBeLessThan(0.01);
 
-                const net = cash.lines.find(l => l.kind === 'subtotal')!;
-                expect(net.label).toBe('Net income');
-                expect(net.amount, `${name} i=${i} net`).toBeCloseTo(carried - tax - payroll, 6);
+                // The subtotal only renders when it has something to subtract — a year
+                // with neither an income-tax nor a CPP/EI line would otherwise print
+                // "Net income" as a bare repeat of "Total cash in (pre-tax)" above it.
+                const net = cash.lines.find(l => l.kind === 'subtotal');
+                const hadDeduction = cash.lines.some(l =>
+                    l.label === 'Less: income tax' || l.label === 'Less: CPP/EI contributions');
+                if (hadDeduction) {
+                    expect(net, `${name} i=${i} net present`).toBeDefined();
+                    expect(net!.label).toBe('Net income');
+                    expect(net!.amount, `${name} i=${i} net`).toBeCloseTo(carried - tax - payroll, 6);
+                } else {
+                    expect(net, `${name} i=${i} net absent`).toBeUndefined();
+                }
             }
         }
+    });
+
+    it('a TFSA-only retirement year has no income tax or payroll and omits the "Net income" subtotal', () => {
+        // No RRSP, no employment, and CPP/OAS start ages set past the person's
+        // life expectancy so they never trigger — the only cash in is tax-free
+        // TFSA withdrawals, so taxPaid and payroll are both exactly zero.
+        const TFSA_ONLY = inputs({
+            person: person({
+                age: 65, retirementAge: 60, lifeExpectancy: 75,
+                cppStartAge: 80, oasStartAge: 80,
+                rrsp: { type: 'RRSP', balance: 0 },
+                tfsa: { type: 'TFSA', balance: 500_000 },
+                nonRegisteredAccounts: []
+            }),
+            postRetirementSpend: 40_000
+        });
+        const results = runSimulation(TFSA_ONLY);
+        expect(results.length).toBeGreaterThan(0);
+        for (let i = 0; i < results.length; i++) {
+            const r = results[i];
+            expect(r.taxPaid, `i=${i}`).toBeCloseTo(0, 2);
+            const cash = sectionOf(buildYearAudit(TFSA_ONLY, results, i), 'cashFlow')!;
+            expect(cash.lines.some(l => l.label === 'Less: income tax'), `i=${i}`).toBe(false);
+            expect(cash.lines.some(l => l.label === 'Less: CPP/EI contributions'), `i=${i}`).toBe(false);
+            expect(cash.lines.some(l => l.kind === 'subtotal'), `i=${i}`).toBe(false);
+        }
+    });
+
+    it('a year that actually carries an income-tax deduction still shows "Net income"', () => {
+        const results = runSimulation(INITIAL_INPUTS);
+        const i = results.findIndex(r => r.taxPaid > 1);
+        expect(i, 'expected a taxed year in INITIAL_INPUTS').toBeGreaterThanOrEqual(0);
+        const cash = sectionOf(buildYearAudit(INITIAL_INPUTS, results, i), 'cashFlow')!;
+        expect(cash.lines.some(l => l.kind === 'subtotal' && l.label === 'Net income')).toBe(true);
     });
 
     it('payroll is deducted here and nowhere else', () => {
@@ -739,6 +942,172 @@ describe('income and tax sections', () => {
             .filter(l => l.kind === undefined || l.kind === 'normal')
             .reduce((sum, l) => sum + l.amount, 0);
         expect(Math.abs(partition - results[i].taxPaid)).toBeLessThan(0.1);
+    });
+
+    it("the effective-rate note names its denominator via NOTE_AMOUNT_TOKEN, and that denominator is grossIncome", () => {
+        for (const [name, ins] of SCENARIOS) {
+            const results = runSimulation(ins);
+            const i = results.findIndex(r => r.taxPaid > 1 && r.grossIncome > 0);
+            if (i < 0) continue; // not every scenario has a taxed year
+            const result = sectionOf(buildYearAudit(ins, results, i), 'taxes')!.lines
+                .find(l => l.kind === 'result')!;
+            expect(result.note, `${name} i=${i}`).toContain(NOTE_AMOUNT_TOKEN);
+            expect(result.note, `${name} i=${i}`).toMatch(/Total cash in \(pre-tax\)/);
+            expect(result.noteAmount, `${name} i=${i}`).toBeCloseTo(results[i].grossIncome, 6);
+        }
+    });
+
+    it('the OAS clawback is explained once — on the info line, not on the partition line too', () => {
+        // ~$150k+ of RRSP income puts the person deep into clawback territory (same
+        // shape as projection.test.ts's own clawback fixture).
+        const ins = inputs({
+            person: person({ oasStartAge: 65, rrsp: { type: 'RRSP', balance: 3_000_000 } }),
+            postRetirementSpend: 250_000
+        });
+        const results = runSimulation(ins);
+        const i = results.findIndex(r => r.oasClawbackPaid > 1);
+        expect(i, 'expected a clawback year').toBeGreaterThanOrEqual(0);
+        const section = sectionOf(buildYearAudit(ins, results, i), 'taxes')!;
+
+        const oasLine = section.lines.find(l => l.label === 'Tax on OAS');
+        expect(oasLine?.note, `i=${i}`).toBeUndefined();
+
+        const clawbackInfo = section.lines.find(l => l.label === 'Includes OAS recovery tax (clawback)')!;
+        expect(clawbackInfo.note, `i=${i}`).toBeDefined();
+        expect(clawbackInfo.amount).toBeCloseTo(results[i].oasClawbackPaid, 6);
+    });
+});
+
+describe('one-time expense info lines (cashFlow)', () => {
+    it('the Roof expense appears directly under Target spending, as an info line sized to the event', () => {
+        const results = runSimulation(ONE_TIME);
+        const i = results.findIndex(r => r.age === 66);
+        const cash = sectionOf(buildYearAudit(ONE_TIME, results, i), 'cashFlow')!;
+        const targetIdx = cash.lines.findIndex(l => l.label.startsWith('Target spending'));
+        expect(targetIdx).toBeGreaterThanOrEqual(0);
+        const line = cash.lines[targetIdx + 1];
+        expect(line.label).toBe('Includes one-time: Roof');
+        expect(line.kind).toBe('info');
+        expect(line.amount).toBeCloseTo(50_000, 6);
+    });
+
+    it('falls back to a generic label when the event name is blank', () => {
+        const blankNamed = inputs({
+            person: person({ rrsp: { type: 'RRSP', balance: 800_000 } }),
+            oneTimeExpenses: [{ id: 'x', name: '', amount: 10_000, age: 66, type: 'expense' }]
+        });
+        const results = runSimulation(blankNamed);
+        const i = results.findIndex(r => r.age === 66);
+        const cash = sectionOf(buildYearAudit(blankNamed, results, i), 'cashFlow')!;
+        const line = cash.lines.find(l => l.label === 'Includes one-time: One-time expense');
+        expect(line).toBeDefined();
+        expect(line!.kind).toBe('info');
+    });
+
+    it('multiple one-time expenses in the same year each get their own info line', () => {
+        const multi = inputs({
+            person: person({ rrsp: { type: 'RRSP', balance: 800_000 } }),
+            oneTimeExpenses: [
+                { id: 'a', name: 'Roof', amount: 30_000, age: 66, type: 'expense' },
+                { id: 'b', name: 'Car', amount: 15_000, age: 66, type: 'expense' }
+            ]
+        });
+        const results = runSimulation(multi);
+        const i = results.findIndex(r => r.age === 66);
+        const cash = sectionOf(buildYearAudit(multi, results, i), 'cashFlow')!;
+        const roof = cash.lines.find(l => l.label === 'Includes one-time: Roof')!;
+        const car = cash.lines.find(l => l.label === 'Includes one-time: Car')!;
+        expect(roof.amount).toBeCloseTo(30_000, 6);
+        expect(car.amount).toBeCloseTo(15_000, 6);
+        expect(roof.kind).toBe('info');
+        expect(car.kind).toBe('info');
+    });
+
+    it('does not change the cashFlow reconciliation residual — the amount is already inside r.spending', () => {
+        // The one-time-events reconciliation suite (CASH_FLOW_TOLERANCE) already
+        // covers every year of ONE_TIME with these info lines present; this test
+        // proves directly why they cannot move the residual: sumLines() (which
+        // both "Cash available to spend" and the check are built from) ignores
+        // `info`-kind lines by construction, so appending them changes nothing.
+        const results = runSimulation(ONE_TIME);
+        const i = results.findIndex(r => r.age === 66);
+        const cash = sectionOf(buildYearAudit(ONE_TIME, results, i), 'cashFlow')!;
+        expect(cash.lines.some(l => l.label === 'Includes one-time: Roof')).toBe(true);
+        const addendsOnly = cash.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((s, l) => s + l.amount, 0);
+        const available = cash.lines.find(l => l.kind === 'result')!.amount;
+        expect(addendsOnly).toBeCloseTo(available, 6);
+        // Same tolerance already asserted in CASH_FLOW_TOLERANCE for 'one-time events'.
+        expect(Math.abs(cash.check!.residual)).toBeLessThan(0.7);
+    });
+});
+
+describe('one-time inflow naming (incomeSources)', () => {
+    it('the summed addend line is untouched, and a named info line sits alongside it', () => {
+        const results = runSimulation(ONE_TIME);
+        const i = results.findIndex(r => r.age === 67);
+        const income = sectionOf(buildYearAudit(ONE_TIME, results, i), 'incomeSources')!;
+
+        const addend = income.lines.find(l => l.label === 'One-time inflows')!;
+        expect(addend.amount).toBeCloseTo(120_000, 6);
+        expect(addend.kind).toBeUndefined();
+
+        const named = income.lines.find(l => l.label === 'Includes one-time: Inheritance')!;
+        expect(named).toBeDefined();
+        expect(named.kind).toBe('info');
+        expect(named.amount).toBeCloseTo(120_000, 6);
+
+        // Naming is informational only — the section total is unaffected.
+        const addendsOnly = income.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((s, l) => s + l.amount, 0);
+        const total = income.lines.find(l => l.kind === 'result')!;
+        expect(total.amount).toBeCloseTo(addendsOnly, 6);
+    });
+});
+
+describe('per-person net benefit lines in income & withdrawals', () => {
+    it('never appear for a single-person plan', () => {
+        const results = runSimulation(SINGLE);
+        for (let i = 0; i < results.length; i++) {
+            const income = sectionOf(buildYearAudit(SINGLE, results, i), 'incomeSources')!;
+            expect(income.lines.some(l => l.label.startsWith('Net CPP received')), `i=${i}`).toBe(false);
+            expect(income.lines.some(l => l.label.startsWith('Net OAS received')), `i=${i}`).toBe(false);
+            expect(income.lines.some(l => l.label.startsWith('Net DB pension received')), `i=${i}`).toBe(false);
+        }
+    });
+
+    it('appear for a couple, only alongside the gross line they explain, and match the engine\'s own net figures', () => {
+        const results = runSimulation(COUPLE);
+        const withCpp = results.findIndex(r => r.cppIncome > 1);
+        expect(withCpp, 'expected a year with CPP in COUPLE').toBeGreaterThanOrEqual(0);
+        const income = sectionOf(buildYearAudit(COUPLE, results, withCpp), 'incomeSources')!;
+
+        const cppLine = income.lines.find(l => l.label === 'Net CPP received — You / Spouse')!;
+        expect(cppLine).toBeDefined();
+        expect(cppLine.kind).toBe('info');
+        // Consistent with what it claims to be: person/spouse are the engine's own
+        // net-of-tax figures, and the displayed total is exactly their sum.
+        expect(cppLine.person).toBeCloseTo(results[withCpp].personNetCPP, 6);
+        expect(cppLine.spouse).toBeCloseTo(results[withCpp].spouseNetCPP, 6);
+        expect(cppLine.amount).toBeCloseTo(cppLine.person! + cppLine.spouse!, 6);
+
+        // COUPLE has no DB pension configured, so neither the gross line nor its
+        // net-split info line should appear even though a spouse exists.
+        expect(income.lines.some(l => l.label === 'Workplace (DB) pension (gross)')).toBe(false);
+        expect(income.lines.some(l => l.label.startsWith('Net DB pension received'))).toBe(false);
+    });
+
+    it('are excluded from the section total, like every other info line', () => {
+        const results = runSimulation(COUPLE);
+        const withCpp = results.findIndex(r => r.cppIncome > 1);
+        const income = sectionOf(buildYearAudit(COUPLE, results, withCpp), 'incomeSources')!;
+        const addendsOnly = income.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((s, l) => s + l.amount, 0);
+        const total = income.lines.find(l => l.kind === 'result')!;
+        expect(total.amount).toBeCloseTo(addendsOnly, 6);
     });
 });
 
