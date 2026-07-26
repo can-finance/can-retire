@@ -224,7 +224,7 @@ describe('mergeSimpleAnswers', () => {
         const out = mergeSimpleAnswers(baseDraft(), { ...baseAnswers, age: 67, retirementAge: 60 });
         expect(out.person.retirementAge).toBe(67); // max(retire, age)
         expect(out.person.lifeExpectancy).toBe(90); // max(seeded 90, 90, 72)
-        expect(out.person.rrspMeltStartAge).toBe(67); // max(seeded 55, 55, age)
+        expect(out.person.rrspMeltStartAge).toBe(67); // max(seeded 60, 60, age)
     });
 
     it('lifeExpectancy uses retirementAge+5 when that exceeds 90', () => {
@@ -245,7 +245,7 @@ describe('mergeSimpleAnswers', () => {
         seed.person.age = 40;
         seed.person.rrspMeltStartAge = 62;
         const out = mergeSimpleAnswers(seed, seedToSimpleAnswers(seed));
-        expect(out.person.rrspMeltStartAge).toBe(62); // max(62, 55, 40) stays 62
+        expect(out.person.rrspMeltStartAge).toBe(62); // max(62, 60, 40) stays 62
     });
 
     it('merges into an existing spouse rather than replacing it, preserving uncollected fields', () => {

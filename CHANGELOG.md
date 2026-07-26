@@ -14,9 +14,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   what drove it, a cash-flow reconciliation against the spending target, and an
   opening-to-closing waterfall for each account — with every section showing
   whether its numbers balance to the dollar. Arrow keys step between years.
-  Applies to the standard projection (Monte Carlo runs are not audited).
+  Applies to the standard projection (Monte Carlo runs are not audited). The
+  gross RRSP/RRIF withdrawal line splits out the mandatory RRIF minimum, the
+  voluntary meltdown, and any extra draw needed to meet spending, and notes
+  when a mandatory minimum drew out more than the household spent that year.
 
 ### Changed
+- **New plans now start the RRSP meltdown at retirement instead of five years
+  before it.** The default melt start age was 55 while the default retirement age
+  was 60, so a new plan withdrew from the RRSP for five years on top of a full
+  salary — taxed at the household's peak marginal rate, on money it did not need
+  and simply reinvested. A meltdown only pays off in the low-income window between
+  retiring and CPP/OAS starting, which is where the default now puts it. New plans
+  show lower tax in those five years and a larger RRSP (and so larger RRIF
+  minimums) afterwards. Saved plans are unaffected — they carry their own melt
+  start age.
 - **Monte Carlo simulations now draw yearly returns lognormally.** The old model
   added a symmetric shock to the return, which ignored the drag that swings put
   on compound growth and could even produce a year worse than losing everything.
@@ -26,6 +38,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Carlo may shift.
 
 ### Fixed
+- **Your salary now keeps pace with inflation over your working years instead of
+  staying frozen in today's dollars.** Every other figure in a plan — spending,
+  CPP, OAS, tax brackets, contribution limits — was indexed for inflation, but
+  employment income was held at the amount you entered for as many years as you
+  keep working. Spending therefore crept past a permanently fixed salary, and
+  plans showed an artificial shortfall late in a career: the default plan started
+  raiding its RRSP at age 52 to pay for ordinary living costs. Annual income is
+  now treated as a today's-dollars figure, exactly like your spending, and is
+  indexed at your plan's inflation rate in each year you earn it. Any projection
+  with working years left changes — more saved by retirement, and correspondingly
+  more tax later once those larger balances are drawn down.
 - **The tax saved by pension income splitting is no longer dropped from the
   projection.** Splitting lowered the household's tax bill, but the cash it freed
   up was never added to savings — it simply disappeared from the year. The saving

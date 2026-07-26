@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { runSimulation } from '../../engine/projection';
 import type { Person, NonRegisteredAccount, SimulationInputs } from '../../engine/types';
-import { INITIAL_INPUTS } from '../../utils/inputSanitizer';
+import { INITIAL_INPUTS, createDefaultPerson } from '../../utils/inputSanitizer';
 import { buildYearAudit } from '../../utils/yearAudit';
 import { YearAuditDrawer } from './YearAuditDrawer';
 import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
@@ -472,6 +472,60 @@ describe('YearAuditDrawer', () => {
             />
         );
         expect(screen.getAllByText('Capital gains deemed realized at death')).toHaveLength(1);
+    });
+});
+
+describe('RRSP/RRIF withdrawal breakdown sub-lines', () => {
+    // Same forced-overdraw fixture as yearAudit.test.ts: from age 74 a $2M RRSP
+    // forces a RRIF minimum far above the $20k spending target, with no melt
+    // running and no top-up needed.
+    const FORCED = inputs({
+        person: person({ age: 74, lifeExpectancy: 78, rrsp: { type: 'RRSP', balance: 2_000_000 } }),
+        postRetirementSpend: 20_000
+    });
+
+    // Default plan with a spouse added via createDefaultPerson(true): at the
+    // primary's age 72 the (younger) spouse is still running their own
+    // configured meltdown alongside the primary's freshly-triggered RRIF
+    // minimum, so both sub-lines render together.
+    const SPOUSE_PLAN: SimulationInputs = {
+        person: createDefaultPerson(),
+        spouse: createDefaultPerson(true),
+        province: 'ON', inflationRate: 0.025,
+        preRetirementSpend: 60_000, postRetirementSpend: 55_000,
+        oneTimeExpenses: [], withdrawalStrategy: 'rrsp-first', useIncomeSplitting: true,
+        returnRates: {
+            bondReturn: 0.035, cashInterest: 0.02, dividend: 0.03, foreignYield: 0.02,
+            capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.10
+        }
+    };
+
+    it('shows the mandatory-minimum sub-line with the forced-overdraw nudge text', () => {
+        const results = runSimulation(FORCED);
+        render(
+            <YearAuditDrawer
+                inputs={FORCED} results={results} index={0}
+                inflationAdjusted={false} hasSpouse={false} onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Mandatory RRIF minimum')).toBeInTheDocument();
+        expect(screen.getByText(/RRSP meltdown optimizer explores/)).toBeInTheDocument();
+        expect(screen.queryByText('Voluntary meltdown')).toBeNull();
+        expect(screen.queryByText('Extra draw to fund spending')).toBeNull();
+    });
+
+    it('shows both the mandatory-minimum and voluntary-meltdown sub-lines in a year with both', () => {
+        const results = runSimulation(SPOUSE_PLAN);
+        const i = results.findIndex(r => r.age === 72);
+        expect(i).toBeGreaterThanOrEqual(0);
+        render(
+            <YearAuditDrawer
+                inputs={SPOUSE_PLAN} results={results} index={i}
+                inflationAdjusted={false} hasSpouse onClose={vi.fn()} onNavigate={vi.fn()}
+            />
+        );
+        expect(screen.getByText('Mandatory RRIF minimum')).toBeInTheDocument();
+        expect(screen.getByText('Voluntary meltdown')).toBeInTheDocument();
     });
 });
 

@@ -105,8 +105,10 @@ function mergePerson(base: Person, opts: MergeOpts): Person {
     const retirementAge = Math.max(opts.retirementAge, age);
     // lifeExpectancy ≥ max(90, retirementAge + 5), but never lower a seeded value.
     const lifeExpectancy = Math.max(base.lifeExpectancy, 90, retirementAge + 5);
-    // rrspMeltStartAge ≥ max(55, age), without lowering a seeded value.
-    const rrspMeltStartAge = Math.max(base.rrspMeltStartAge ?? 0, 55, age);
+    // rrspMeltStartAge ≥ max(60, age), without lowering a seeded value. The 60
+    // floor tracks the default melt start (createDefaultPerson) — melting earlier
+    // than that means drawing an RRSP down while still on a full salary.
+    const rrspMeltStartAge = Math.max(base.rrspMeltStartAge ?? 0, 60, age);
 
     return {
         ...base,

@@ -280,7 +280,15 @@ function simulatePersonBaseYear(
     const divGrossUp = divIncome * 1.38;
 
     // Employment
-    const employmentIncome = (age < person.retirementAge) ? person.currentIncome : 0;
+    // `currentIncome` is a TODAY'S-DOLLARS input, exactly like preRetirementSpend /
+    // postRetirementSpend, so it is indexed into the year it is earned. Indexing at
+    // the plan's inflation rate holds REAL wages flat — broadly what wages do — and
+    // keeps the salary on the same footing as the spending it funds and as the
+    // CPP/EI ceilings it is tested against (calculatePayrollContributions indexes
+    // those). Leaving it nominal made every plan drift into an artificial
+    // pre-retirement shortfall as spending inflated past a frozen salary. A separate
+    // real-wage-growth assumption is deliberately NOT modelled here.
+    const employmentIncome = (age < person.retirementAge) ? person.currentIncome * inflationFactor : 0;
 
     // Mandatory CPP/QPP + EI withheld on employment income.
     const payrollForTax = calculatePayrollContributions(employmentIncome, province, inflationFactor);
@@ -691,7 +699,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             const pIsMelting = p.rrspMeltAmount && p.rrspMeltAmount > 0 && pAge >= (p.rrspMeltStartAge || p.retirementAge);
 
             if (pAlive && pAge < 71 && remaining > 0 && p.currentIncome > 0 && pAge < p.retirementAge && !pIsMelting) {
-                const limit = Math.min(p.currentIncome * 0.18, 31000 * inflationFactor); // Approx room gen
+                // Both sides indexed: `currentIncome` is a today's-dollars input (see
+                // the employment-income comment in simulatePersonBaseYear), so the 18%
+                // is taken on the salary actually earned this year, and the dollar cap
+                // is indexed the same way CRA indexes it.
+                const limit = Math.min(p.currentIncome * inflationFactor * 0.18, 31000 * inflationFactor); // Approx room gen
                 const add = Math.min(remaining, limit);
                 p.rrsp.balance += add;
                 remaining -= add;
@@ -702,7 +714,7 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             const sIsMelting = s && s.rrspMeltAmount && s.rrspMeltAmount > 0 && sAge! >= (s.rrspMeltStartAge || s.retirementAge);
 
             if (sAlive && s && sAge! < 71 && remaining > 0 && s.currentIncome > 0 && sAge! < s.retirementAge && !sIsMelting) {
-                const limit = Math.min(s.currentIncome * 0.18, 31000 * inflationFactor);
+                const limit = Math.min(s.currentIncome * inflationFactor * 0.18, 31000 * inflationFactor);
                 const add = Math.min(remaining, limit);
                 s.rrsp.balance += add;
                 remaining -= add;
@@ -791,6 +803,10 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 finalTaxable,
                 finalTax,
                 totalRRSP,
+                // The three components totalRRSP is the sum of — surfaced so the
+                // SimulationResult can report the split without recomputing it.
+                meltWithdrawal: base.voluntaryRRSPWithdrawal,
+                topUpWithdrawal: extraRRSP,
                 dbPensionIncome,
                 rrifIncome,
                 qualifiedPension,
@@ -1235,6 +1251,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             totalTFSAWithdrawal: pTFSAWithdrawal + sTFSAWithdrawal,
             totalNonRegWithdrawal: pNonRegWithdrawal + sNonRegWithdrawal,
             totalRRSPWithdrawal: (pFinal?.totalRRSP || 0) + (sFinal?.totalRRSP || 0),
+            // Partition of totalRRSPWithdrawal, taken from the same per-person
+            // components getFinalStats summed — so the three add back exactly.
+            rrifMinimumWithdrawal: (pFinal?.rrifIncome || 0) + (sFinal?.rrifIncome || 0),
+            voluntaryMeltWithdrawal: (pFinal?.meltWithdrawal || 0) + (sFinal?.meltWithdrawal || 0),
+            topUpWithdrawal: (pFinal?.topUpWithdrawal || 0) + (sFinal?.topUpWithdrawal || 0),
 
             // Just for checking
             netRRSPWithdrawal: pNetRRSP + sNetRRSP,

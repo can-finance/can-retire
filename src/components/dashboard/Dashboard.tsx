@@ -16,7 +16,7 @@ import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { YearAuditDrawer } from './YearAuditDrawer';
 import { runSimulation, runMonteCarlo, blendedNonRegMix } from '../../engine/projection';
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
-import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
+import { createDefaultPerson, DEFAULT_SPEND, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
 import { SIM_KEY, hasSavedPlan } from '../../utils/onboarding';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { computeSummaryMetrics } from '../../utils/summaryMetrics';
@@ -201,8 +201,19 @@ export function Dashboard() {
         updateInputs({ ...inputs, [who]: { ...target, nonRegisteredAccounts: accounts } });
     };
 
+    // Adding or removing a spouse also moves the household spending defaults
+    // (see DEFAULT_SPEND) — but ONLY while they still sit at the other size's
+    // default. Once the user has typed their own figure it is theirs to keep,
+    // so a spouse toggle must never overwrite it.
     const toggleSpouse = () => {
-        updateInputs({ ...inputs, spouse: hasSpouse ? undefined : createDefaultPerson(true) });
+        const from = hasSpouse ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
+        const to = hasSpouse ? DEFAULT_SPEND.single : DEFAULT_SPEND.couple;
+        updateInputs({
+            ...inputs,
+            spouse: hasSpouse ? undefined : createDefaultPerson(true),
+            preRetirementSpend: inputs.preRetirementSpend === from.pre ? to.pre : inputs.preRetirementSpend,
+            postRetirementSpend: inputs.postRetirementSpend === from.post ? to.post : inputs.postRetirementSpend
+        });
     };
 
     const loadPlanInputs = (p: SavedPlan) => setInputsRaw(sanitizeSimulationInputs(p.inputs) ?? INITIAL_INPUTS);

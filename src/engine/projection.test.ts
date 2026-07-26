@@ -228,6 +228,120 @@ describe('RRIF minimums', () => {
     });
 });
 
+describe('RRSP withdrawal breakdown partitions the total', () => {
+    // The drawer shows a user how much of a large withdrawal was legally forced.
+    // If these three ever stop summing to the total, some component has been
+    // mis-mapped and the breakdown is lying about what was mandatory.
+    const partitionFixtures: Array<[string, SimulationInputs]> = [
+        ['default plan (INITIAL_INPUTS)', INITIAL_INPUTS],
+        ['default plan with spouse', {
+            ...INITIAL_INPUTS,
+            spouse: { ...INITIAL_INPUTS.person, age: 45, currentIncome: 50_000 }
+        }],
+        // Melt runs right up to 71, RRIF starts at 72 — the transition year has
+        // a RRIF minimum and no melt, its predecessor the reverse.
+        ['melt/RRIF transition (age 68 → 76)', inputs({
+            person: person({
+                age: 68, retirementAge: 60, lifeExpectancy: 76,
+                rrspMeltStartAge: 60, rrspMeltAmount: 25_000,
+                rrsp: { type: 'RRSP', balance: 900_000 },
+                tfsa: { type: 'TFSA', balance: 100_000 }
+            }),
+            postRetirementSpend: 70_000
+        })],
+        // Couple whose melt, RRIF and top-up draws all overlap, with a death year
+        // (spouse dies at 74, RRSP rolls to the survivor) and income splitting on.
+        ['couple with a death year', inputs({
+            inflationRate: 0.02,
+            useIncomeSplitting: true,
+            person: person({
+                age: 70, lifeExpectancy: 85, cppStartAge: 65, cppContributedYears: 38,
+                oasStartAge: 65, rrspMeltStartAge: 70, rrspMeltAmount: 30_000,
+                rrsp: { type: 'RRSP', balance: 800_000 },
+                nonRegisteredAccounts: [nonReg({ balance: 200_000, adjustedCostBase: 120_000, receivesSurplus: true })]
+            }),
+            spouse: person({
+                age: 71, lifeExpectancy: 74, cppStartAge: 65, cppContributedYears: 30,
+                oasStartAge: 65, rrspMeltStartAge: 71, rrspMeltAmount: 20_000,
+                rrsp: { type: 'RRSP', balance: 400_000 },
+                nonRegisteredAccounts: [nonReg({ balance: 80_000, adjustedCostBase: 60_000, receivesSurplus: true })]
+            }),
+            postRetirementSpend: 95_000,
+            returnRates: { bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03, capitalGrowth: 0.05 }
+        })],
+        // Every account drains: top-ups are capped by the balance, so the
+        // components must still add up in a year the plan fails.
+        ['shortfall years', inputs({
+            person: person({
+                age: 66, lifeExpectancy: 72, rrspMeltStartAge: 66, rrspMeltAmount: 40_000,
+                rrsp: { type: 'RRSP', balance: 120_000 }, tfsa: { type: 'TFSA', balance: 20_000 }
+            }),
+            postRetirementSpend: 100_000
+        })],
+        // rrsp-first ordering exercises the doWithdraw fallback round
+        ['rrsp-first couple', inputs({
+            withdrawalStrategy: 'rrsp-first',
+            person: person({ age: 73, lifeExpectancy: 82, rrsp: { type: 'RRSP', balance: 500_000 } }),
+            spouse: person({ age: 73, lifeExpectancy: 80, rrsp: { type: 'RRSP', balance: 40_000 } }),
+            postRetirementSpend: 90_000
+        })]
+    ];
+
+    for (const [name, ins] of partitionFixtures) {
+        it(`${name}: rrif + voluntary melt + top-up === totalRRSPWithdrawal, every year`, () => {
+            const res = runSimulation(ins);
+            expect(res.length).toBeGreaterThan(0);
+            for (let i = 0; i < res.length; i++) {
+                const r = res[i];
+                const sum = r.rrifMinimumWithdrawal + r.voluntaryMeltWithdrawal + r.topUpWithdrawal;
+                expect(sum, `${name} i=${i} (age ${r.age})`).toBeCloseTo(r.totalRRSPWithdrawal, 6);
+                expect(r.rrifMinimumWithdrawal, `${name} i=${i} rrif`).toBeGreaterThanOrEqual(0);
+                expect(r.voluntaryMeltWithdrawal, `${name} i=${i} melt`).toBeGreaterThanOrEqual(0);
+                expect(r.topUpWithdrawal, `${name} i=${i} topUp`).toBeGreaterThanOrEqual(0);
+            }
+        });
+    }
+
+    it('the age-71→72 boundary moves the draw from voluntary to mandatory', () => {
+        const res = runSimulation(inputs({
+            person: person({
+                age: 69, retirementAge: 60, lifeExpectancy: 75,
+                rrspMeltStartAge: 60, rrspMeltAmount: 25_000,
+                rrsp: { type: 'RRSP', balance: 600_000 },
+                tfsa: { type: 'TFSA', balance: 400_000 }
+            }),
+            postRetirementSpend: 30_000
+        }));
+        const at71 = res.find(r => r.age === 71)!;
+        const at72 = res.find(r => r.age === 72)!;
+        // 71: the melt is still running, nothing is forced
+        expect(at71.rrifMinimumWithdrawal).toBe(0);
+        expect(at71.voluntaryMeltWithdrawal).toBeCloseTo(25_000, 6);
+        // 72: the melt has stopped and the RRIF minimum takes over
+        expect(at72.voluntaryMeltWithdrawal).toBe(0);
+        expect(at72.rrifMinimumWithdrawal).toBeGreaterThan(0);
+        expect(at72.rrifMinimumWithdrawal).toBeCloseTo(at72.totalRRSPWithdrawal - at72.topUpWithdrawal, 6);
+    });
+
+    it('a top-up appears only when base income leaves a spending deficit', () => {
+        // Forced RRIF minimum far exceeds the target, so nothing extra is drawn.
+        const covered = runSimulation(inputs({
+            person: person({ age: 74, lifeExpectancy: 78, rrsp: { type: 'RRSP', balance: 2_000_000 } }),
+            postRetirementSpend: 20_000
+        }));
+        expect(covered[0].rrifMinimumWithdrawal).toBeGreaterThan(20_000);
+        expect(covered[0].topUpWithdrawal).toBe(0);
+
+        // Same age, small balance: the minimum can't fund the target, so Step 3 tops up.
+        const short = runSimulation(inputs({
+            person: person({ age: 74, lifeExpectancy: 78, rrsp: { type: 'RRSP', balance: 400_000 } }),
+            postRetirementSpend: 60_000
+        }));
+        expect(short[0].topUpWithdrawal).toBeGreaterThan(0);
+        expect(short[0].voluntaryMeltWithdrawal).toBe(0); // melt never runs past 71
+    });
+});
+
 describe('non-registered tax modeling', () => {
     it('capital gains inclusion is a flat 50% (the 2/3 proposal was never enacted)', () => {
         // Single person dies with $1M of unrealized gains (ACB 0) and no other income.

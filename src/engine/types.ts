@@ -178,6 +178,11 @@ export interface SimulationResult {
     totalTFSAWithdrawal: number;
     totalNonRegWithdrawal: number; // Principal + Gains
     totalRRSPWithdrawal: number;   // RRIF + Melt + Extra
+    // Household totals (both people summed). These three partition
+    // totalRRSPWithdrawal exactly: rrif + voluntary + topUp === totalRRSPWithdrawal.
+    rrifMinimumWithdrawal: number;   // Household total: mandatory RRIF minimums (age 72+)
+    voluntaryMeltWithdrawal: number; // Household total: configured meltdown draws (rrspMeltAmount)
+    topUpWithdrawal: number;         // Household total: extra RRSP draws taken to fund a spending deficit
     employmentIncome: number;
     investmentIncome: number; // Interest + Dividends Only
     // Household capital gains realized this year from non-reg sales while living

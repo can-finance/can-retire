@@ -54,7 +54,7 @@ export interface WizardStep {
  * load-bearing: a step must only block on problems the user can fix without
  * leaving it. Gating every person step on the whole person's errors instead
  * strands them — e.g. entering a current age of 70 on "About you" trips the melt
- * check against the default melt start of 55, whose field is four steps away.
+ * check against the default melt start of 60, whose field is four steps away.
  *
  * Nothing is lost by scoping: Save re-checks the whole draft and jumps to the
  * owning step, and every check belongs to exactly one scope.
@@ -97,6 +97,7 @@ function AboutFields({ person, who, setDraft }: { person: Person; who: Who; setD
             <SharedAboutFields person={person} labels={WIZARD_ABOUT_LABELS}
                 onPatch={(patch) => patchPerson(setDraft, who, patch)} />
             <FinancialInput label="Annual income (before tax)" value={person.currentIncome}
+                tooltip="Gross employment income in today's dollars, like your household spending. It is indexed at the plan's inflation rate for each year you keep working, so your pay holds its purchasing power rather than shrinking against rising costs."
                 onChange={(e) => patchPerson(setDraft, who, { currentIncome: Number(e.target.value) })} />
         </div>
     );

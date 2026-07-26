@@ -102,7 +102,7 @@ describe('buildDetailedSteps', () => {
         });
 
         // Regression: gating on the whole person's errors trapped the user on
-        // step 0 — a current age past the default melt start age (55) tripped a
+        // step 0 — a current age past the default melt start age (60) tripped a
         // check whose only editable field sits four steps later.
         it('a current age past the melt start age blocks the meltdown step, not "About you"', () => {
             const person = { ...withoutSpouse.person, age: 70, retirementAge: 72, lifeExpectancy: 90 };

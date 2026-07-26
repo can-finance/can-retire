@@ -30,7 +30,11 @@ export const createDefaultPerson = (isSpouse = false): Person => ({
     cppStartAge: 65,
     cppContributedYears: 35,
     oasStartAge: 65,
-    rrspMeltStartAge: 55,
+    // Melt at retirement, not before it. A meltdown is only worth doing in the
+    // low-income window between retiring and CPP/OAS starting — starting it while
+    // a full salary is still coming in taxes the draw at a peak marginal rate on
+    // money the household does not need.
+    rrspMeltStartAge: 60, // == retirementAge above
     rrspMeltAmount: isSpouse ? 10000 : 20000,
     rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 500000 },
     tfsa: { type: AccountTypeVals.TFSA, balance: isSpouse ? 100000 : 150000 },
@@ -41,13 +45,24 @@ export const createDefaultPerson = (isSpouse = false): Person => ({
     })]
 });
 
+// Household spending defaults. A second adult does not double a household's
+// costs — housing, utilities and durables are shared — so the couple figures
+// use the OECD square-root equivalence scale (~1.4x), not 2x. Without this,
+// adding a spouse leaves a two-earner household modelled as spending a single
+// person's budget, which makes it implausibly over-funded: the RRSPs are never
+// drawn down and compound until mandatory RRIF minimums force them out.
+export const DEFAULT_SPEND = {
+    single: { pre: 60000, post: 55000 },
+    couple: { pre: 84000, post: 77000 }
+} as const;
+
 export const INITIAL_INPUTS: SimulationInputs = {
     person: createDefaultPerson(),
     spouse: undefined,
     province: 'ON',
     inflationRate: 0.025,
-    preRetirementSpend: 60000,
-    postRetirementSpend: 55000,
+    preRetirementSpend: DEFAULT_SPEND.single.pre,
+    postRetirementSpend: DEFAULT_SPEND.single.post,
     oneTimeExpenses: [],
     withdrawalStrategy: 'rrsp-first',
     useIncomeSplitting: true,

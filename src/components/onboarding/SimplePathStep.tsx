@@ -52,6 +52,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
 
                 <FinancialInput
                     label="Annual income (before tax)"
+                    tooltip="Gross employment income in today's dollars, like your household spending. It is indexed at the plan's inflation rate for each year you keep working, so your pay holds its purchasing power rather than shrinking against rising costs."
                     value={answers.currentIncome}
                     onChange={(e) => onChange({ currentIncome: Number(e.target.value) })}
                 />

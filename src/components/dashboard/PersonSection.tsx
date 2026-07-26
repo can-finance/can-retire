@@ -145,6 +145,7 @@ export function PersonSection({
                 )}
 
                 <FinancialInput label="Annual Income" value={person.currentIncome}
+                    tooltip="Gross employment income in today's dollars, like your household spending. It is indexed at the plan's inflation rate for each year you keep working, so your pay holds its purchasing power rather than shrinking against rising costs."
                     onChange={(e) => onChange('currentIncome', Number(e.target.value))} />
 
                 <AccountsFields person={person} isSpouse={isSpouse} onPatch={onPatch}

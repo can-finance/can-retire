@@ -128,8 +128,12 @@ function inputBalances(inputs: SimulationInputs): Balances {
 
 // Mandatory CPP/QPP + EI never reach the household's pocket, and the engine folds
 // them into `netEmploymentIncome` without reporting them separately. Rebuild them
-// from the inputs the same way the engine does: a person earns their (nominal,
-// un-indexed) `currentIncome` while alive and below their retirement age.
+// from the inputs the same way the engine does: a person earns their `currentIncome`
+// while alive and below their retirement age, INDEXED by the row's inflation factor
+// — `currentIncome` is a today's-dollars input, and the engine multiplies it by that
+// same factor in the year it is earned (see simulatePersonBaseYear). The CPP/EI
+// ceilings inside calculatePayrollContributions are indexed by the same factor, so
+// the salary and the ceilings it is tested against stay on the same footing.
 function payrollWithheld(inputs: SimulationInputs, r: SimulationResult): { payroll: number; employment: number } {
     const entries: Array<[Person, number | undefined]> = [
         [inputs.person, r.age],
@@ -139,7 +143,7 @@ function payrollWithheld(inputs: SimulationInputs, r: SimulationResult): { payro
     let employment = 0;
     for (const [p, age] of entries) {
         if (age === undefined || age > p.lifeExpectancy) continue;
-        const emp = age < p.retirementAge ? p.currentIncome : 0;
+        const emp = age < p.retirementAge ? p.currentIncome * r.inflationFactor : 0;
         if (emp <= 0) continue;
         employment += emp;
         payroll += calculatePayrollContributions(emp, inputs.province, r.inflationFactor).total;
@@ -151,6 +155,23 @@ const sumLines = (lines: AuditLine[]) =>
     lines.reduce((s, l) => s + (
         l.kind === 'info' || l.kind === 'result' || l.kind === 'subtotal' || l.kind === 'reference' ? 0 : l.amount
     ), 0);
+
+// Below this a year's reinvested surplus is rounding noise, not a household
+// choice worth remarking on.
+const FORCED_WITHDRAWAL_NUDGE_THRESHOLD = 1000;
+
+// Signals that the mandatory RRIF minimum — not the household's own spending
+// need — is what drove this year's RRSP withdrawal: the minimum forced out more
+// cash than spending required, so the excess became taxable income that was
+// then reinvested rather than spent. `topUpWithdrawal > 0` means the household
+// was actually short that year, which disqualifies it outright — the household
+// needed the draw, mandatory or not.
+function isForcedRRIFOverdraw(r: SimulationResult): boolean {
+    if (r.rrifMinimumWithdrawal <= EPS) return false;
+    if (r.topUpWithdrawal > EPS) return false;
+    const reinvested = r.reinvestedTFSA + r.reinvestedRRSP + r.reinvestedNonReg;
+    return reinvested > FORCED_WITHDRAWAL_NUDGE_THRESHOLD;
+}
 
 /**
  * Section 1 — every dollar of gross cash the household takes in this year.
@@ -202,7 +223,50 @@ function incomeSourcesSection(
     addNetSplit('Net DB pension received — You / Spouse', r.personNetPension, r.spouseNetPension, r.pensionIncome);
     add('Investment income received', r.investmentIncome,
         'Interest and dividends paid out by non-registered accounts only — RRSP and TFSA earnings stay inside those accounts. Capital growth stays in the account too.');
-    add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal, 'RRIF minimum + meltdown + top-up draws');
+    add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal);
+
+    // These three partition the gross withdrawal exactly (see SimulationResult),
+    // so they are `info` lines beneath it, never addends of their own — an
+    // addend here would double-count the parent line and break the section
+    // total. A single nonzero component is suppressed as noise (the parent
+    // label already says what it is) UNLESS the forced-overdraw nudge applies:
+    // then the mandatory-minimum line is the natural place to carry that note,
+    // so it earns its keep even alone.
+    const rrifMin = r.rrifMinimumWithdrawal;
+    const melt = r.voluntaryMeltWithdrawal;
+    const topUp = r.topUpWithdrawal;
+    const nonzeroComponents = [rrifMin, melt, topUp].filter(v => v > EPS).length;
+    const forcedOverdraw = isForcedRRIFOverdraw(r);
+
+    if (r.totalRRSPWithdrawal > EPS && (nonzeroComponents > 1 || forcedOverdraw)) {
+        if (rrifMin > EPS) {
+            lines.push({
+                label: 'Mandatory RRIF minimum',
+                amount: rrifMin,
+                kind: 'info',
+                note: forcedOverdraw
+                    ? 'Required by law from the year you turn 72, drawn regardless of what the household needs to spend. This year the minimum exceeded that need, so the excess was taxed as income and reinvested rather than spent — drawing the RRSP down earlier, in lower-income years, is the trade-off the RRSP meltdown optimizer explores.'
+                    : 'Required by law from the year you turn 72, drawn regardless of what the household needs to spend.'
+            });
+        }
+        if (melt > EPS) {
+            lines.push({
+                label: 'Voluntary meltdown',
+                amount: melt,
+                kind: 'info',
+                note: 'The RRSP meltdown amount configured in this plan.'
+            });
+        }
+        if (topUp > EPS) {
+            lines.push({
+                label: 'Extra draw to fund spending',
+                amount: topUp,
+                kind: 'info',
+                note: 'Additional RRSP withdrawn on top of the above to reach this year\'s spending target.'
+            });
+        }
+    }
+
     add('TFSA withdrawals', r.totalTFSAWithdrawal);
     add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Grossed up so the sale funds its own tax');
     add('One-time inflows', oneTimeInflows, 'Household cash — not attributed to either person');

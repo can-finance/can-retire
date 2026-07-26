@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { runSimulation } from '../engine/projection';
 import { calculatePayrollContributions } from '../engine/tax';
 import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult } from '../engine/types';
-import { INITIAL_INPUTS } from './inputSanitizer';
+import { INITIAL_INPUTS, createDefaultPerson } from './inputSanitizer';
 import { buildYearAudit, NOTE_AMOUNT_TOKEN } from './yearAudit';
 import type { AuditSectionKey, YearAudit } from './yearAudit';
 
@@ -146,16 +146,25 @@ const SURPLUS = inputs({
  * regression fence on engine drift, not a licence for it to grow.
  */
 const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
-    // Worst year is age 64 (~$274) — a DB pension plus dividends the solver's tax
-    // estimate does not credit, not an age-amount error.
+    // Worst year is age 64 ($274.16) — a DB pension plus dividends the solver's tax
+    // estimate does not credit, not an age-amount error. Moving the default melt
+    // start from 55 to 60 shifted this by pennies ($274.28 -> $274.16, same year):
+    // the melt is not what the solver mis-prices.
     ['INITIAL_INPUTS', INITIAL_INPUTS, 275],
     // No credit-argument gap in these fixtures, so only the binary-search tolerance
-    // survives.
+    // survives. Measured worsts: 0.9704 / 1.7083 / 1.6253.
     ['single', SINGLE, 1],
-    ['couple', COUPLE, 0.9],
+    // Indexing employment income (it is a today's-dollars input) grew the couple's
+    // balances through the working years, so the early-retirement non-registered
+    // sales are larger: the worst year moved from age 69 ($0.8235) to age 66
+    // ($1.7083, a $40k sale). `withdrawNonReg` makes two passes over two spouses'
+    // accounts, so up to four $1-tolerance binary searches land in one year — still
+    // purely search noise, with no RRSP draw and no credit gap in that year.
+    ['couple', COUPLE, 1.8],
     ['widowed', WIDOWED, 1.7],
     // Every year is fully unfunded or TFSA-only — no gross-up, no drift.
     ['shortfall', SHORTFALL, 0.01],
+    // Measured worsts: 0.6104 / 0.5448.
     ['one-time events', ONE_TIME, 0.7],
     ['surplus', SURPLUS, 0.6]
 ];
@@ -242,10 +251,12 @@ describe('cash-flow identity: what the residual is made of', () => {
             const audit = buildYearAudit(COUPLE, results, i);
             const line = sectionOf(audit, 'cashFlow')!.lines
                 .find(l => l.label === 'Less: CPP/EI contributions');
+            // `currentIncome` is a today's-dollars input the engine indexes into the
+            // year it is earned, so the reconstruction has to index it too.
             const pEmp = r.age <= COUPLE.person.lifeExpectancy && r.age < COUPLE.person.retirementAge
-                ? COUPLE.person.currentIncome : 0;
+                ? COUPLE.person.currentIncome * r.inflationFactor : 0;
             const sEmp = r.spouseAge! <= COUPLE.spouse!.lifeExpectancy && r.spouseAge! < COUPLE.spouse!.retirementAge
-                ? COUPLE.spouse!.currentIncome : 0;
+                ? COUPLE.spouse!.currentIncome * r.inflationFactor : 0;
             // The reconstruction is only valid because it reproduces the engine's own
             // employment rule; assert that first.
             expect(pEmp + sEmp, `employment i=${i}`).toBeCloseTo(r.employmentIncome, 6);
@@ -815,7 +826,8 @@ describe('net income section (section 3)', () => {
         expect(payrollLine.amount).toBeLessThan(0);
         expect(-payrollLine.amount).toBeCloseTo(
             calculatePayrollContributions(
-                SURPLUS.person.currentIncome, SURPLUS.province, results[i].inflationFactor
+                SURPLUS.person.currentIncome * results[i].inflationFactor,
+                SURPLUS.province, results[i].inflationFactor
             ).total, 6);
     });
 });
@@ -1103,6 +1115,166 @@ describe('per-person net benefit lines in income & withdrawals', () => {
         const results = runSimulation(COUPLE);
         const withCpp = results.findIndex(r => r.cppIncome > 1);
         const income = sectionOf(buildYearAudit(COUPLE, results, withCpp), 'incomeSources')!;
+        const addendsOnly = income.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((s, l) => s + l.amount, 0);
+        const total = income.lines.find(l => l.kind === 'result')!;
+        expect(total.amount).toBeCloseTo(addendsOnly, 6);
+    });
+});
+
+describe('RRSP/RRIF withdrawal breakdown (incomeSources)', () => {
+    // Same fixture as projection.test.ts's forced-overdraw coverage: from age 74
+    // a $2M RRSP forces a RRIF minimum far above the $20k spending target, with
+    // no melt running (melt stops at 72) and no top-up needed — a lone mandatory
+    // component that pushes a large surplus into reinvestment.
+    const FORCED = inputs({
+        person: person({ age: 74, lifeExpectancy: 78, rrsp: { type: 'RRSP', balance: 2_000_000 } }),
+        postRetirementSpend: 20_000
+    });
+
+    // The default plan (createDefaultPerson) with a spouse added via
+    // createDefaultPerson(true), per the task's suggested fixture: the spouse is
+    // 3 years younger, so at the primary's age 72 the spouse (69) is still
+    // running their own configured meltdown while the primary's RRIF minimum has
+    // just kicked in — two nonzero components, no top-up, in the same year.
+    const SPOUSE_PLAN: SimulationInputs = {
+        person: createDefaultPerson(),
+        spouse: createDefaultPerson(true),
+        province: 'ON', inflationRate: 0.025,
+        preRetirementSpend: 60_000, postRetirementSpend: 55_000,
+        oneTimeExpenses: [], withdrawalStrategy: 'rrsp-first', useIncomeSplitting: true,
+        returnRates: {
+            bondReturn: 0.035, cashInterest: 0.02, dividend: 0.03, foreignYield: 0.02,
+            capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.10
+        }
+    };
+
+    // The plain single default plan (no spouse) genuinely runs short once RRIF
+    // minimums start at 72: the minimum alone does not cover the spending
+    // target, so Step 3 tops up on top of it. The household needed every dollar
+    // here, which is exactly the case the nudge must NOT fire in.
+    const SINGLE_PLAN: SimulationInputs = {
+        person: createDefaultPerson(),
+        spouse: undefined,
+        province: 'ON', inflationRate: 0.025,
+        preRetirementSpend: 60_000, postRetirementSpend: 55_000,
+        oneTimeExpenses: [], withdrawalStrategy: 'rrsp-first', useIncomeSplitting: true,
+        returnRates: {
+            bondReturn: 0.035, cashInterest: 0.02, dividend: 0.03, foreignYield: 0.02,
+            capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.10
+        }
+    };
+
+    it('a lone forced minimum still renders a sub-line, carrying the forced-overdraw nudge', () => {
+        const results = runSimulation(FORCED);
+        const r = results[0];
+        expect(r.age).toBe(74);
+        expect(r.rrifMinimumWithdrawal).toBeGreaterThan(0);
+        expect(r.voluntaryMeltWithdrawal).toBe(0);
+        expect(r.topUpWithdrawal).toBe(0);
+        // A large surplus is reinvested — the minimum drew more than was spent.
+        expect(r.reinvestedTFSA + r.reinvestedRRSP + r.reinvestedNonReg).toBeGreaterThan(1000);
+
+        const income = sectionOf(buildYearAudit(FORCED, results, 0), 'incomeSources')!;
+        const line = income.lines.find(l => l.label === 'Mandatory RRIF minimum')!;
+        expect(line).toBeDefined();
+        expect(line.kind).toBe('info');
+        expect(line.amount).toBeCloseTo(r.rrifMinimumWithdrawal, 6);
+        expect(line.note).toMatch(/RRSP meltdown optimizer/);
+
+        // Melt and top-up are exactly zero, so neither sub-line appears.
+        expect(income.lines.some(l => l.label === 'Voluntary meltdown')).toBe(false);
+        expect(income.lines.some(l => l.label === 'Extra draw to fund spending')).toBe(false);
+
+        // The sub-line is informational only — the section total is unaffected.
+        const addendsOnly = income.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((s, l) => s + l.amount, 0);
+        const total = income.lines.find(l => l.kind === 'result')!;
+        expect(total.amount).toBeCloseTo(addendsOnly, 6);
+    });
+
+    it('a lone voluntary melt with no forced minimum is suppressed as noise (no sub-line at all)', () => {
+        const MELT_ONLY = inputs({
+            person: person({
+                age: 60, retirementAge: 60, lifeExpectancy: 71,
+                cppStartAge: 70, oasStartAge: 70,
+                rrspMeltStartAge: 60, rrspMeltAmount: 40_000,
+                rrsp: { type: 'RRSP', balance: 500_000 },
+                nonRegisteredAccounts: [nonReg({ receivesSurplus: true })]
+            }),
+            postRetirementSpend: 30_000
+        });
+        const results = runSimulation(MELT_ONLY);
+        const r = results[0];
+        expect(r.voluntaryMeltWithdrawal).toBeCloseTo(40_000, 6);
+        expect(r.rrifMinimumWithdrawal).toBe(0);
+        expect(r.topUpWithdrawal).toBe(0);
+
+        const income = sectionOf(buildYearAudit(MELT_ONLY, results, 0), 'incomeSources')!;
+        expect(income.lines.some(l => l.label === 'Voluntary meltdown')).toBe(false);
+        expect(income.lines.some(l => l.label === 'Mandatory RRIF minimum')).toBe(false);
+        expect(income.lines.some(l => l.label === 'Extra draw to fund spending')).toBe(false);
+        // The gross line alone still carries the full amount.
+        const gross = income.lines.find(l => l.label === 'RRSP/RRIF withdrawals (gross)')!;
+        expect(gross.amount).toBeCloseTo(40_000, 6);
+    });
+
+    it('a mandatory minimum alongside a still-running spousal melt shows both sub-lines, and they sum to the gross line', () => {
+        const results = runSimulation(SPOUSE_PLAN);
+        const i = results.findIndex(r => r.age === 72);
+        expect(i, 'expected age 72 in SPOUSE_PLAN').toBeGreaterThanOrEqual(0);
+        const r = results[i];
+        expect(r.rrifMinimumWithdrawal).toBeGreaterThan(0);
+        expect(r.voluntaryMeltWithdrawal).toBeGreaterThan(0);
+        expect(r.topUpWithdrawal).toBe(0);
+        expect(r.rrifMinimumWithdrawal + r.voluntaryMeltWithdrawal + r.topUpWithdrawal)
+            .toBeCloseTo(r.totalRRSPWithdrawal, 6);
+
+        const income = sectionOf(buildYearAudit(SPOUSE_PLAN, results, i), 'incomeSources')!;
+        const min = income.lines.find(l => l.label === 'Mandatory RRIF minimum')!;
+        const melt = income.lines.find(l => l.label === 'Voluntary meltdown')!;
+        expect(min).toBeDefined();
+        expect(melt).toBeDefined();
+        expect(min.kind).toBe('info');
+        expect(melt.kind).toBe('info');
+        expect(min.amount).toBeCloseTo(r.rrifMinimumWithdrawal, 6);
+        expect(melt.amount).toBeCloseTo(r.voluntaryMeltWithdrawal, 6);
+        expect(income.lines.some(l => l.label === 'Extra draw to fund spending')).toBe(false);
+
+        const gross = income.lines.find(l => l.label === 'RRSP/RRIF withdrawals (gross)')!;
+        expect(min.amount + melt.amount).toBeCloseTo(gross.amount, 6);
+        expect(gross.amount).toBeCloseTo(r.totalRRSPWithdrawal, 6);
+
+        const addendsOnly = income.lines
+            .filter(l => l.kind === undefined || l.kind === 'normal')
+            .reduce((s, l) => s + l.amount, 0);
+        const total = income.lines.find(l => l.kind === 'result')!;
+        expect(total.amount).toBeCloseTo(addendsOnly, 6);
+    });
+
+    it('a top-up year shows the extra-draw sub-line and does NOT fire the nudge, since the household needed the cash', () => {
+        const results = runSimulation(SINGLE_PLAN);
+        const i = results.findIndex(r => r.age === 72);
+        expect(i, 'expected age 72 in SINGLE_PLAN').toBeGreaterThanOrEqual(0);
+        const r = results[i];
+        expect(r.rrifMinimumWithdrawal).toBeGreaterThan(0);
+        expect(r.topUpWithdrawal).toBeGreaterThan(0);
+        expect(r.rrifMinimumWithdrawal + r.voluntaryMeltWithdrawal + r.topUpWithdrawal)
+            .toBeCloseTo(r.totalRRSPWithdrawal, 6);
+
+        const income = sectionOf(buildYearAudit(SINGLE_PLAN, results, i), 'incomeSources')!;
+        const min = income.lines.find(l => l.label === 'Mandatory RRIF minimum')!;
+        const topUp = income.lines.find(l => l.label === 'Extra draw to fund spending')!;
+        expect(min).toBeDefined();
+        expect(topUp).toBeDefined();
+        expect(topUp.kind).toBe('info');
+        expect(topUp.amount).toBeCloseTo(r.topUpWithdrawal, 6);
+        // The household was short, not sitting on an unwanted surplus — the nudge
+        // sentence must be absent from the mandatory line's note.
+        expect(min.note).not.toMatch(/RRSP meltdown optimizer/);
+
         const addendsOnly = income.lines
             .filter(l => l.kind === undefined || l.kind === 'normal')
             .reduce((s, l) => s + l.amount, 0);
