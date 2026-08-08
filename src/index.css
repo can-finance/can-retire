@@ -6,6 +6,14 @@
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
   }
+
+  /* Smooth in-page jumps (the "Year-by-year table" link), but never for readers
+     who have asked the OS to reduce motion — for them the jump stays instant. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
 }
 
 @layer components {

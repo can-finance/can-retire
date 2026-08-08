@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Choose which columns the year-by-year table shows.** Three generously sized
+  toggles above the table — Balances, Income and Tax — switch whole blocks of
+  columns on and off, and your choice is remembered between visits. Balances and
+  Income start on with Tax off, which is what fits on a normal screen without
+  scrolling sideways; switch Tax on when you want the detail, or open any row for
+  the full Year Audit. Year, Age and Sp Age are always shown.
+- **A "RRSP Drawn" column.** How much came out of RRSP/RRIF that year (household,
+  before tax) — previously you could only infer it from the balance dropping.
+  Hover a figure to see it split into the mandatory RRIF minimum, any voluntary
+  meltdown, and any extra draw taken to cover spending.
+- **Taxable Income, Avg Tax Rate and OAS Clawback columns** in the table's Tax
+  group. Taxable income is the figure the brackets are applied to, so it makes Tax
+  Paid interpretable; the average rate is tax paid divided by that income. The OAS
+  clawback shown is already part of Tax Paid — it is broken out so you can see how
+  much of the bill it accounts for, not added on top of it.
+
 ### Changed
+- **The year-by-year table now follows the "Show Today's Dollars" toggle.** It
+  previously always showed future (nominal) dollars, even with the toggle on — so
+  the charts, the table and the Year Audit drawer could show three different
+  figures for the same year. Every dollar amount in the table, and in its hover
+  breakdowns, is now converted to today's dollars along with everything else.
+  **Figures you read in this table before will be lower when the toggle is on**;
+  ages and percentages are unaffected.
 - **Everything is bigger and easier to read.** The whole app moved up one step on the
   type scale — the smallest text went from 12px to 14px, ordinary body text from 14px
   to 16px, and the explanatory pages now read at 20px. Chart axis labels, hover

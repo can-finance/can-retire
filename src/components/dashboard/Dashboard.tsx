@@ -516,16 +516,57 @@ export function Dashboard() {
                         />
                     )}
 
-                    <YearlyBreakdownTable
-                        data={simulationResults}
-                        hasSpouse={hasSpouse}
-                        showMixDrift={
-                            inputs.person.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false) ||
-                            !!inputs.spouse?.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false)
-                        }
-                        onSelectYear={handleSelectYear}
-                    />
+                    {/* The input column is usually far taller than this one, and the
+                        year-by-year table now sits below BOTH columns, so a reader who
+                        doesn't scroll past that emptiness never learns it is there.
+                        This sits directly under the last chart — at the TOP of the dead
+                        space rather than pinned to its foot — so it is visible without
+                        scrolling through the gap first, which is the whole point.
+                        A real anchor, not a click handler: it gets focus, keyboard
+                        activation and browser Back for free. */}
+                    <a
+                        href="#year-by-year"
+                        className="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-6 text-slate-500 transition-colors hover:border-brand-300 hover:bg-brand-50/40 hover:text-brand-700"
+                    >
+                        <span className="text-lg font-semibold">Year-by-year table</span>
+                        <svg
+                            className="h-7 w-7 transition-transform group-hover:translate-y-1"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            aria-hidden="true"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                    </a>
                 </div>
+            </div>
+
+            {/* Year-by-year table lives OUTSIDE the 12-column grid so it spans the
+                full container instead of the right column's 8/12. At a 1440px
+                viewport that takes its scroll box from 819px to 1231px, which cuts
+                the single-person table's horizontal overflow from ~490px to ~100px
+                but does not eliminate it: <main> is `container mx-auto px-4`, so the
+                widest this ever gets is 1280 − 32 = 1248px, and the table needs
+                ~1330px. Closing the rest means widening the page container (affects
+                every view) or tightening the table's cell padding.
+                The parent is `flex flex-col gap-6` (24px), so the extra `mt-2` (8px)
+                brings the gap up to the grid's own gap-8 rhythm. */}
+            {/* scroll-mt clears the two stacked sticky layers (app header 65px +
+                summary cards 183px = 248px), or the jump link lands the table's
+                heading underneath them. Both only stick at lg, hence the breakpoint. */}
+            <div id="year-by-year" className="mt-2 scroll-mt-4 lg:scroll-mt-[264px]">
+                <YearlyBreakdownTable
+                    data={simulationResults}
+                    hasSpouse={hasSpouse}
+                    showMixDrift={
+                        inputs.person.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false) ||
+                        !!inputs.spouse?.nonRegisteredAccounts.some(a => a.rebalanceAnnually === false)
+                    }
+                    inflationAdjusted={isInflationAdjusted}
+                    onSelectYear={handleSelectYear}
+                />
             </div>
                 </>
             )}
