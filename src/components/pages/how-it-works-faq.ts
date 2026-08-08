@@ -27,6 +27,11 @@ export const FAQ_ITEMS: FaqItem[] = [
             'Yes, completely free to use, with no ads. I may accept sponsors in the future, but all features will remain 100% free without any paywalls.',
     },
     {
+        question: 'Does this work on a phone?',
+        answer:
+            'It does — the layout adapts to smaller screens, so you can run a projection from your phone. That said, it is designed for a larger monitor and works best on one. The projection tables, charts and year-by-year detail have a lot of numbers in them, and they are far easier to read and compare side by side on a desktop or laptop.',
+    },
+    {
         question: "What's with the name?",
         answer:
             "The Canadian Retirement Asset Planning tool's acronym is… intentional. Money, investing and retirement are serious business, but you can't take everything too seriously.",
