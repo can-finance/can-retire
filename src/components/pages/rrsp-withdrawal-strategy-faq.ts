@@ -34,7 +34,7 @@ export const RRSP_STRATEGY_FAQ_ITEMS: FaqItem[] = [
     {
         question: 'Does an RRSP meltdown avoid OAS clawback?',
         answer:
-            'It can help. OAS is reduced by a 15% recovery tax (the clawback) once your net income passes a threshold — about $93,500 in 2025. Drawing your RRSP down earlier, in years before OAS starts, can lower your RRIF minimums later and keep your taxable income under the clawback threshold once OAS is flowing. It does not always avoid the clawback entirely, but it can reduce how much OAS you lose.',
+            'It can help. OAS is reduced by a 15% recovery tax (the clawback) once your net income passes a threshold — about $95,300 in 2026. Drawing your RRSP down earlier, in years before OAS starts, can lower your RRIF minimums later and keep your taxable income under the clawback threshold once OAS is flowing. It does not always avoid the clawback entirely, but it can reduce how much OAS you lose.',
     },
     {
         question: 'Should I delay CPP and OAS to 70?',

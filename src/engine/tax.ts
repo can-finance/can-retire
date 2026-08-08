@@ -1,145 +1,170 @@
 import type { TaxRates, TaxBracket } from './types';
 
-// 2025 Tax Constants — Updated to confirmed 2025 CRA / provincial values
+// 2026 Tax Constants — confirmed 2026 CRA / provincial values
+// (federal indexation factor for 2026 is 2.0%)
 export const TAX_CONSTANTS: TaxRates = {
     federalBrackets: [
-        { threshold: 0, rate: 0.14 },       // 14% from 2026 on (2025 was a blended 14.5% — see FEDERAL_LOWEST_RATE)
-        { threshold: 57375, rate: 0.205 },
-        { threshold: 114750, rate: 0.26 },
-        { threshold: 177882, rate: 0.29 },
-        { threshold: 253414, rate: 0.33 },
+        { threshold: 0, rate: 0.14 },       // 2026 is a full-year 14% rate (2025 was a blended 14.5% after the mid-2025 cut)
+        { threshold: 58523, rate: 0.205 },
+        { threshold: 117045, rate: 0.26 },
+        { threshold: 181440, rate: 0.29 },
+        { threshold: 258482, rate: 0.33 },
     ],
     provincialBrackets: {
         'AB': [
-            { threshold: 0, rate: 0.08 },       // New 8% bracket effective Jan 1 2025
-            { threshold: 60000, rate: 0.10 },
-            { threshold: 151234, rate: 0.12 },
-            { threshold: 181481, rate: 0.13 },
-            { threshold: 241974, rate: 0.14 },
-            { threshold: 362961, rate: 0.15 },
+            { threshold: 0, rate: 0.08 },       // 8% bottom bracket, effective Jan 1 2025
+            { threshold: 61200, rate: 0.10 },
+            { threshold: 154259, rate: 0.12 },
+            { threshold: 185111, rate: 0.13 },
+            { threshold: 246813, rate: 0.14 },
+            { threshold: 370220, rate: 0.15 },
         ],
+        // Bottom rate rose 5.06% -> 5.60% for 2026 (BC Budget, announced 2026-02-17).
+        // BC has PAUSED bracket and credit indexation for 2027-2030, resuming 2031.
         'BC': [
-            { threshold: 0, rate: 0.0506 },
-            { threshold: 49279, rate: 0.077 },
-            { threshold: 98560, rate: 0.105 },
-            { threshold: 113158, rate: 0.1229 },
-            { threshold: 137407, rate: 0.147 },
-            { threshold: 186306, rate: 0.168 },
-            { threshold: 259829, rate: 0.205 },
+            { threshold: 0, rate: 0.056 },
+            { threshold: 50363, rate: 0.077 },
+            { threshold: 100728, rate: 0.105 },
+            { threshold: 115648, rate: 0.1229 },
+            { threshold: 140430, rate: 0.147 },
+            { threshold: 190405, rate: 0.168 },
+            { threshold: 265545, rate: 0.205 },
         ],
+        // Manitoba froze both its brackets and its BPA starting 2025 (Budget 2025-03-20),
+        // so these do not index. NOTE the conflict: CRA's "current year tax rates" web
+        // page shows 47,564 / 101,200 for MB, but T4127 and the printed MB428 both show
+        // 47,000 / 100,000 — the frozen figures are correct and the web page is in error.
         'MB': [
             { threshold: 0, rate: 0.108 },
             { threshold: 47000, rate: 0.1275 },
             { threshold: 100000, rate: 0.174 },
         ],
+        // Four brackets. The previous five-bracket table with a 17.5% tier at
+        // 170,000 / 200,000 corresponded to no actual tax year and was a data defect;
+        // NB has had four brackets since 2023.
         'NB': [
             { threshold: 0, rate: 0.094 },
             { threshold: 52333, rate: 0.14 },
             { threshold: 104666, rate: 0.16 },
-            { threshold: 170000, rate: 0.175 },
-            { threshold: 200000, rate: 0.195 },
+            { threshold: 193861, rate: 0.195 },
         ],
         'NL': [
             { threshold: 0, rate: 0.087 },
-            { threshold: 44192, rate: 0.145 },
-            { threshold: 88382, rate: 0.158 },
-            { threshold: 157792, rate: 0.178 },
-            { threshold: 220910, rate: 0.198 },
-            { threshold: 281160, rate: 0.208 },
-            { threshold: 557250, rate: 0.213 },
-            { threshold: 1109430, rate: 0.218 },
+            { threshold: 44678, rate: 0.145 },
+            { threshold: 89354, rate: 0.158 },
+            { threshold: 159528, rate: 0.178 },
+            { threshold: 223340, rate: 0.198 },
+            { threshold: 285319, rate: 0.208 },
+            { threshold: 570638, rate: 0.213 },
+            { threshold: 1141275, rate: 0.218 },
         ],
         'NS': [
             { threshold: 0, rate: 0.0879 },
-            { threshold: 30507, rate: 0.1495 },
-            { threshold: 61015, rate: 0.1667 },
-            { threshold: 95883, rate: 0.175 },
-            { threshold: 154650, rate: 0.21 },
+            { threshold: 30995, rate: 0.1495 },
+            { threshold: 61991, rate: 0.1667 },
+            { threshold: 97417, rate: 0.175 },
+            { threshold: 157124, rate: 0.21 },
         ],
         'NT': [
             { threshold: 0, rate: 0.059 },
-            { threshold: 51964, rate: 0.086 },
-            { threshold: 103930, rate: 0.122 },
-            { threshold: 168967, rate: 0.1405 },
+            { threshold: 53003, rate: 0.086 },
+            { threshold: 106009, rate: 0.122 },
+            { threshold: 172346, rate: 0.1405 },
         ],
         'NU': [
             { threshold: 0, rate: 0.04 },
-            { threshold: 54707, rate: 0.07 },
-            { threshold: 109413, rate: 0.09 },
-            { threshold: 177881, rate: 0.115 },
+            { threshold: 55801, rate: 0.07 },
+            { threshold: 111602, rate: 0.09 },
+            { threshold: 181439, rate: 0.115 },
         ],
+        // The top two thresholds (150,000 / 220,000) are legislated flat amounts, not indexed.
         'ON': [
             { threshold: 0, rate: 0.0505 },
-            { threshold: 52886, rate: 0.0915 },
-            { threshold: 105775, rate: 0.1116 },
+            { threshold: 53891, rate: 0.0915 },
+            { threshold: 107785, rate: 0.1116 },
             { threshold: 150000, rate: 0.1216 },
             { threshold: 220000, rate: 0.1316 },
         ],
+        // New sixth bracket: 20% over $200,000, introduced 2026-04-14.
+        // PE does not index its system.
         'PE': [
             { threshold: 0, rate: 0.095 },
-            { threshold: 33328, rate: 0.1347 },
-            { threshold: 64656, rate: 0.166 },
-            { threshold: 105000, rate: 0.1762 },
-            { threshold: 140000, rate: 0.19 },
+            { threshold: 33928, rate: 0.1347 },
+            { threshold: 65820, rate: 0.166 },
+            { threshold: 106890, rate: 0.1762 },
+            { threshold: 142520, rate: 0.19 },
+            { threshold: 200000, rate: 0.20 },
         ],
         'QC': [
             { threshold: 0, rate: 0.14 },
-            { threshold: 53255, rate: 0.19 },
-            { threshold: 106495, rate: 0.24 },
-            { threshold: 129590, rate: 0.2575 },
+            { threshold: 54345, rate: 0.19 },
+            { threshold: 108680, rate: 0.24 },
+            { threshold: 132245, rate: 0.2575 },
         ],
         'SK': [
             { threshold: 0, rate: 0.105 },
-            { threshold: 53463, rate: 0.125 },
-            { threshold: 152750, rate: 0.145 },
+            { threshold: 54532, rate: 0.125 },
+            { threshold: 155805, rate: 0.145 },
         ],
+        // YT's lower thresholds mirror the federal ones exactly; the $500,000 top
+        // bracket is Yukon-specific.
         'YT': [
             { threshold: 0, rate: 0.064 },
-            { threshold: 57375, rate: 0.09 },
-            { threshold: 114750, rate: 0.109 },
-            { threshold: 177882, rate: 0.128 },
+            { threshold: 58523, rate: 0.09 },
+            { threshold: 117045, rate: 0.109 },
+            { threshold: 181440, rate: 0.128 },
             { threshold: 500000, rate: 0.15 },
         ]
     },
     basicPersonalAmount: {
-        federal: 16129, // 2025 full BPA, claimable up to the bottom of the 4th federal bracket
+        federal: 16452, // 2026 full BPA, claimable up to the bottom of the 4th federal bracket
         // Floor of the federal BPA taper: the amount that remains once net income
         // reaches the bottom of the 5th (top) federal bracket. Between the two
         // bracket thresholds the BPA slides linearly from `federal` down to this.
         // Not a province — see federalBasicPersonalAmount().
-        federalMinimum: 14538, // 2025
-        'AB': 22323,
-        'BC': 12932,
-        // 2025 per CRA Form TD1MB. Manitoba resumed indexing for 2025 (the previous
-        // 15,780 here was the frozen 2024 amount). Its own phase-out above $200k of
-        // net income is NOT modelled.
-        'MB': 15969,
-        'NB': 13396,
-        'NL': 11067,
-        'NS': 11744,
-        'NT': 17842,
-        'NU': 19274,
-        'ON': 12747,
-        'PE': 14650,
-        'QC': 18571,
-        'SK': 19491,
-        'YT': 16129,
+        federalMinimum: 14829, // 2026
+        'AB': 22769,
+        'BC': 13216,
+        // Frozen (see the MB bracket note above). The previous 15,969 was a transient
+        // mid-2025 payroll proration, never the filed-return amount. Manitoba's own
+        // phase-out above $200k of net income is NOT modelled.
+        'MB': 15780,
+        'NB': 13664,
+        // Large jump from 11,188, announced 2026-04-29 (retroactive for 2026).
+        'NL': 13094,
+        // The 2025 income-tested BPA proration was removed for 2026 — it is now a
+        // flat 11,932 regardless of income.
+        'NS': 11932,
+        'NT': 18198,
+        'NU': 19659,
+        'ON': 12989,
+        'PE': 15000,
+        'QC': 18952,
+        // Rises faster than indexation because of the Saskatchewan Affordability Act's
+        // $500/yr top-up, which stacks on ordinary indexing.
+        'SK': 20381,
+        'YT': 16452, // mirrors the federal BPA
     },
     cpp: {
-        maxPensionableEarnings: 71300, // 2025 YMPE
+        maxPensionableEarnings: 74600, // 2026 YMPE
         basicExemption: 3500,
-        maxContribution: 4034  // 2025 employee max
+        maxContribution: 4230.45  // 2026 employee max
     },
     oas: {
-        maxAnnualBenefit: 8820, // ~$735/mo × 12 (2025 annualized)
-        clawbackThreshold: 93454 // 2025
+        // ≈$751.97/mo × 12 for ages 65-74 (July–Sept 2026 quarter). OAS is re-indexed
+        // QUARTERLY, so this annualization is approximate; the 10% enhancement for
+        // ages 75+ is still NOT modelled.
+        maxAnnualBenefit: 9024,
+        // 2026 INCOME-year threshold. Do not confuse it with the 93,454 still shown on
+        // some canada.ca pages, which governs current-period withholding based on 2025 income.
+        clawbackThreshold: 95323
     }
 };
 
 // Lowest federal bracket rate. Non-refundable federal credits (BPA, pension
 // amount, age amount) are valued at this same rate by statute, so the two must
-// move together. 2025 was a blended 14.5% because of the mid-year cut from 15%;
-// every projected year from 2026 on is 14%.
+// move together. 14% is now the actual base-year (2026) rate rather than a forward
+// projection — 2025 was a blended 14.5% because of the mid-year cut from 15%.
 const FEDERAL_LOWEST_RATE = 0.14;
 
 // Quebec residents pay 16.5% less basic federal tax (the Quebec abatement), in
@@ -154,14 +179,14 @@ const QC_FEDERAL_ABATEMENT = 0.165;
 // module tables rather than inside TAX_CONSTANTS — same file, same review
 // surface, still tax DATA kept out of the calculation bodies.
 //
-// Every figure below is a 2025 amount and is indexed by `inflationFactor` at the
-// point of use. Provincial figures come from each jurisdiction's 2025 CRA Form
-// TD1 (which carries the same amounts as the matching Form 428); Quebec's come
-// from Revenu Québec Form TP-1015.3-V (2025-01) and the Ministère des Finances
-// "Parameters of the personal income tax system for 2025", Table 3.
+// Every figure below is a 2026 amount and is indexed by `inflationFactor` at the
+// point of use. Provincial figures come from each jurisdiction's 2026 CRA Form
+// TD1 / T4127 (the TD1 carries the same amounts as the matching Form 428);
+// Quebec's come from Revenu Québec Form TP-1015.3-V (2026-01) and the Ministère
+// des Finances "Parameters of the personal income tax system for 2026", Table 3.
 // ---------------------------------------------------------------------------
 
-/** Federal pension income amount (T1 line 31400). */
+/** Federal pension income amount (T1 line 31400) — confirmed still unindexed for 2026. */
 export const FEDERAL_PENSION_INCOME_AMOUNT = 2000;
 
 /**
@@ -171,17 +196,17 @@ export const FEDERAL_PENSION_INCOME_AMOUNT = 2000;
  * Quebec's equivalent is its "amount for retirement income", which is larger.
  */
 export const PROVINCIAL_PENSION_INCOME_AMOUNT: Record<string, number> = {
-    'AB': 1719,
+    'AB': 1753,
     'BC': 1000,
     'MB': 1000,
     'NB': 1000,
     'NL': 1000,
-    'NS': 1173,
+    'NS': 1173, // re-confirmed for 2026: genuinely unchanged from 2025, not a stale copy
     'NT': 1000,
     'NU': 2000,
-    'ON': 1762,
+    'ON': 1796,
     'PE': 1000,
-    'QC': 3470, // "amount for retirement income" (Schedule B) — not a $2,000-style pension amount
+    'QC': 3541, // "amount for retirement income" (Schedule B) — not a $2,000-style pension amount
     'SK': 1000,
     'YT': 2000,
 };
@@ -197,8 +222,8 @@ export interface AgeAmount {
 /** Rate at which the age amount is clawed back above its threshold. */
 export const AGE_AMOUNT_REDUCTION_RATE = 0.15;
 
-/** Federal age amount (T1 line 30100): $9,028 reduced by 15% of income over $45,522. */
-export const FEDERAL_AGE_AMOUNT: AgeAmount = { max: 9028, threshold: 45522 };
+/** Federal age amount (T1 line 30100): $9,208 reduced by 15% of income over $46,432. */
+export const FEDERAL_AGE_AMOUNT: AgeAmount = { max: 9208, threshold: 46432 };
 
 /**
  * Provincial/territorial age amount. Each jurisdiction sets its own maximum and
@@ -207,23 +232,27 @@ export const FEDERAL_AGE_AMOUNT: AgeAmount = { max: 9028, threshold: 45522 };
  * which is what pins the rate down).
  */
 export const PROVINCIAL_AGE_AMOUNT: Record<string, AgeAmount> = {
-    'AB': { max: 6221, threshold: 46308 },
-    'BC': { max: 5799, threshold: 43169 },
-    'MB': { max: 3728, threshold: 27749 },
-    'NB': { max: 6037, threshold: 44945 },
-    'NL': { max: 7064, threshold: 38712 },
-    'NS': { max: 5734, threshold: 30828 },
-    'NT': { max: 8727, threshold: 45522 },
-    'NU': { max: 12303, threshold: 45522 },
-    'ON': { max: 6223, threshold: 46330 },
-    'PE': { max: 6510, threshold: 36600 },
-    // QC max and threshold are confirmed (TP-1015.3-V 2025-01 / MFQ parameters).
-    // Two approximations remain, both in the taxpayer's favour: Quebec reduces on
-    // net FAMILY income (we only have the individual's), and its claw-back RATE is
-    // UNCONFIRMED, so AGE_AMOUNT_REDUCTION_RATE (the federal 15%) is used instead.
-    'QC': { max: 3906, threshold: 42090 },
-    'SK': { max: 5785, threshold: 43066 },
-    'YT': { max: 9028, threshold: 45522 },
+    'AB': { max: 6345, threshold: 47234 },
+    'BC': { max: 5927, threshold: 44119 },
+    'MB': { max: 3728, threshold: 27749 }, // genuinely unchanged — MB froze this credit
+    'NB': { max: 6158, threshold: 45844 },
+    'NL': { max: 7142, threshold: 39138 },
+    // NS threshold verified unchanged for 2026 even though its max rose — not a stale copy.
+    'NS': { max: 5826, threshold: 30828 },
+    'NT': { max: 8902, threshold: 46432 },
+    'NU': { max: 12550, threshold: 46432 },
+    'ON': { max: 6342, threshold: 47210 },
+    'PE': { max: 6510, threshold: 36600 }, // genuinely unchanged — PE does not index this credit
+    // Quebec combines the age, living-alone and retirement-income amounts into ONE
+    // credit, reduced at 18.75% of net FAMILY income above 42,955 (TP-1015.3-V 2026-01).
+    // KNOWN APPROXIMATION: the engine still applies AGE_AMOUNT_REDUCTION_RATE (15%) to
+    // the INDIVIDUAL's net income. That behaviour is deliberately retained here —
+    // switching to the 18.75% family-income mechanism is a behaviour change, not a
+    // constants refresh. TODO: model Quebec's combined credit properly (family net
+    // income base + 18.75% reduction rate) as its own change.
+    'QC': { max: 3986, threshold: 42955 },
+    'SK': { max: 5901, threshold: 43927 },
+    'YT': { max: 9208, threshold: 46432 },
 };
 
 /**
@@ -452,19 +481,20 @@ export function calculatePayrollContributions(
     const isQC = province === 'QC';
     const ympe = taxRates.cpp.maxPensionableEarnings * inflationFactor;
     const exemption = taxRates.cpp.basicExemption * inflationFactor;
-    const yampe = 81_300 * inflationFactor; // 2025 second earnings ceiling
-    const mie = 65_700 * inflationFactor;   // 2025 EI maximum insurable earnings
+    const yampe = 85_000 * inflationFactor; // 2026 second earnings ceiling
+    const mie = 68_900 * inflationFactor;   // 2026 EI maximum insurable earnings
 
     // CPP 5.95% = 4.95% base (credit) + 1.00% enhanced (deduction).
-    // QPP 6.40% = 5.40% base (credit) + 1.00% enhanced (deduction).
-    const baseRate = isQC ? 0.054 : 0.0495;
+    // QPP's total rate fell to 6.30% for 2026 (from 6.40%): 5.30% base (credit)
+    // + 1.00% enhanced (deduction). CPP's stayed at 5.95%.
+    const baseRate = isQC ? 0.053 : 0.0495;
     const ENHANCED_RATE = 0.01;
     const pensionable = Math.max(0, Math.min(employmentIncome, ympe) - exemption);
     // The second tier is entirely enhanced, so all of it is deductible.
     const tier2 = Math.max(0, Math.min(employmentIncome, yampe) - ympe) * 0.04;
 
     // Quebec's EI rate is lower because QPIP covers parental benefits separately.
-    const eiRate = isQC ? 0.0131 : 0.0164;
+    const eiRate = isQC ? 0.0130 : 0.0163;
     const ei = Math.min(employmentIncome, mie) * eiRate;
 
     const deductible = pensionable * ENHANCED_RATE + tier2;
@@ -491,7 +521,8 @@ function calculateTieredTax(income: number, brackets: TaxBracket[], inflationFac
 
 /**
  * Ontario Health Premium — thresholds and amounts are NOT indexed. These bands
- * have been frozen since 2004 and are applied to nominal income.
+ * have been frozen since 2004 (re-verified unchanged for 2026) and are applied to
+ * nominal income.
  *
  * The premium PHASES IN within each band rather than jumping to the band maximum
  * at its floor: inside a band you pay the previous band's ceiling plus a marginal
@@ -512,18 +543,18 @@ export function calculateOHP(income: number): number {
 function calculateOntarioSurtax(basicProvTax: number, inflationFactor: number = 1.0): number {
     if (basicProvTax <= 0) return 0;
 
-    // 2025 thresholds — indexed to inflation annually (unlike the OHP bands above)
-    const tier1Threshold = 5710 * inflationFactor;
-    const tier2Threshold = 7307 * inflationFactor;
+    // 2026 thresholds — indexed to inflation annually (unlike the OHP bands above)
+    const tier1Threshold = 5818 * inflationFactor;
+    const tier2Threshold = 7446 * inflationFactor;
 
     let surtax = 0;
 
-    // Tier 1: 20% of provincial tax > $5,710
+    // Tier 1: 20% of provincial tax > $5,818
     if (basicProvTax > tier1Threshold) {
         surtax += (basicProvTax - tier1Threshold) * 0.20;
     }
 
-    // Tier 2: 36% of provincial tax > $7,307
+    // Tier 2: 36% of provincial tax > $7,446
     if (basicProvTax > tier2Threshold) {
         surtax += (basicProvTax - tier2Threshold) * 0.36;
     }

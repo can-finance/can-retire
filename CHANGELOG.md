@@ -5,6 +5,28 @@ All notable changes to the Canadian Retirement Asset Planning tool are documente
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Projections now use 2026 tax rules.** Federal and provincial brackets, basic
+  personal amounts, age and pension credits, CPP/EI contribution ceilings, the OAS
+  clawback threshold ($95,323) and the Ontario surtax thresholds have all moved from
+  2025 to confirmed 2026 figures. **This changes previously computed projections** —
+  most plans will show slightly lower lifetime tax, because credits and bracket
+  thresholds rose faster than the benefit amounts did. Notable non-routine changes:
+  British Columbia's lowest rate rose from 5.06% to 5.60%, Prince Edward Island added
+  a new 20% bracket above $200,000, Saskatchewan's basic personal amount jumped to
+  $20,381, and Newfoundland's rose to $13,094.
+- Estimated CPP and OAS benefit amounts updated to their 2026 maximums.
+
+### Fixed
+- **New Brunswick's tax brackets were wrong.** The province was modelled with five
+  brackets including a 17.5% tier that matches no actual tax year; New Brunswick has
+  had four brackets since 2023. New Brunswick projections were overstating tax for
+  incomes above roughly $170,000.
+- Corrected Newfoundland's top three bracket thresholds and Manitoba's basic personal
+  amount, both of which used figures that were never in force for a full tax year.
+
 ## [0.11.0] - 2026-07-26
 
 ### Added

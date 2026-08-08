@@ -13,9 +13,10 @@ export function RrspWithdrawalStrategy() {
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
                 <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">RRSP Withdrawal Strategy Calculator</h1>
                 <p className="max-w-2xl mx-auto text-lg text-slate-600 leading-relaxed">
-                    Find the RRSP withdrawal schedule — the decumulation plan — that leaves the largest
-                    after-tax estate. This free calculator models the RRSP meltdown strategy year by year
-                    to help you decide when to withdraw from your RRSP, and how much.
+                    Find the RRSP withdrawal schedule — the decumulation plan — that fits your goal: the
+                    most you can safely spend each year, or the largest after-tax estate you can leave.
+                    This free calculator models the RRSP meltdown strategy year by year to help you decide
+                    when to withdraw from your RRSP, and how much.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <a
@@ -52,7 +53,7 @@ export function RrspWithdrawalStrategy() {
                         at once can push a retiree into a higher tax bracket than they ever paid while working.
                     </p>
                     <p>
-                        It also triggers the OAS clawback. Once individual net income passes roughly $93,500 (2025),
+                        Large forced withdrawals can also trigger the OAS clawback. Once individual net income passes roughly $95,300 (2026),
                         OAS is reduced by a 15% recovery tax — so a large forced RRIF withdrawal can quietly claw
                         back a chunk of a benefit you would otherwise keep.
                     </p>
@@ -60,7 +61,7 @@ export function RrspWithdrawalStrategy() {
                         The final bill comes at death. Whatever remains in the RRSP or RRIF is treated as income on
                         the final tax return and taxed all at once — often at the highest marginal rate — unless it
                         rolls over to a surviving spouse. A large deferred RRSP can hand a big share of the estate to
-                        the tax authorities instead of to your heirs.
+                        the CRA instead of to your heirs.
                     </p>
                 </div>
             </section>
@@ -81,8 +82,8 @@ export function RrspWithdrawalStrategy() {
                         so the forced withdrawals after 72 are smaller and less likely to trigger the OAS clawback.
                     </p>
                     <p>
-                        The strategy often pairs with delaying CPP and OAS to age 70. Delaying does two helpful
-                        things: it permanently raises the guaranteed, inflation-indexed benefit you receive for life,
+                        The strategy often pairs with delaying CPP and OAS to age 70. Delaying helps twice over:
+                        it permanently raises the guaranteed, inflation-indexed benefit you receive for life,
                         and it widens the low-income window — giving you more years to melt down the RRSP at low tax
                         rates before government benefits start. The goal is not to pay the least tax in any single
                         year, but the least tax across your whole retirement, so more is left over at the end.
@@ -132,13 +133,13 @@ export function RrspWithdrawalStrategy() {
                 <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
                     <p>
                         The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
-                        your retirement using real Canadian tax rules, then searches for the schedule that maximizes
-                        what is left after tax. Under the hood it:
+                        your retirement using real Canadian tax rules, then searches for the schedule that best
+                        delivers the goal you choose. Under the hood it:
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li>Simulates each year from now to life expectancy, applying federal and provincial income tax brackets for all provinces and territories, the OAS clawback, and mandatory RRIF minimums.</li>
                         <li>Searches across many annual RRSP withdrawal amounts — and, if you let it, across CPP and OAS start ages from 60 to 70 — to see which combination performs best.</li>
-                        <li>Maximizes the <strong>net estate</strong>: the after-tax value left over at the end, after the final return's terminal tax on any remaining registered assets.</li>
+                        <li>Optimizes for the goal you choose: the largest <strong>net estate</strong> — the after-tax value left at the end, after the final return's terminal tax on any remaining registered assets — or the highest annual spending your plan can sustain.</li>
                         <li>Never proposes a plan that runs you out of money — schedules that leave you short are discarded, not recommended.</li>
                         <li>Validates the winner against Monte Carlo market scenarios, so you can see whether a plan that looks great on average still holds up when markets misbehave.</li>
                     </ul>
@@ -195,7 +196,7 @@ export function RrspWithdrawalStrategy() {
                 <h2 className="text-2xl font-bold text-indigo-900">See your own numbers</h2>
                 <p className="max-w-2xl mx-auto text-indigo-900/80 leading-relaxed">
                     Every situation is different. Run the optimizer on your own balances, income, and province to
-                    see whether an RRSP meltdown could optimize your withdrawals and leave more behind — all
+                    see whether an RRSP meltdown could cut your lifetime tax bill and leave more behind — all
                     calculated privately in your browser.
                 </p>
                 <div className="flex justify-center">

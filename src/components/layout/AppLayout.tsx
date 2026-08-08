@@ -196,7 +196,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                     <div className="flex items-center justify-center gap-2 flex-wrap mb-2">
                         <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                            Runs Entirely in Your Browser • Your Data Never Leaves Your Device
+                            Runs entirely in your browser • Your data never leaves your device
                         </div>
                         <button
                             type="button"
@@ -217,7 +217,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                         </a>
                     </p>
                     <p className="text-sm text-slate-400">
-                        Calculations use 2025 federal and provincial tax rules.
+                        Calculations use 2026 federal and provincial tax rules.
                     </p>
                     <p className="text-sm text-slate-400">
                         Questions or feedback?{' '}

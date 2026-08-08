@@ -450,7 +450,7 @@ describe('RRSP contributions are deductible', () => {
         // deductible half of CPP (enhanced 1% of pensionable earnings, plus all of
         // CPP2) — both are deductions, not credits.
         expect(y.investmentIncome).toBe(0);
-        const cppDeductible = (71_300 - 3_500) * 0.01 + (81_300 - 71_300) * 0.04;
+        const cppDeductible = (74_600 - 3_500) * 0.01 + (85_000 - 74_600) * 0.04;
         expect(y.grossIncome).toBeCloseTo(y.employmentIncome - y.reinvestedRRSP - cppDeductible, 0);
     });
 
@@ -988,10 +988,10 @@ describe('death-year terminal tax (no surviving spouse)', () => {
         const naive = creditStrippedTerminalTax(last, 70);
         expect(last.totalTerminalTax!).toBeLessThan(naive);
         // Federal 14% of the $2,000 federal pension amount, plus Ontario's own
-        // $1,762 amount at Ontario's own 5.05%, grossed up by both surtax tiers
+        // $1,796 amount at Ontario's own 5.05%, grossed up by both surtax tiers
         // (x1.56) since the surtax applies after non-refundable credits.
         expect(naive - last.totalTerminalTax!)
-            .toBeCloseTo(2_000 * 0.14 + 1_762 * 0.0505 * 1.56, 0);
+            .toBeCloseTo(2_000 * 0.14 + 1_796 * 0.0505 * 1.56, 0);
     });
 
     it('(b) eligible Canadian dividends: the dividend tax credit survives the subtraction', () => {

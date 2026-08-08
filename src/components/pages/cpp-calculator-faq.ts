@@ -49,7 +49,7 @@ export const CPP_CALCULATOR_FAQ_ITEMS: FaqItem[] = [
     {
         question: 'Is CPP taxable?',
         answer:
-            'Yes. CPP retirement benefits are fully taxable as ordinary income in the year you receive them, and they count toward the net income used for the OAS clawback, which begins around $93,500 in 2025. This calculator shows your estimated pension before tax, in today\'s dollars. To see how CPP interacts with your other income, taxes, and OAS, use the full retirement dashboard, which models all of that together.',
+            'Yes. CPP retirement benefits are fully taxable as ordinary income in the year you receive them, and they count toward the net income used for the OAS clawback, which begins around $95,300 in 2026. This calculator shows your estimated pension before tax, in today\'s dollars. To see how CPP interacts with your other income, taxes, and OAS, use the full retirement dashboard, which models all of that together.',
     },
     {
         question: 'Can this estimate replace my Service Canada statement?',

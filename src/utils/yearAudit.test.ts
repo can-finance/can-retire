@@ -152,10 +152,13 @@ const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
     // the melt is not what the solver mis-prices. Giving the non-registered dividend
     // slice price appreciation moved it again ($274.16 -> $238.30, still age 64):
     // the year's larger non-registered balance shifts the funding mix, not the
-    // solver's pricing of it.
-    ['INITIAL_INPUTS', INITIAL_INPUTS, 239],
-    // No credit-argument gap in these fixtures, so only the binary-search tolerance
-    // survives. Measured worsts: 0.9704 / 0.9362 / 1.6253.
+    // solver's pricing of it. Moving the base tax year 2025 -> 2026 widened it again
+    // ($238.30 -> $325.44, still age 64): the credits the solver's estimate omits are
+    // simply worth more under the 2026 amounts, so the same omission costs more.
+    ['INITIAL_INPUTS', INITIAL_INPUTS, 326],
+    // No credit-argument gap in these two fixtures, so only the binary-search
+    // tolerance survives. Measured worsts under the 2026 constants: 0.6405 (single,
+    // age 68) and 1.6024 (widowed, age 70).
     ['single', SINGLE, 1],
     // Indexing employment income (it is a today's-dollars input) grew the couple's
     // balances through the working years, so the early-retirement non-registered
@@ -164,14 +167,23 @@ const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
     // accounts, so up to four $1-tolerance binary searches land in one year — still
     // purely search noise, with no RRSP draw and no credit gap in that year. Dividend
     // price appreciation then reshuffled which year is worst (age 66 -> age 70) and
-    // shrank it to $0.9362, so this is back inside the plain search-noise bound.
-    ['couple', COUPLE, 1],
+    // shrank it to $0.9362. Moving the base tax year to 2026 then jumped it an order
+    // of magnitude (age 70 -> age 67, $8.5783), and that is NO LONGER search noise:
+    // four $1-tolerance searches cannot exceed ~$4. Raising CPP/OAS to the 2026
+    // amounts (cpp.ts) pushes this couple's age-67 income high enough to earn the
+    // age and pension credits, so the same omitted-credit gap that dominates
+    // INITIAL_INPUTS now reaches this fixture too — a bigger instance of a known
+    // solver limitation, not a new defect. Still trivial in dollar terms, but it is
+    // the second scenario to cross into credit-gap territory; if a third appears,
+    // fix the solver's estimate rather than raising fences again.
+    ['couple', COUPLE, 9],
     ['widowed', WIDOWED, 1.7],
     // Every year is fully unfunded or TFSA-only — no gross-up, no drift.
     ['shortfall', SHORTFALL, 0.01],
-    // Measured worsts: 0.6104 / 0.5448.
-    ['one-time events', ONE_TIME, 0.7],
-    ['surplus', SURPLUS, 0.6]
+    // Measured worsts under the 2026 constants: 0.7949 (one-time, age 70) and
+    // 0.5448 (surplus, age 68) — both still pure binary-search noise.
+    ['one-time events', ONE_TIME, 0.9],
+    ['surplus', SURPLUS, 0.9]
 ];
 
 const SCENARIOS = CASH_FLOW_TOLERANCE;

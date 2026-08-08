@@ -13,10 +13,10 @@ export function HowItWorks() {
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-6">
                 <div className="prose prose-indigo max-w-none text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
-                        Saving for retirement is one problem. Spending it is another — and in Canada, decisions on how to invest and withdraw in retirement can make a meaningful difference. When you take CPP/OAS, which account you drain first, which account you reinvest in — these choices can lead to tens or hundreds of thousands in tax savings.
+                        Saving for retirement is one problem. Spending it is another — and in Canada, decisions on how to invest and withdraw in retirement can make a meaningful difference. When you take CPP/OAS, which account you drain first, which account you reinvest in — these choices can lead to tens of thousands of dollars — sometimes more — in tax savings.
                     </p>
                     <p>
-                        This tool exists to show you those differences and how you can increase your retirement income and/or estate value.
+                        This tool exists to show you those differences and how you can increase your retirement income, your estate, or both.
                     </p>
                 </div>
 
@@ -87,7 +87,7 @@ export function HowItWorks() {
                 </h2>
                 <div className="prose prose-amber max-w-none text-amber-900/80 leading-relaxed space-y-3">
                     <p>
-                        Treat results as comparisons between plans, not forecasts. A small difference (even 1-2%) between assumed and actual returns, compounded over 20-30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
+                        Treat results as comparisons between plans, not forecasts. A small difference (even 1–2%) between assumed and actual returns, compounded over 20–30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
                     </p>
                     <p>
                         The simulation also assumes today's rules stay in place. Future changes to tax rates and brackets, government programs like CPP and OAS, and other laws will affect real-world results in ways no projection can anticipate.
@@ -129,7 +129,7 @@ export function HowItWorks() {
                         The engine performs a <strong>year-by-year cash flow simulation</strong> from your current age until your projected life expectancy (or your spouse's, whichever is later). Each year, the engine looks at:
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
-                        <li><strong>Inflow:</strong> Employment, CPP, OAS, mandatory RRIF minimums, optional RRSP melt withdrawals, investment income from non-registered accounts, and any one-time inflows.</li>
+                        <li><strong>Inflow:</strong> employment, CPP, OAS, mandatory RRIF minimums, optional RRSP melt withdrawals, investment income from non-registered accounts, and any one-time inflows.</li>
                         <li><strong>Gap analysis:</strong> compares net cash to your "Target Spend".</li>
                         <li><strong>Drawdown:</strong> pulls from accounts per your selected strategy if there's a deficit.</li>
                         <li><strong>Reinvestment:</strong> fills TFSA room, then RRSP room, then invests the rest in your designated non-registered surplus account.</li>
@@ -144,17 +144,17 @@ export function HowItWorks() {
             {/* Withdrawal Strategies */}
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
-                    <h2 className="text-2xl font-bold text-slate-900">Withdrawal Strategies</h2>
+                    <h2 className="text-2xl font-bold text-slate-900">Withdrawal strategies</h2>
                     <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
                 <div className="px-8 pb-8 -mt-2 prose prose-slate max-w-none text-slate-600 leading-relaxed">
                     <p>
-                        <strong>RRSP Last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched to defer taxes as long as possible. Deferral isn't free: the RRSP keeps growing, forced RRIF withdrawals get larger after 72, and whatever remains is fully taxed at death — so this strategy may result in a higher tax bill for your estate and higher total lifetime tax.
+                        <strong>RRSP last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched to defer taxes as long as possible. Deferral isn't free: the RRSP keeps growing, forced RRIF withdrawals get larger after 72, and whatever remains is fully taxed at death — so this strategy may result in a higher tax bill for your estate and higher total lifetime tax.
                     </p>
                     <p>
-                        <strong>RRSP First (early melt):</strong> draws from RRSPs first to "melt" the balance early at lower tax brackets, potentially reducing large tax bills at age 72 or at death.
+                        <strong>RRSP first (early melt):</strong> draws from RRSPs first to "melt" the balance early at lower tax brackets, potentially reducing large tax bills at age 72 or at death.
                     </p>
                 </div>
             </details>
@@ -162,7 +162,7 @@ export function HowItWorks() {
             {/* Tax Logic */}
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
-                    <h2 className="text-2xl font-bold text-slate-900">Taxation & Government Benefits</h2>
+                    <h2 className="text-2xl font-bold text-slate-900">Taxation & government benefits</h2>
                     <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
@@ -174,25 +174,25 @@ export function HowItWorks() {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div className="space-y-2">
-                            <h4 className="font-bold text-slate-900">Income Tax</h4>
+                            <h4 className="font-bold text-slate-900">Income tax</h4>
                             <p className="text-slate-600 leading-relaxed">
                                 Applies federal and provincial brackets, the Basic Personal Amount, Age Amount (65+), and Pension Income Credit (RRIF income, 65+). Brackets and credits are indexed to your projected inflation rate.
                             </p>
                         </div>
                         <div className="space-y-2">
-                            <h4 className="font-bold text-slate-900">OAS Clawback</h4>
+                            <h4 className="font-bold text-slate-900">OAS clawback</h4>
                             <p className="text-slate-600 leading-relaxed">
-                                If individual net income exceeds the threshold (~$93k in 2025), the engine deducts the 15% recovery tax.
+                                If individual net income exceeds the threshold (~$95,300 in 2026), the engine deducts the 15% recovery tax.
                             </p>
                         </div>
                         <div className="space-y-2">
-                            <h4 className="font-bold text-slate-900">Capital Gains</h4>
+                            <h4 className="font-bold text-slate-900">Capital gains</h4>
                             <p className="text-slate-600 leading-relaxed">
                                 Non-registered withdrawals use your <strong>Adjusted Cost Base (ACB)</strong>. Only 50% of the gain is taxable income.
                             </p>
                         </div>
                         <div className="space-y-2">
-                            <h4 className="font-bold text-slate-900">Dividend Tax Credit</h4>
+                            <h4 className="font-bold text-slate-900">Dividend tax credit</h4>
                             <p className="text-slate-600 leading-relaxed">
                                 Eligible Canadian dividends are grossed up (38%) and receive federal and provincial credits for corporate tax already paid.
                             </p>
@@ -210,7 +210,7 @@ export function HowItWorks() {
             {/* Income Splitting Section */}
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
-                    <h2 className="text-2xl font-bold text-slate-900">Pension Income Splitting</h2>
+                    <h2 className="text-2xl font-bold text-slate-900">Pension income splitting</h2>
                     <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
@@ -230,7 +230,7 @@ export function HowItWorks() {
             {/* Asset Growth */}
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
-                    <h2 className="text-2xl font-bold text-slate-900">Investment Growth</h2>
+                    <h2 className="text-2xl font-bold text-slate-900">Investment growth</h2>
                     <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
@@ -262,7 +262,7 @@ export function HowItWorks() {
             {/* Privacy Section */}
             <section id="privacy" className="bg-emerald-50/50 rounded-3xl p-8 border border-emerald-100 space-y-4">
                 <h2 className="text-2xl font-bold text-emerald-900">
-                    Privacy & Data Security
+                    Privacy & data security
                 </h2>
                 <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed">
                     <p>
@@ -270,17 +270,17 @@ export function HowItWorks() {
                         <strong> All calculations are performed locally within your web browser.</strong>
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
-                        <li><strong>No Data Transfer:</strong> personal financial information is never sent to a server.</li>
-                        <li><strong>Local Logic:</strong> the projection engine and tax models run entirely on your own device.</li>
-                        <li><strong>No Persistent Tracking:</strong> saved plans are stored only in your browser's local storage.</li>
-                        <li><strong>Anonymous Analytics:</strong> Cloudflare Web Analytics monitors aggregate, non-identifiable traffic only.</li>
+                        <li><strong>No data transfer:</strong> personal financial information is never sent to a server.</li>
+                        <li><strong>Local logic:</strong> the projection engine and tax models run entirely on your own device.</li>
+                        <li><strong>Local storage only:</strong> saved plans are stored only in your browser's local storage.</li>
+                        <li><strong>Anonymous analytics:</strong> Cloudflare Web Analytics monitors aggregate, non-identifiable traffic only.</li>
                     </ul>
                 </div>
             </section>
 
             {/* FAQs */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-6">
-                <h2 className="text-2xl font-bold text-slate-900">FAQs</h2>
+                <h2 className="text-2xl font-bold text-slate-900">Frequently asked questions</h2>
                 <div className="space-y-6">
                     {FAQ_ITEMS.map(({ question, answer }) => (
                         <div key={question} className="space-y-2">
@@ -294,19 +294,19 @@ export function HowItWorks() {
             {/* Full Legal Disclaimer (site footer is shared via AppLayout) */}
             <section id="full-disclaimer" className="pt-12 border-t border-slate-200">
                 <div className="bg-slate-50 rounded-2xl p-8 border border-slate-200">
-                    <p className="text-sm text-slate-500 uppercase tracking-widest font-bold mb-4">Important Legal Disclaimer</p>
+                    <p className="text-sm text-slate-500 uppercase tracking-widest font-bold mb-4">Important legal disclaimer</p>
                     <div className="text-xs text-slate-500 leading-relaxed space-y-4">
                         <p>
-                            <strong>For Informational Purposes Only:</strong> The Canadian Retirement Asset Planning (C.R.A.P.) tool is provided as a mathematical demonstration of retirement scenarios based on user-provided inputs and simplified tax/financial models. It does not constitute financial, investment, tax, or legal advice.
+                            <strong>For informational purposes only:</strong> The Canadian Retirement Asset Planning (C.R.A.P.) tool is provided as a mathematical demonstration of retirement scenarios based on user-provided inputs and simplified tax/financial models. It does not constitute financial, investment, tax, or legal advice.
                         </p>
                         <p>
-                            <strong>No Guarantees:</strong> Projections are purely hypothetical and are not guarantees of future results. Investment returns, inflation rates, and tax laws are volatile and subject to change without notice. The software may contain errors or omissions in its underlying logic or data constants.
+                            <strong>No guarantees:</strong> Projections are purely hypothetical and are not guarantees of future results. Investment returns, inflation rates, and tax laws are volatile and subject to change without notice. The software may contain errors or omissions in its underlying logic or data constants.
                         </p>
                         <p>
-                            <strong>Limitation of Liability:</strong> Under no circumstances shall the creators or distributors of this tool be liable for any financial losses, damages, or decisions made based on the information provided by this simulation. You assume full responsibility for any financial actions you take.
+                            <strong>Limitation of liability:</strong> Under no circumstances shall the creators or distributors of this tool be liable for any financial losses, damages, or decisions made based on the information provided by this simulation. You assume full responsibility for any financial actions you take.
                         </p>
                         <p>
-                            <strong>Professional Advice Required:</strong> Retirement planning is complex. You should not rely on this tool for making actual financial decisions. Always consult with a certified financial planner (CFP), qualified tax professional, or legal advisor before implementing any retirement or investment strategy.
+                            <strong>Professional advice required:</strong> Retirement planning is complex. You should not rely on this tool for making actual financial decisions. Always consult with a certified financial planner (CFP), qualified tax professional, or legal advisor before implementing any retirement or investment strategy.
                         </p>
                     </div>
                 </div>

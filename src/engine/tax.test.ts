@@ -15,26 +15,26 @@ import {
 import type { SplitPerson } from './tax';
 
 describe('calculateIncomeTax — golden values (no age/pension/dividend credits)', () => {
-    // Federal lowest bracket is 14% (2026 on). Non-refundable federal credits are
-    // valued at that same statutory rate, so BPA relief moved 15% -> 14% with it.
+    // Federal lowest bracket is 14% (2026 base year). Non-refundable federal credits
+    // are valued at that same statutory rate, so BPA relief moved 15% -> 14% with it.
     it('ON, $50,000: matches hand calculation', () => {
         // Federal: 50,000 × 14%                       =  7,000.00
-        // Fed BPA credit: 16,129 × 14%                = -2,258.06
+        // Fed BPA credit: 16,452 × 14%                = -2,303.28
         // ON: 50,000 × 5.05%                          =  2,525.00
-        // ON BPA credit: 12,747 × 5.05%               =   -643.72
-        // ON surtax: prov tax payable 1,881.28 < 5,710 =      0
+        // ON BPA credit: 12,989 × 5.05%               =   -655.94
+        // ON surtax: prov tax payable 1,869.06 < 5,818 =      0
         // OHP: 600 + 25% × (50,000 − 48,000), capped   =    750.00
-        // Total                                       =  7,373.22
-        expect(calculateIncomeTax(50_000, 'ON')).toBeCloseTo(7_373.22, 1);
+        // Total                                       =  7,315.78
+        expect(calculateIncomeTax(50_000, 'ON')).toBeCloseTo(7_315.78, 1);
     });
 
     it('AB, $100,000: matches hand calculation', () => {
-        // Federal: 57,375 × 14% + 42,625 × 20.5%      = 16,770.63
-        // Fed BPA credit: 16,129 × 14%                = -2,258.06
-        // AB: 60,000 × 8% + 40,000 × 10%              =  8,800.00
-        // AB BPA credit: 22,323 × 8%                  = -1,785.84
-        // Total                                       = 21,526.73
-        expect(calculateIncomeTax(100_000, 'AB')).toBeCloseTo(21_526.73, 1);
+        // Federal: 58,523 × 14% + 41,477 × 20.5%      = 16,696.01
+        // Fed BPA credit: 16,452 × 14%                = -2,303.28
+        // AB: 61,200 × 8% + 38,800 × 10%              =  8,776.00
+        // AB BPA credit: 22,769 × 8%                  = -1,821.52
+        // Total                                       = 21,347.21
+        expect(calculateIncomeTax(100_000, 'AB')).toBeCloseTo(21_347.21, 1);
     });
 
     it('income below the basic personal amount owes zero tax', () => {
@@ -83,25 +83,25 @@ describe('calculateIncomeTax — golden values (no age/pension/dividend credits)
     it('age amount reduces tax for 65+ at moderate income', () => {
         const under65 = calculateIncomeTax(40_000, 'ON', 1.0, undefined, 64);
         const over65 = calculateIncomeTax(40_000, 'ON', 1.0, undefined, 65);
-        // $40k is below BOTH income-test thresholds (fed $45,522, ON $46,330), so both
+        // $40k is below BOTH income-test thresholds (fed $46,432, ON $47,210), so both
         // maxima are claimable in full — but each at its own amount and its own rate:
-        //   federal 9,028 × 14%  = 1,263.92
-        //   Ontario 6,223 × 5.05% =  314.26
-        // (The old expectation of 9,028 × 19% applied the FEDERAL amount at a flat 5%
-        // provincial proxy — wrong on both counts.)
-        expect(under65 - over65).toBeCloseTo(9_028 * 0.14 + 6_223 * 0.0505, 2);
+        //   federal 9,208 × 14%  = 1,289.12
+        //   Ontario 6,342 × 5.05% =  320.27
+        // (The old expectation applied the FEDERAL amount at a flat 5% provincial
+        // proxy — wrong on both counts.)
+        expect(under65 - over65).toBeCloseTo(9_208 * 0.14 + 6_342 * 0.0505, 2);
     });
 
     it('pension income credit caps separately at the federal and provincial amounts', () => {
-        // Ontario's pension amount is $1,762, not the federal $2,000, and it is credited
+        // Ontario's pension amount is $1,796, not the federal $2,000, and it is credited
         // at ON's own 5.05% rather than a flat 5%.
         const noPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 66, 0);
         const smallPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 66, 1_000);
         const bigPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 66, 50_000);
         // $1,000 is under both caps, so the whole amount is claimable on both sides.
         expect(noPension - smallPension).toBeCloseTo(1_000 * 0.14 + 1_000 * 0.0505, 2);
-        // Large pension: federal caps at $2,000, Ontario at $1,762.
-        expect(noPension - bigPension).toBeCloseTo(2_000 * 0.14 + 1_762 * 0.0505, 2);
+        // Large pension: federal caps at $2,000, Ontario at $1,796.
+        expect(noPension - bigPension).toBeCloseTo(2_000 * 0.14 + 1_796 * 0.0505, 2);
     });
 
     it('applies the pension credit under 65 (caller is responsible for age-qualifying)', () => {
@@ -109,7 +109,7 @@ describe('calculateIncomeTax — golden values (no age/pension/dividend credits)
         // age, so a caller passing eligible pension income for a 60-year-old gets the credit.
         const noPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 60, 0);
         const withPension = calculateIncomeTax(60_000, 'ON', 1.0, undefined, 60, 2_000);
-        expect(noPension - withPension).toBeCloseTo(2_000 * 0.14 + 1_762 * 0.0505, 2);
+        expect(noPension - withPension).toBeCloseTo(2_000 * 0.14 + 1_796 * 0.0505, 2);
     });
 });
 
@@ -171,10 +171,10 @@ describe('calculateOHP — Ontario Health Premium phase-in', () => {
 });
 
 describe('federalBasicPersonalAmount — high-income taper', () => {
-    const FULL = TAX_CONSTANTS.basicPersonalAmount.federal;          // 16,129
-    const FLOOR = TAX_CONSTANTS.basicPersonalAmount.federalMinimum;  // 14,538
-    const START = TAX_CONSTANTS.federalBrackets[3].threshold;        // 177,882
-    const END = TAX_CONSTANTS.federalBrackets[4].threshold;          // 253,414
+    const FULL = TAX_CONSTANTS.basicPersonalAmount.federal;          // 16,452
+    const FLOOR = TAX_CONSTANTS.basicPersonalAmount.federalMinimum;  // 14,829
+    const START = TAX_CONSTANTS.federalBrackets[3].threshold;        // 181,440
+    const END = TAX_CONSTANTS.federalBrackets[4].threshold;          // 258,482
 
     it('is the full amount up to the bottom of the 4th bracket', () => {
         expect(federalBasicPersonalAmount(0)).toBeCloseTo(FULL, 6);
@@ -251,7 +251,7 @@ describe('provincial age and pension credits use each province\'s own rate and a
 
     it('provincial age amounts run their own income test, not the federal one', () => {
         // Manitoba's age amount starts phasing out at $27,749 — far below the federal
-        // $45,522 — so at $40k the provincial claim is already partly clawed back while
+        // $46,432 — so at $40k the provincial claim is already partly clawed back while
         // the federal claim is still whole.
         expect(claimable(40_000, FEDERAL_AGE_AMOUNT)).toBeCloseTo(FEDERAL_AGE_AMOUNT.max, 6);
         expect(claimable(40_000, PROVINCIAL_AGE_AMOUNT['MB']))
@@ -262,12 +262,12 @@ describe('provincial age and pension credits use each province\'s own rate and a
     });
 
     it('pension amounts are capped provincially at the province\'s own figure', () => {
-        // BC's pension amount is the un-indexed $1,000 floor, at BC's 5.06% rate.
+        // BC's pension amount is the un-indexed $1,000 floor, at BC's 5.60% rate.
         const saving = calculateIncomeTax(60_000, 'BC', 1.0, undefined, 60, 0)
             - calculateIncomeTax(60_000, 'BC', 1.0, undefined, 60, 50_000);
-        expect(saving).toBeCloseTo(2_000 * 0.14 + 1_000 * 0.0506, 2);
+        expect(saving).toBeCloseTo(2_000 * 0.14 + 1_000 * 0.056, 2);
         expect(PROVINCIAL_PENSION_INCOME_AMOUNT['BC']).toBe(1_000);
-        expect(PROVINCIAL_PENSION_INCOME_AMOUNT['ON']).toBe(1_762);
+        expect(PROVINCIAL_PENSION_INCOME_AMOUNT['ON']).toBe(1_796);
     });
 
     it('unknown provinces fall back to the federal amounts', () => {
@@ -354,10 +354,10 @@ describe('calculateTotalTax — OAS repayment is deducted before tax', () => {
     it('passes credits through to the income-tax half', () => {
         // Alberta: no surtax to multiply the provincial share of the credit, so the
         // saving is exactly the credit's face value — federal $2,000 at 14% plus
-        // Alberta's own $1,719 pension amount at its own 8% lowest rate.
+        // Alberta's own $1,753 pension amount at its own 8% lowest rate.
         const withCredit = calculateTotalTax(150_000, 8_820, 'AB', 1.0, 70, 2_000);
         const without = calculateTotalTax(150_000, 8_820, 'AB', 1.0, 70, 0);
-        expect(without.total - withCredit.total).toBeCloseTo(2_000 * 0.14 + 1_719 * 0.08, 2);
+        expect(without.total - withCredit.total).toBeCloseTo(2_000 * 0.14 + 1_753 * 0.08, 2);
     });
 });
 
@@ -369,15 +369,15 @@ describe('calculatePayrollContributions', () => {
 
     it('caps CPP at the first ceiling and EI at maximum insurable earnings', () => {
         const atCeiling = calculatePayrollContributions(200_000, 'ON');
-        // CPP base (71,300−3,500)×5.95% = 4,034.10, CPP2 (81,300−71,300)×4% = 400,
-        // EI 65,700×1.64% = 1,077.48
-        expect(atCeiling.total).toBeCloseTo(4_034.10 + 400 + 1_077.48, 1);
+        // CPP base (74,600−3,500)×5.95% = 4,230.45, CPP2 (85,000−74,600)×4% = 416,
+        // EI 68,900×1.63% = 1,123.07
+        expect(atCeiling.total).toBeCloseTo(4_230.45 + 416 + 1_123.07, 1);
     });
 
     it('scales with income below the ceilings', () => {
         const low = calculatePayrollContributions(30_000, 'ON');
-        // (30,000−3,500)×5.95% + 30,000×1.64% = 1,576.75 + 492 = 2,068.75
-        expect(low.total).toBeCloseTo(2_068.75, 1);
+        // (30,000−3,500)×5.95% + 30,000×1.63% = 1,576.75 + 489 = 2,065.75
+        expect(low.total).toBeCloseTo(2_065.75, 1);
         expect(low.total).toBeLessThan(calculatePayrollContributions(60_000, 'ON').total);
     });
 
@@ -386,7 +386,7 @@ describe('calculatePayrollContributions', () => {
         const rest = calculatePayrollContributions(200_000, 'ON');
         // Higher QPP rate, lower EI rate — QPP dominates, so QC pays more overall.
         expect(qc.total).toBeGreaterThan(rest.total);
-        expect(qc.total).toBeCloseTo((71_300 - 3_500) * 0.064 + 400 + 65_700 * 0.0131, 1);
+        expect(qc.total).toBeCloseTo((74_600 - 3_500) * 0.063 + 416 + 68_900 * 0.0130, 1);
     });
 
     it('indexes its ceilings with inflation', () => {
@@ -399,20 +399,20 @@ describe('calculatePayrollContributions', () => {
     // the split wrong silently misprices every working year.
     it('splits contributions into the deductible and creditable halves', () => {
         const at = calculatePayrollContributions(200_000, 'ON');
-        const pensionable = 71_300 - 3_500;
+        const pensionable = 74_600 - 3_500;
         // Enhanced CPP is 1% of pensionable earnings; all of CPP2 is enhanced too.
-        expect(at.deductible).toBeCloseTo(pensionable * 0.01 + 400, 1);
+        expect(at.deductible).toBeCloseTo(pensionable * 0.01 + 416, 1);
         // Base CPP 4.95% plus EI.
-        expect(at.creditable).toBeCloseTo(pensionable * 0.0495 + 65_700 * 0.0164, 1);
+        expect(at.creditable).toBeCloseTo(pensionable * 0.0495 + 68_900 * 0.0163, 1);
         // The halves account for every dollar withheld.
         expect(at.deductible + at.creditable).toBeCloseTo(at.total, 6);
     });
 
     it("uses QPP's larger base share in Quebec", () => {
         const qc = calculatePayrollContributions(200_000, 'QC');
-        const pensionable = 71_300 - 3_500;
-        expect(qc.deductible).toBeCloseTo(pensionable * 0.01 + 400, 1);
-        expect(qc.creditable).toBeCloseTo(pensionable * 0.054 + 65_700 * 0.0131, 1);
+        const pensionable = 74_600 - 3_500;
+        expect(qc.deductible).toBeCloseTo(pensionable * 0.01 + 416, 1);
+        expect(qc.creditable).toBeCloseTo(pensionable * 0.053 + 68_900 * 0.0130, 1);
     });
 
     it('zero income yields a zero breakdown, not just a zero total', () => {
@@ -443,8 +443,8 @@ describe('calculateOASClawback', () => {
     });
 
     it('recovers 15% of income above the threshold', () => {
-        // 100,000 − 93,454 = 6,546 × 15% = 981.90
-        expect(calculateOASClawback(100_000, 8_820)).toBeCloseTo(981.90, 2);
+        // 100,000 − 95,323 = 4,677 × 15% = 701.55
+        expect(calculateOASClawback(100_000, 8_820)).toBeCloseTo(701.55, 2);
     });
 
     it('is capped at the OAS actually received', () => {
