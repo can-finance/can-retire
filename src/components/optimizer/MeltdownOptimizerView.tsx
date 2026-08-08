@@ -173,7 +173,7 @@ export function MeltdownOptimizerView({
                             <p className="text-sm text-slate-600">
                                 Optimizing plan: <span className="font-semibold text-slate-900">{activePlanName}</span>
                             </p>
-                            <p className="mt-0.5 text-xs text-slate-400">
+                            <p className="mt-0.5 text-xs text-slate-500">
                                 To optimize a different plan, select it in the plan list on the dashboard first.
                             </p>
                         </div>
@@ -294,7 +294,7 @@ export function MeltdownOptimizerView({
                             style={{ width: `${pct}%` }}
                         />
                     </div>
-                    <p className="mt-2 text-xs text-slate-400">{pct}%</p>
+                    <p className="mt-2 text-xs text-slate-500">{pct}%</p>
                     <button onClick={backToSetup} className={`${secondaryBtn} mt-6`}>
                         Cancel
                     </button>
@@ -557,7 +557,7 @@ function RecommendationCard({ result }: { result: MeltdownResult }) {
                 ))}
             </div>
 
-            <p className="mt-3 text-xs text-slate-400">
+            <p className="mt-3 text-xs text-slate-500">
                 The melt runs each year until age 71 (RRIF conversion) or until the RRSP is empty.
             </p>
 
@@ -713,8 +713,8 @@ function ObjectiveCard({
             }`}
         >
             <p className={`text-base font-semibold ${selected ? 'text-brand-700' : 'text-slate-800'}`}>{title}</p>
-            <p className="mt-1 text-[13px] text-slate-500 leading-relaxed">{sub}</p>
-            {detail && <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">{detail}</p>}
+            <p className="mt-1 text-sm text-slate-500 leading-relaxed">{sub}</p>
+            {detail && <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">{detail}</p>}
         </button>
     );
 }
@@ -823,7 +823,7 @@ function MaxSpendCard({ result }: { result: MeltdownResult }) {
                     ))}
                 </div>
 
-                <p className="mt-3 text-xs text-slate-400">
+                <p className="mt-3 text-xs text-slate-500">
                     The melt runs each year until age 71 (RRIF conversion) or until the RRSP is empty.
                 </p>
 

@@ -57,7 +57,7 @@ function fmtAmt(v: number): string {
 function Badge({ badge }: { badge: AuditBadge }) {
     const meta = BADGE_META[badge];
     return (
-        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.className}`}>
+        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${meta.className}`}>
             {meta.label}
         </span>
     );
@@ -74,8 +74,8 @@ function LineRow({
     const amt = line.amount / scale;
     const redTint = amt < 0 && DEDUCTION_SECTIONS.has(sectionKey);
 
-    const labelClass = isInfo ? 'text-slate-400' : 'text-slate-700';
-    const amountClass = isInfo ? 'text-slate-400' : redTint ? 'text-rose-600' : 'text-slate-900';
+    const labelClass = isInfo ? 'text-slate-500' : 'text-slate-700';
+    const amountClass = isInfo ? 'text-slate-500' : redTint ? 'text-rose-600' : 'text-slate-900';
     const rowClass = heavy ? 'border-t-2 border-slate-200' : '';
     const weightClass = heavy ? 'font-semibold' : '';
 
@@ -90,7 +90,7 @@ function LineRow({
         <tr className={rowClass}>
             <td className={`px-3 py-2 align-top ${labelClass} ${weightClass}`}>
                 <div>{line.label}</div>
-                {noteText && <div className="text-[11px] text-slate-400 mt-0.5 font-normal">{noteText}</div>}
+                {noteText && <div className="text-xs text-slate-500 mt-0.5 font-normal">{noteText}</div>}
             </td>
             {showSplit && (
                 <>
@@ -139,7 +139,7 @@ function SectionBlock({ section, hasSpouse, scale }: { section: AuditSection; ha
             <div className={cardClass}>
                 <table className="w-full text-sm">
                     {showSplit && (
-                        <thead className="bg-slate-50 text-[11px] text-slate-400 uppercase tracking-wide">
+                        <thead className="bg-slate-50 text-xs text-slate-500 uppercase tracking-wide">
                             <tr>
                                 <th className="px-3 py-1.5 text-left font-medium"> </th>
                                 <th className="px-3 py-1.5 text-right font-medium">You</th>
@@ -160,7 +160,7 @@ function SectionBlock({ section, hasSpouse, scale }: { section: AuditSection; ha
                     )}
                 </table>
             </div>
-            {section.note && <p className="text-xs text-slate-400 mt-1.5">{section.note}</p>}
+            {section.note && <p className="text-xs text-slate-500 mt-1.5">{section.note}</p>}
         </div>
     );
 }
@@ -279,7 +279,7 @@ export function YearAuditDrawer({
                             </div>
                         )}
                         {inflationAdjusted && (
-                            <p className="text-xs text-slate-400 mt-2">
+                            <p className="text-xs text-slate-500 mt-2">
                                 Shown in today's dollars — every amount below is divided by {row.inflationFactor.toFixed(2)}× cumulative inflation. The reconciliation checks still balance because every line is scaled the same way.
                             </p>
                         )}

@@ -214,7 +214,7 @@ export function ComparisonView({
 
             {/* Chip picker */}
             <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-slate-400 mr-1">
+                <span className="text-xs text-slate-500 mr-1">
                     {selectedIds.length >= MAX_COMPARANDS
                         ? `Maximum of ${MAX_COMPARANDS} plans selected — deselect one to swap`
                         : `Choose up to ${MAX_COMPARANDS} plans:`}
@@ -243,9 +243,9 @@ export function ComparisonView({
                             />
                             <span>{p.name}</span>
                             {p.id === activePlanId && (
-                                <span className="text-slate-400 font-normal">(active)</span>
+                                <span className="text-slate-500 font-normal">(active)</span>
                             )}
-                            <span className="text-xs font-normal text-slate-400">
+                            <span className="text-xs font-normal text-slate-500">
                                 {new Date(p.lastSaved).toLocaleDateString()}
                             </span>
                         </button>

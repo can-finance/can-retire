@@ -12,15 +12,20 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
     return (
         <div className="lg:sticky lg:top-16 z-20 -mx-4 px-4 py-4 bg-slate-50/80 backdrop-blur-md border-b border-slate-200 shadow-sm">
             <div className="max-w-7xl mx-auto">
-                <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+                {/* Five equal columns: Net Estate used to span two of six, which left
+                    the four rate cards at ~160px of inner width — too narrow for
+                    "Retirement Tax Rate" to sit on one line at the current label size.
+                    Equal fifths give every card ~200px, and the hero figure still has
+                    room for an eight-figure estate. */}
+                <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
 
                     {/* Hero: Net Estate */}
-                    <div className="summary-card summary-card--emerald col-span-2 lg:col-span-2">
+                    <div className="summary-card summary-card--emerald col-span-2 lg:col-span-1">
                         <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Net Estate</p>
                         <p className="text-2xl font-bold text-emerald-600 font-mono leading-tight mt-0.5">
                             {formatCurrencyCAD(metrics.netEstateValue)}
                         </p>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">Before tax: {formatCurrencyCAD(metrics.estate)}</p>
+                        <p className="text-xs text-slate-500 font-mono mt-0.5">Before tax: {formatCurrencyCAD(metrics.estate)}</p>
                     </div>
 
                     {/* Withdrawal Rate */}
@@ -29,7 +34,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                         <p className="text-xl font-bold text-cyan-600 font-mono leading-tight mt-0.5">
                             {metrics.initialWithdrawalRate.toFixed(1)}%
                         </p>
-                        <p className="text-xs text-slate-400 mt-0.5">Initial year</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Initial year</p>
                     </div>
 
                     {/* Retirement Tax Rate */}
@@ -75,7 +80,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                             <p className="text-xl font-bold text-indigo-600 font-mono leading-tight mt-0.5">
                                 {monteCarlo.successRate.toFixed(1)}%
                             </p>
-                            <p className="text-xs text-slate-400 font-mono mt-0.5">Median {formatCurrencyCAD(monteCarlo.medianEndOfPlanAssets)}</p>
+                            <p className="text-xs text-slate-500 font-mono mt-0.5">Median {formatCurrencyCAD(monteCarlo.medianEndOfPlanAssets)}</p>
                         </div>
                     )}
                 </div>

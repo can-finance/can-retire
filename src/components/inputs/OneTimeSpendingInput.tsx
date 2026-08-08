@@ -42,7 +42,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                     {expenses.map(event => (
                         <div key={event.id} className="flex items-center justify-between bg-white p-2 rounded border border-slate-200 text-sm">
                             <div className="flex gap-3 items-center">
-                                <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${event.type === 'inflow' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                                <span className={`px-2 py-0.5 rounded-full text-xs uppercase font-bold ${event.type === 'inflow' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                                     }`}>
                                     {event.type || 'expense'}
                                 </span>

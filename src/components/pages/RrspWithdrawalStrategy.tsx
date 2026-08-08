@@ -10,7 +10,7 @@ export function RrspWithdrawalStrategy() {
         <div className="max-w-4xl mx-auto space-y-12 pb-20">
             {/* Hero */}
             <section className="text-center space-y-6">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
                 <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">RRSP Withdrawal Strategy Calculator</h1>
                 <p className="max-w-2xl mx-auto text-lg text-slate-600 leading-relaxed">
                     Find the RRSP withdrawal schedule — the decumulation plan — that fits your goal: the
@@ -24,13 +24,13 @@ export function RrspWithdrawalStrategy() {
                         className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 text-white font-semibold text-base hover:bg-brand-700 transition-colors shadow-sm"
                     >
                         Find my withdrawal strategy
-                        <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
+                        <span className="bg-white/20 text-white text-xs px-1.5 py-0.5 rounded font-bold">BETA</span>
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                         </svg>
                     </a>
                 </div>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-slate-500">
                     Free · No account · Runs entirely in your browser — your data never leaves your device
                 </p>
             </section>
@@ -38,7 +38,7 @@ export function RrspWithdrawalStrategy() {
             {/* Why deferral backfires */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-900">Why "withdraw as late as possible" often backfires</h2>
-                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
+                <div className="max-w-none text-lg text-slate-600 leading-relaxed space-y-4">
                     <p>
                         The instinct with an RRSP is to defer tax for as long as possible — leave it untouched, let
                         it grow, and worry about withdrawals later. That instinct can be expensive. Deferral is not
@@ -69,7 +69,7 @@ export function RrspWithdrawalStrategy() {
             {/* The meltdown strategy */}
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-4">
                 <h2 className="text-2xl font-bold text-indigo-900">The RRSP meltdown strategy</h2>
-                <div className="prose prose-indigo max-w-none text-indigo-900/80 leading-relaxed space-y-4">
+                <div className="max-w-none text-lg text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
                         The RRSP meltdown strategy flips the default. Instead of deferring, you deliberately draw the
                         RRSP down during your <strong>low-income years</strong> — typically the window between
@@ -130,7 +130,7 @@ export function RrspWithdrawalStrategy() {
             {/* How the optimizer works */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-900">How the optimizer works</h2>
-                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
+                <div className="max-w-none text-lg text-slate-600 leading-relaxed space-y-4">
                     <p>
                         The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
                         your retirement using real Canadian tax rules, then searches for the schedule that best
@@ -153,7 +153,7 @@ export function RrspWithdrawalStrategy() {
             {/* Accuracy */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-900">How accurate is this calculation?</h2>
-                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed space-y-4">
+                <div className="max-w-none text-lg text-slate-600 leading-relaxed space-y-4">
                     <p>
                         Exactly as accurate as its inputs — which are a mix of things you know and things nobody
                         knows. Your ages, current account balances, and today's tax rules are known precisely, and
@@ -205,7 +205,7 @@ export function RrspWithdrawalStrategy() {
                         className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-600 text-white font-semibold text-base hover:bg-brand-700 transition-colors shadow-sm"
                     >
                         Find my withdrawal strategy
-                        <span className="bg-white/20 text-white text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
+                        <span className="bg-white/20 text-white text-xs px-1.5 py-0.5 rounded font-bold">BETA</span>
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                         </svg>

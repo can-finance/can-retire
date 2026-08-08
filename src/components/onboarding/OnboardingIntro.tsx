@@ -28,7 +28,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                 >
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold text-slate-900">Quick start</h2>
-                        <span className="text-xs font-medium text-slate-400">~2 min</span>
+                        <span className="text-xs font-medium text-slate-500">~2 min</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
                         A handful of questions. We'll use sensible defaults for everything else — you
@@ -45,7 +45,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                 >
                     <div className="flex items-center justify-between">
                         <h2 className="text-lg font-bold text-slate-900">Full setup</h2>
-                        <span className="text-xs font-medium text-slate-400">~10 min</span>
+                        <span className="text-xs font-medium text-slate-500">~10 min</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
                         Step through every option. Sensible defaults are pre-filled — change what you like.
@@ -57,7 +57,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
             </div>
 
             <SectionCard accent="none" padding="p-4" className="bg-slate-50/70">
-                <p className="text-xs text-slate-400 text-center">
+                <p className="text-xs text-slate-500 text-center">
                     Rough estimates for planning — not financial advice.
                 </p>
             </SectionCard>
@@ -69,7 +69,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                 >
                     {isRelaunch ? 'Cancel — keep my current numbers' : 'Skip — explore with sample numbers instead'}
                 </button>
-                <p className="text-xs text-slate-400 mt-2">
+                <p className="text-xs text-slate-500 mt-2">
                     You can run this setup again anytime from the {EDIT_PLAN_LABEL} button in the top menu.
                 </p>
             </div>

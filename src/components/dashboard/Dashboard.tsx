@@ -381,7 +381,7 @@ export function Dashboard() {
                     ) : (
                         <button
                             onClick={toggleSpouse}
-                            className="w-full rounded-2xl p-6 border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-brand-50/30 transition-all group flex flex-col items-center gap-2 text-slate-400 hover:text-brand-500"
+                            className="w-full rounded-2xl p-6 border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-brand-50/30 transition-all group flex flex-col items-center gap-2 text-slate-500 hover:text-brand-600"
                         >
                             <div className="w-10 h-10 rounded-full border-2 border-dashed border-current flex items-center justify-center group-hover:scale-110 transition-transform">
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -450,7 +450,7 @@ export function Dashboard() {
                                     if (!checked) setMonteCarloResults(null);
                                 }}
                                 label="Monte Carlo Simulation"
-                                badge={<span className="bg-indigo-100 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>}
+                                badge={<span className="bg-indigo-100 text-indigo-700 text-xs px-1.5 py-0.5 rounded font-bold">BETA</span>}
                             />
 
                             {isMonteCarlo && (

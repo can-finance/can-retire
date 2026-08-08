@@ -87,14 +87,14 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
                     <XAxis
                         dataKey="age"
                         stroke="#64748b"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
                     />
                     <YAxis
                         tickFormatter={formatCurrencyShort}
                         stroke="#64748b"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
                     />

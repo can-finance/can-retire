@@ -27,7 +27,7 @@ function StatCard({
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 {label}
                 {note && (
-                    <span className="ml-1 normal-case font-normal tracking-normal text-slate-400">
+                    <span className="ml-1 normal-case font-normal tracking-normal text-slate-500">
                         {note}
                     </span>
                 )}
@@ -39,7 +39,7 @@ function StatCard({
                             className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                             style={{ backgroundColor: run.color }}
                         />
-                        <span className="truncate text-xs text-slate-400 flex-1">
+                        <span className="truncate text-xs text-slate-500 flex-1">
                             {run.comparand.name}
                         </span>
                         <span className="tabular-nums whitespace-nowrap">{value(run, best === i)}</span>

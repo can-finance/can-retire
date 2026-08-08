@@ -412,10 +412,10 @@ describe('YearAuditDrawer', () => {
             />
         );
         const assetsCell = screen.getByText('Assets before terminal tax').closest('td')!;
-        expect(assetsCell.className).not.toContain('text-slate-400');
+        expect(assetsCell.className).not.toContain('text-slate-500');
 
         const targetCell = screen.getByText(/Target spending/).closest('td')!;
-        expect(targetCell.className).not.toContain('text-slate-400');
+        expect(targetCell.className).not.toContain('text-slate-500');
 
         // A genuine info annotation alongside it must stay muted, so the contrast
         // is deliberate rather than the muted styling having been removed outright.
@@ -428,7 +428,7 @@ describe('YearAuditDrawer', () => {
             />
         );
         const infoCell = screen.getByText('Includes one-time: Roof').closest('td')!;
-        expect(infoCell.className).toContain('text-slate-400');
+        expect(infoCell.className).toContain('text-slate-500');
     });
 
     it('a TFSA-only year omits "Net income" — nothing was deducted between it and "Total cash in"', () => {

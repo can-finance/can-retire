@@ -108,7 +108,7 @@ function BenefitsFields({ person, who, setDraft }: { person: Person; who: Who; s
         <div className="space-y-4">
             <SharedBenefitsFields person={person} labels={WIZARD_BENEFITS_LABELS}
                 onPatch={(patch) => patchPerson(setDraft, who, patch)} />
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500">
                 These are rough estimates. You can refine your CPP later with the CPP Calculator and feed the result back into your plan.
             </p>
         </div>

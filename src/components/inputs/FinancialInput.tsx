@@ -137,7 +137,7 @@ export function FinancialInput({
                     onKeyDown={handleKeyDown}
                     disabled={disabled}
                     className={twMerge(
-                        "w-full rounded-lg border bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 sm:text-sm",
+                        "w-full rounded-lg border bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1",
                         accentColor ? "border-slate-200" : "border-slate-300 focus:border-brand-500 focus:ring-brand-500",
                         prefix && "pl-7",
                         suffix && "pr-8",

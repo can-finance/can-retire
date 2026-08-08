@@ -145,7 +145,7 @@ function ModeTab({ active, onClick, title, subtitle }: {
                 }`}
         >
             <span className={`block text-sm font-semibold ${active ? 'text-slate-900' : 'text-slate-500'}`}>{title}</span>
-            <span className={`block text-xs ${active ? 'text-slate-500' : 'text-slate-400'}`}>{subtitle}</span>
+            <span className={`block text-xs ${active ? 'text-slate-600' : 'text-slate-500'}`}>{subtitle}</span>
         </button>
     );
 }
@@ -161,7 +161,7 @@ function YearEarningsInput({ year, age, value, onChange }: {
                 {year} <span className="opacity-70">(age {age})</span>
             </label>
             <div className="relative flex items-center">
-                <span className="absolute left-2 text-xs text-slate-400">$</span>
+                <span className="absolute left-2 text-xs text-slate-500">$</span>
                 <input
                     type="text"
                     inputMode="numeric"
@@ -444,7 +444,7 @@ export function CppCalculator() {
                                         <div className="flex flex-col gap-1 flex-1">
                                             <label className="text-xs font-medium text-slate-500">Annual salary</label>
                                             <div className="relative flex items-center">
-                                                <span className="absolute left-2 text-xs text-slate-400">$</span>
+                                                <span className="absolute left-2 text-xs text-slate-500">$</span>
                                                 <input type="text" inputMode="numeric" className={`${inputClass} !pl-5 !pr-2 !py-1.5 !text-xs`}
                                                     value={block.salary.toLocaleString('en-US')}
                                                     onChange={(e) => {
@@ -456,7 +456,7 @@ export function CppCalculator() {
                                         </div>
                                         <button
                                             onClick={() => update({ blocks: state.blocks.filter(b => b.id !== block.id) })}
-                                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                                            className="p-1.5 text-slate-500 hover:text-red-500 transition-colors"
                                             title="Remove period"
                                         >
                                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -479,7 +479,7 @@ export function CppCalculator() {
                                             }]
                                         });
                                     }}
-                                    className="w-full rounded-lg p-2.5 border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-brand-50/30 transition-all text-sm font-medium text-slate-400 hover:text-brand-500"
+                                    className="w-full rounded-lg p-2.5 border-2 border-dashed border-slate-200 hover:border-brand-400 hover:bg-brand-50/30 transition-all text-sm font-medium text-slate-500 hover:text-brand-600"
                                 >
                                     + Add career period
                                 </button>
@@ -523,7 +523,7 @@ export function CppCalculator() {
                                     </button>
                                     <button
                                         onClick={() => update({ exactEarnings: {} })}
-                                        className="text-xs font-medium px-3 py-1.5 rounded-lg text-slate-400 hover:text-red-500 transition-colors"
+                                        className="text-xs font-medium px-3 py-1.5 rounded-lg text-slate-500 hover:text-red-500 transition-colors"
                                     >
                                         Clear all
                                     </button>
@@ -593,7 +593,7 @@ export function CppCalculator() {
                                     placeholder="e.g. 1998, 2001"
                                     className={inputClass}
                                 />
-                                <p className="text-sm text-slate-400">
+                                <p className="text-sm text-slate-500">
                                     Each child protects the 7 years from birth. Only years where your earnings were below
                                     your career average are excluded{result.childRearingDropped.length > 0 && (
                                         <> — currently excluding <strong>{result.childRearingDropped.length}</strong> year{result.childRearingDropped.length === 1 ? '' : 's'} ({result.childRearingDropped.join(', ')})</>
@@ -617,7 +617,7 @@ export function CppCalculator() {
                                 {formatCurrencyCAD(result.annualBenefit)}/year
                             </span>
                         </div>
-                        <p className="text-sm text-slate-400 mt-2">
+                        <p className="text-sm text-slate-500 mt-2">
                             In today's dollars. You qualify for <strong className="text-slate-200">{(result.percentOfMax * 100).toFixed(0)}%</strong> of
                             the maximum pension{result.adjustmentFactor !== 1 && (
                                 <>, {result.adjustmentFactor < 1 ? 'reduced' : 'increased'} by{' '}
@@ -638,8 +638,8 @@ export function CppCalculator() {
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={allAges} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                    <XAxis dataKey="startAge" stroke="#64748b" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
-                                    <YAxis tickFormatter={formatCurrencyShort} stroke="#64748b" tick={{ fontSize: 12 }} tickLine={false} axisLine={false} />
+                                    <XAxis dataKey="startAge" stroke="#64748b" tick={{ fontSize: 14 }} tickLine={false} axisLine={false} />
+                                    <YAxis tickFormatter={formatCurrencyShort} stroke="#64748b" tick={{ fontSize: 14 }} tickLine={false} axisLine={false} />
                                     <Tooltip
                                         cursor={{ fill: '#f1f5f9' }}
                                         content={({ active, payload }) => {

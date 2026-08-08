@@ -45,14 +45,14 @@ export const SurplusChart = React.memo(function SurplusChart({ data, inflationAd
                     <XAxis
                         dataKey="age"
                         stroke="#64748b"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
                     />
                     <YAxis
                         tickFormatter={formatCurrencyShort}
                         stroke="#64748b"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
                         domain={domainMax ? [0, domainMax] : ['auto', 'auto']}

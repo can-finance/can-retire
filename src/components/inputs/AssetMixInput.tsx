@@ -92,7 +92,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                     Total: {Math.round(total)}%
                 </span>
                 <HelpTooltip text="Cdn Dividends get the eligible dividend gross-up and tax credit. Foreign Dividends (e.g. US ETFs) are fully taxed as regular income with no credit.">
-                    <span className="text-slate-400 cursor-help border-b border-dashed border-slate-300">Affects tax efficiency</span>
+                    <span className="text-slate-500 cursor-help border-b border-dashed border-slate-300">Affects tax efficiency</span>
                 </HelpTooltip>
             </div>
             <div className="pt-2 border-t border-slate-200">
@@ -106,7 +106,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                         max={100}
                     />
                     <HelpTooltip text="Share of unrealized gains realized each year — ~2–3% for index ETFs, ~10–30% for active funds. Taxed as capital gains and reinvested, raising the cost base.">
-                        <span className="text-xs text-slate-400 cursor-help border-b border-dashed border-slate-300 pb-1 inline-block">What is this?</span>
+                        <span className="text-xs text-slate-500 cursor-help border-b border-dashed border-slate-300 pb-1 inline-block">What is this?</span>
                     </HelpTooltip>
                 </div>
             </div>

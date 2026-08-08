@@ -22,7 +22,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
 
             <SectionCard className="space-y-4">
                 <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Next steps</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Next steps</p>
                     <h2 className="text-sm font-bold text-slate-900">Review your plan on the dashboard</h2>
                     <p className="text-sm text-slate-600">
                         Make changes and the projection updates instantly — your plan saves automatically.
@@ -39,7 +39,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                 </div>
 
                 <div className="space-y-1.5 pt-3 border-t border-slate-100">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Good to know</p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Good to know</p>
                     <h2 className="text-sm font-bold text-slate-900">Your plan is saved on this device</h2>
                     <p className="text-sm text-slate-600">
                         Your numbers are saved in this browser's local storage, on this device only — nothing is sent to
@@ -72,7 +72,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                 >
                     Go to my dashboard
                 </button>
-                <p className="text-xs text-slate-400 text-center">
+                <p className="text-xs text-slate-500 text-center">
                     You can run this setup again anytime from the {EDIT_PLAN_LABEL} button in the top menu.
                 </p>
             </div>

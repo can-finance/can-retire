@@ -5,13 +5,13 @@ export function HowItWorks() {
         <div className="max-w-4xl mx-auto space-y-12 pb-20">
             {/* Header Section */}
             <section className="text-center space-y-2">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
                 <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">How it works</h1>
             </section>
 
             {/* Opening Section */}
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-6">
-                <div className="prose prose-indigo max-w-none text-indigo-900/80 leading-relaxed space-y-4">
+                <div className="max-w-none text-lg text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
                         Saving for retirement is one problem. Spending it is another — and in Canada, decisions on how to invest and withdraw in retirement can make a meaningful difference. When you take CPP/OAS, which account you drain first, which account you reinvest in — these choices can lead to tens of thousands of dollars — sometimes more — in tax savings.
                     </p>
@@ -27,7 +27,7 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Government benefit timing</h4>
-                            <p className="text-sm text-indigo-900/80 leading-relaxed">
+                            <p className="text-base text-indigo-900/80 leading-relaxed">
                                 See what starting CPP or OAS earlier or later does to your outcome. A built-in CPP calculator estimates your entitlement from your earnings history.
                             </p>
                         </div>
@@ -38,7 +38,7 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Withdrawal order</h4>
-                            <p className="text-sm text-indigo-900/80 leading-relaxed">
+                            <p className="text-base text-indigo-900/80 leading-relaxed">
                                 Compare draining RRSP/RRIF, TFSA, and non-registered accounts in different sequences — including an early "RRSP melt" to avoid large forced withdrawals (and tax bills) later.
                             </p>
                         </div>
@@ -49,7 +49,7 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Real Canadian taxes</h4>
-                            <p className="text-sm text-indigo-900/80 leading-relaxed">
+                            <p className="text-base text-indigo-900/80 leading-relaxed">
                                 Federal and provincial brackets for all 10 provinces and 3 territories, OAS clawback, capital gains with cost-base tracking, dividend credits, and automatic pension income splitting for couples.
                             </p>
                         </div>
@@ -60,14 +60,14 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Uncertainty</h4>
-                            <p className="text-sm text-indigo-900/80 leading-relaxed">
+                            <p className="text-base text-indigo-900/80 leading-relaxed">
                                 A Monte Carlo mode stress-tests your plan against volatile equity markets instead of assuming a smooth average return every year.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="prose prose-indigo max-w-none text-indigo-900/80 leading-relaxed space-y-4">
+                <div className="max-w-none text-lg text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
                         Everything runs entirely in your browser — no account, no server, none of your financial data ever leaves your device.
                     </p>
@@ -85,7 +85,7 @@ export function HowItWorks() {
                     </svg>
                     These are rough estimates — actual results will vary, often by a lot
                 </h2>
-                <div className="prose prose-amber max-w-none text-amber-900/80 leading-relaxed space-y-3">
+                <div className="max-w-none text-lg text-amber-900/80 leading-relaxed space-y-3">
                     <p>
                         Treat results as comparisons between plans, not forecasts. A small difference (even 1–2%) between assumed and actual returns, compounded over 20–30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
                     </p>
@@ -101,13 +101,13 @@ export function HowItWorks() {
             {/* Section divider */}
             <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-slate-200" />
-                <span className="text-sm font-semibold text-slate-400 uppercase tracking-widest whitespace-nowrap">Further details on how this works</span>
+                <span className="text-sm font-semibold text-slate-500 uppercase tracking-widest whitespace-nowrap">Further details on how this works</span>
                 <div className="flex-1 h-px bg-slate-200" />
             </div>
 
             {/* Modelling overview */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
-                <p className="text-slate-600 leading-relaxed">
+                <p className="text-lg text-slate-600 leading-relaxed">
                     This tool attempts to model the tax impact of your choices as accurately as is practical for
                     a planning tool. Income from each source — employment, CPP/OAS, RRIF withdrawals, interest,
                     dividends, and capital gains — is taxed under its own rules, and government entitlements such
@@ -120,11 +120,11 @@ export function HowItWorks() {
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
                     <h2 className="text-2xl font-bold text-slate-900">Calculation logic</h2>
-                    <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-5 h-5 flex-shrink-0 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
                     <p>
                         The engine performs a <strong>year-by-year cash flow simulation</strong> from your current age until your projected life expectancy (or your spouse's, whichever is later). Each year, the engine looks at:
                     </p>
@@ -145,11 +145,11 @@ export function HowItWorks() {
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
                     <h2 className="text-2xl font-bold text-slate-900">Withdrawal strategies</h2>
-                    <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-5 h-5 flex-shrink-0 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
                     <p>
                         <strong>RRSP last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched to defer taxes as long as possible. Deferral isn't free: the RRSP keeps growing, forced RRIF withdrawals get larger after 72, and whatever remains is fully taxed at death — so this strategy may result in a higher tax bill for your estate and higher total lifetime tax.
                     </p>
@@ -163,12 +163,12 @@ export function HowItWorks() {
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
                     <h2 className="text-2xl font-bold text-slate-900">Taxation & government benefits</h2>
-                    <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-5 h-5 flex-shrink-0 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
                 <div className="px-8 pb-8 -mt-2 space-y-8">
-                    <p className="text-slate-600 leading-relaxed">
+                    <p className="text-lg text-slate-600 leading-relaxed">
                         The engine uses a built-in tax calculator for all 10 provinces and 3 territories.
                     </p>
 
@@ -211,11 +211,11 @@ export function HowItWorks() {
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
                     <h2 className="text-2xl font-bold text-slate-900">Pension income splitting</h2>
-                    <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-5 h-5 flex-shrink-0 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
                     <p>
                         For couples, the engine automatically calculates the optimal amount of eligible pension income (like RRIF withdrawals) to "split" with a lower-earning spouse.
                     </p>
@@ -231,11 +231,11 @@ export function HowItWorks() {
             <details className="group bg-white rounded-3xl shadow-sm border border-slate-100">
                 <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-4 p-8">
                     <h2 className="text-2xl font-bold text-slate-900">Investment growth</h2>
-                    <svg className="w-5 h-5 flex-shrink-0 text-slate-400 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <svg className="w-5 h-5 flex-shrink-0 text-slate-500 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
                     <p>
                         Assets grow based on the return rates set in the <strong>Returns</strong> panel. The engine separates <strong>Yield</strong> (Dividends/Interest) from <strong>Capital Growth</strong>.
                     </p>
@@ -264,7 +264,7 @@ export function HowItWorks() {
                 <h2 className="text-2xl font-bold text-emerald-900">
                     Privacy & data security
                 </h2>
-                <div className="prose prose-slate max-w-none text-slate-600 leading-relaxed">
+                <div className="max-w-none text-lg text-slate-600 leading-relaxed">
                     <p>
                         Your privacy is built into the architecture of this tool.
                         <strong> All calculations are performed locally within your web browser.</strong>

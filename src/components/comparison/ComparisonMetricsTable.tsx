@@ -375,7 +375,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         <div className="w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
             <h3 className="mb-6 text-xl font-bold text-slate-900">
                 Plan Comparison
-                <span className="ml-2 text-sm font-normal text-slate-400">
+                <span className="ml-2 text-sm font-normal text-slate-500">
                     {inflationAdjusted ? '(real $)' : '(nominal $)'}
                 </span>
             </h3>
@@ -401,7 +401,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
                                 </th>
                             ))}
                             {showDelta && (
-                                <th className="text-right font-normal text-slate-400 py-2 pl-4 align-bottom whitespace-nowrap text-xs">
+                                <th className="text-right font-normal text-slate-500 py-2 pl-4 align-bottom whitespace-nowrap text-xs">
                                     <span className="truncate max-w-[10rem] inline-block align-bottom">
                                         vs. {runs[0].comparand.name}
                                     </span>
@@ -419,7 +419,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
                                     >
                                         {row.label}
                                         {row.note && (
-                                            <span className="ml-2 normal-case font-normal tracking-normal text-slate-400">
+                                            <span className="ml-2 normal-case font-normal tracking-normal text-slate-500">
                                                 {row.note}
                                             </span>
                                         )}

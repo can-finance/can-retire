@@ -194,19 +194,19 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                         wrap-friendly on narrow screens — as a quiet utility link,
                         not a primary action competing with the pill. */}
                     <div className="flex items-center justify-center gap-2 flex-wrap mb-2">
-                        <div className="inline-flex items-center gap-2 text-xs font-medium text-slate-400 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
+                        <div className="inline-flex items-center gap-2 text-2xs font-medium text-slate-500 bg-slate-50 px-3 py-1 rounded-full border border-slate-100">
                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                             Runs entirely in your browser • Your data never leaves your device
                         </div>
                         <button
                             type="button"
                             onClick={() => setConfirmClear(true)}
-                            className="text-xs text-slate-400 underline decoration-dotted underline-offset-2 hover:text-rose-500 transition-colors"
+                            className="text-2xs text-slate-500 underline decoration-dotted underline-offset-2 hover:text-rose-500 transition-colors"
                         >
                             Clear all data
                         </button>
                     </div>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs text-slate-500">
                         For planning and educational purposes only — not financial, tax, or investment advice.
                         Projections are estimates based on simplified assumptions.{' '}
                         <a
@@ -216,10 +216,10 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                             Full disclaimer
                         </a>
                     </p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs text-slate-500">
                         Calculations use 2026 federal and provincial tax rules.
                     </p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs text-slate-500">
                         Questions or feedback?{' '}
                         <a
                             href="mailto:info@craptool.ca"
@@ -228,7 +228,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                             info@craptool.ca
                         </a>
                     </p>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs text-slate-500">
                         &copy; {new Date().getFullYear()} Canadian Retirement Asset Planning tool · Version {__APP_VERSION__} ·{' '}
                         <a
                             href="https://github.com/can-finance/can-retire"

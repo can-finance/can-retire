@@ -162,7 +162,7 @@ export function PersonSection({
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
                         >
                             Not sure how much or when to melt? Try the optimizer →
-                            <span className="ml-1 inline-block bg-sky-100 text-sky-700 text-[10px] px-1.5 py-0.5 rounded font-bold align-middle">BETA</span>
+                            <span className="ml-1 inline-block bg-sky-100 text-sky-700 text-xs px-1.5 py-0.5 rounded font-bold align-middle">BETA</span>
                         </button>
                     </HelpTooltip>
                 )}

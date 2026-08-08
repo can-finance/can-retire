@@ -71,7 +71,7 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
             <div className="mb-6 flex items-baseline justify-between gap-4">
                 <h3 className="text-xl font-bold text-slate-900">Annual Cash Flow (Net)</h3>
                 {onSelectYear && (
-                    <p className="hidden sm:block text-xs text-slate-400">Click a bar for that year's full breakdown</p>
+                    <p className="hidden sm:block text-xs text-slate-500">Click a bar for that year's full breakdown</p>
                 )}
             </div>
             <ResponsiveContainer width="100%" height="90%">
@@ -95,14 +95,14 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                     <XAxis
                         dataKey="age"
                         stroke="#64748b"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
                     />
                     <YAxis
                         tickFormatter={formatCurrencyShort}
                         stroke="#64748b"
-                        tick={{ fontSize: 12 }}
+                        tick={{ fontSize: 14 }}
                         tickLine={false}
                         axisLine={false}
                         domain={domainMax

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Everything is bigger and easier to read.** The whole app moved up one step on the
+  type scale — the smallest text went from 12px to 14px, ordinary body text from 14px
+  to 16px, and the explanatory pages now read at 20px. Chart axis labels, hover
+  tooltips and the amounts you type into inputs all grew too. Muted grey text was
+  darkened so it actually meets contrast guidelines, and the Inter typeface the app was
+  always meant to use now loads properly. No projection figures change.
 - **Projections now use 2026 tax rules.** Federal and provincial brackets, basic
   personal amounts, age and pension credits, CPP/EI contribution ceilings, the OAS
   clawback threshold ($95,323) and the Ontario surtax thresholds have all moved from

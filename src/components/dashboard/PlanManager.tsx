@@ -160,7 +160,7 @@ export function PlanManager({
                             </svg>
                         </HelpTooltip>
                     </div>
-                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wider">
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
                         {activeLastSaved
                             ? `edited ${new Date(activeLastSaved).toLocaleDateString()}`
                             : 'Not saved yet — edits save automatically'}
@@ -209,7 +209,7 @@ export function PlanManager({
                     Compare Plans
                 </button>
                 {plans.length < 2 && (
-                    <p className="text-xs text-slate-400 text-center mt-1">Create a second plan to compare</p>
+                    <p className="text-xs text-slate-500 text-center mt-1">Create a second plan to compare</p>
                 )}
 
                 {/* Optimizer: searches the active plan for a better RRSP-meltdown
@@ -223,7 +223,7 @@ export function PlanManager({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                     Optimize Meltdown
-                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded font-bold">BETA</span>
+                    <span className="bg-emerald-100 text-emerald-800 text-xs px-1.5 py-0.5 rounded font-bold">BETA</span>
                 </button>
             </div>
 
@@ -233,7 +233,7 @@ export function PlanManager({
                     <div className="flex items-center justify-between p-2 rounded-lg bg-brand-50 border border-brand-100">
                         <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate text-brand-900">{activePlanName}</p>
-                            <p className="text-xs text-slate-400">Not saved yet</p>
+                            <p className="text-xs text-slate-500">Not saved yet</p>
                         </div>
                     </div>
                 ) : (
@@ -250,7 +250,7 @@ export function PlanManager({
                                 <p className={`text-sm font-medium truncate ${activePlanId === p.id ? 'text-brand-900' : 'text-slate-700'}`}>
                                     {p.name}
                                 </p>
-                                <p className="text-xs text-slate-400">edited {new Date(p.lastSaved).toLocaleDateString()}</p>
+                                <p className="text-xs text-slate-500">edited {new Date(p.lastSaved).toLocaleDateString()}</p>
                             </div>
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all">
                                 <button
