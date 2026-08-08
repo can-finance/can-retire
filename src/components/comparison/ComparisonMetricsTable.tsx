@@ -194,7 +194,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             textInputRow('Withdrawal strategy', run =>
                 (run.comparand.inputs.withdrawalStrategy ?? 'tax-efficient') === 'rrsp-first'
                     ? 'RRSP first'
-                    : 'Tax-efficient',
+                    : 'RRSP last',
             ),
             textInputRow('Income splitting', run => (run.comparand.inputs.useIncomeSplitting ? 'On' : 'Off')),
             pctInputRow('Inflation', run => run.comparand.inputs.inflationRate),

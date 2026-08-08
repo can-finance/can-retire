@@ -145,7 +145,7 @@ function SpouseToggleField({ draft, onToggleSpouse }: { draft: SimulationInputs;
             />
             <p className="text-sm text-slate-500">
                 {draft.spouse
-                    ? "We've added a few extra steps later on for your spouse's details. Turn this off to remove them."
+                    ? "We've added a few extra steps later for your spouse's details. Turn this off to remove them."
                     : 'Leave this off to plan for just yourself.'}
             </p>
         </div>
@@ -289,7 +289,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
         {
             id: 'assumptions',
             title: 'Assumptions',
-            blurb: 'Defaults are reasonable — you can fine-tune anytime later.',
+            blurb: 'Sensible defaults — you can fine-tune them anytime.',
             errors: noErrors,
             render: (d, setDraft) => (
                 <div className="space-y-4">

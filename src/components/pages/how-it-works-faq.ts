@@ -24,11 +24,11 @@ export const FAQ_ITEMS: FaqItem[] = [
     {
         question: 'Is it free?',
         answer:
-            'Yes, completely free to use, with no ads. I may accept sponsors in the future but all features will remain 100% free without any paywalls.',
+            'Yes, completely free to use, with no ads. I may accept sponsors in the future, but all features will remain 100% free without any paywalls.',
     },
     {
         question: "What's with the name?",
         answer:
-            "Money, investing and retirement are serious business but you can't take everything too seriously.",
+            "The Canadian Retirement Asset Planning tool's acronym is… intentional. Money, investing and retirement are serious business, but you can't take everything too seriously.",
     },
 ];

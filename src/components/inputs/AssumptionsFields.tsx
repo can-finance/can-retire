@@ -60,8 +60,8 @@ export function SettingsFields({ inputs, onChange }: {
             <Toggle
                 checked={inputs.withdrawalStrategy === 'rrsp-first'}
                 onChange={(val) => onChange({ withdrawalStrategy: val ? 'rrsp-first' : 'tax-efficient' })}
-                label="Withdraw from RRSP First"
-                tooltip={'ON = RRSP First (early melt): drain the RRSP first.\nOFF = RRSP Last (defer taxes): Non-Registered first, then TFSA, then RRSP. Deferring can raise estate and lifetime tax.'}
+                label="Withdraw from RRSP first"
+                tooltip={'ON = RRSP first (early melt): drain the RRSP first.\nOFF = RRSP last (defer taxes): non-registered first, then TFSA, then RRSP. Deferring can raise estate and lifetime tax.'}
             />
         </>
     );

@@ -143,7 +143,7 @@ describe('OnboardingFlow', () => {
         const seed = freshSeed({ spouse: { ...createDefaultPerson(true), age: 58 } });
         render(<OnboardingFlow seed={seed} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-        await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+        await user.click(screen.getByRole('button', { name: /Full setup/ }));
         expect(await screen.findByRole('heading', { name: 'About you' })).toBeInTheDocument();
 
         const spouseSwitch = fieldFor('Include a spouse / partner', 'button[role="switch"]');
@@ -174,7 +174,7 @@ describe('OnboardingFlow', () => {
         expect(quickAgeInput.value).toBe('33');
 
         await user.click(screen.getByRole('button', { name: 'Back' }));
-        await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+        await user.click(screen.getByRole('button', { name: /Full setup/ }));
         expect(await screen.findByRole('heading', { name: 'About you' })).toBeInTheDocument();
 
         const detailedAgeInput = fieldFor('Current age') as HTMLInputElement;
@@ -267,7 +267,7 @@ describe('OnboardingFlow', () => {
             const user = userEvent.setup();
             render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-            await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+            await user.click(screen.getByRole('button', { name: /Full setup/ }));
             await setFinancialInput(user, fieldFor('Current age'), '70');
             await setFinancialInput(user, fieldFor('Retirement age'), '72');
 
@@ -296,7 +296,7 @@ describe('OnboardingFlow', () => {
             const user = userEvent.setup();
             render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-            await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+            await user.click(screen.getByRole('button', { name: /Full setup/ }));
             await setFinancialInput(user, fieldFor('Life expectancy'), '40');
 
             await user.click(screen.getByRole('button', { name: 'Next' }));
@@ -311,7 +311,7 @@ describe('OnboardingFlow', () => {
         const user = userEvent.setup();
         render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
-        await user.click(screen.getByRole('button', { name: /Full setup →/ }));
+        await user.click(screen.getByRole('button', { name: /Full setup/ }));
         // about-you -> benefits-you -> pension-you
         await user.click(screen.getByRole('button', { name: 'Next' }));
         await user.click(screen.getByRole('button', { name: 'Next' }));

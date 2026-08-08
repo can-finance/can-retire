@@ -365,7 +365,7 @@ export function CppCalculator() {
                 {/* ------------------------------------------------ Inputs */}
                 <div className="lg:col-span-5 space-y-6">
                     <SectionCard accent="sky">
-                        <h2 className="text-xl font-bold text-slate-900 mb-1">Earnings History</h2>
+                        <h2 className="text-xl font-bold text-slate-900 mb-1">Earnings history</h2>
                         <p className="text-sm text-slate-500 mb-4">
                             The more detail you provide, the more accurate the estimate. All three levels use the same
                             calculation underneath — each mode uses only its own entries. Your start age defaults to 65;
@@ -576,7 +576,7 @@ export function CppCalculator() {
 
                     {/* Child-rearing provision */}
                     <SectionCard accent="rose">
-                        <h2 className="text-xl font-bold text-slate-900">Child-Rearing Provision</h2>
+                        <h2 className="text-xl font-bold text-slate-900">Child-rearing provision</h2>
                         <Toggle
                             checked={state.useChildRearing}
                             onChange={(val) => update({ useChildRearing: val })}
@@ -629,7 +629,7 @@ export function CppCalculator() {
 
                     {/* Start age comparison */}
                     <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-                        <h3 className="text-xl font-bold text-slate-900">Benefit by Start Age</h3>
+                        <h3 className="text-xl font-bold text-slate-900">Benefit by start age</h3>
                         <p className="text-sm text-slate-500 mb-4">
                             Click a bar to change your start age. Ignoring investment returns and taxes, total payments to age 85
                             are highest if you start at <strong>{bestByEightyFive.startAge}</strong>.
@@ -674,7 +674,7 @@ export function CppCalculator() {
 
                     {/* Calculation details */}
                     <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-                        <h3 className="text-xl font-bold text-slate-900 mb-4">How This Was Calculated</h3>
+                        <h3 className="text-xl font-bold text-slate-900 mb-4">How this was calculated</h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 text-center">
                             <div className="bg-slate-50 rounded-xl p-3">
                                 <p className="text-2xl font-bold text-slate-900">{result.contributoryYears}</p>
@@ -778,7 +778,7 @@ export function CppCalculator() {
 
                     {/* Apply to plan */}
                     <SectionCard accent="emerald">
-                        <h3 className="text-xl font-bold text-slate-900 mb-1">Use in Your Retirement Plan</h3>
+                        <h3 className="text-xl font-bold text-slate-900 mb-1">Use in your retirement plan</h3>
                         <p className="text-sm text-slate-500 mb-4">
                             Replaces the Dashboard's simple CPP estimate with this result ({formatCurrencyCAD(result.annualBenefit)}/year
                             starting at {startAge}) for the selected person.
@@ -815,7 +815,7 @@ export function CppCalculator() {
 
                     {/* Assumptions */}
                     <div className="rounded-2xl bg-amber-50/60 border border-amber-100 p-5">
-                        <h3 className="text-base font-bold text-amber-900 mb-2">Assumptions & Limitations</h3>
+                        <h3 className="text-base font-bold text-amber-900 mb-2">Assumptions & limitations</h3>
                         <ul className="text-sm text-amber-900/70 space-y-1.5 list-disc pl-4 leading-relaxed">
                             <li>Estimates the <strong>base CPP</strong> only — the post-2019 CPP enhancement is not modelled, so results for people retiring after ~2035 will be slightly understated.</li>
                             <li>Works in whole years; the real calculation uses months. Future earnings are assumed to keep pace with wage growth (enter them in today's dollars).</li>
