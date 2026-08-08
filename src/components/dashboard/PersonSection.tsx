@@ -37,13 +37,15 @@ interface PersonSectionProps {
     onOpenOptimizer?: () => void;
 }
 
-// Person avatar dot colors — distinct from all chart account colors.
-// "You" → indigo, "Spouse" → cyan. Both gender-neutral.
-const PERSON_AVATAR: Record<string, { dot: string; accent: 'indigo' | 'cyan' | 'slate' }> = {
-    blue:   { dot: '#6366f1', accent: 'indigo' },
-    purple: { dot: '#06b6d4', accent: 'cyan' },
-    indigo: { dot: '#6366f1', accent: 'indigo' },
-    slate:  { dot: '#94a3b8', accent: 'slate' },
+// Per-person accent colour — distinct from all chart account colors.
+// "You" → indigo, "Spouse" → cyan. Both gender-neutral. Carried by the card's
+// left border alone; the header used to repeat it as a coloured dot, which was
+// redundant next to that border.
+const PERSON_AVATAR: Record<string, { accent: 'indigo' | 'cyan' | 'slate' }> = {
+    blue:   { accent: 'indigo' },
+    purple: { accent: 'cyan' },
+    indigo: { accent: 'indigo' },
+    slate:  { accent: 'slate' },
 };
 
 export function PersonSection({
@@ -80,7 +82,6 @@ export function PersonSection({
 
     const headerContent = (
         <div className="flex items-center gap-3">
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: avatar.dot }} />
             <h2 className="text-xl font-bold text-slate-900">{title}</h2>
             {validationErrors.length > 0 && (
                 <span className="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-medium">

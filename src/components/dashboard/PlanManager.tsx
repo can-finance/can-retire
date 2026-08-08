@@ -112,17 +112,15 @@ export function PlanManager({
         setPendingDelete(null);
     };
 
-    const titleClass = 'text-xl font-bold text-slate-900 line-clamp-1';
+    // The section heading is now the standard text-xl bold used by every other
+    // input section, so the plan NAME steps down a level rather than competing
+    // with it — it's content inside the section, not a second heading.
+    const titleClass = 'text-lg font-semibold text-slate-800 line-clamp-1';
 
     return (
         <CollapsibleSection
             title="Plan Manager"
             accent="rose"
-            headerContent={
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    Plan Manager
-                </h2>
-            }
         >
             <div className="space-y-4">
             <div className="space-y-2 border-b pb-2">
