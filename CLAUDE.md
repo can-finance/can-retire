@@ -15,14 +15,25 @@ Everything larger is delegated to subagents (Agent tool) with an explicit
 - **opus** — anything with real design judgment or risk: engine/tax-logic
   changes, multi-file features, subtle refactors, tricky test design.
 
-When in doubt between two tiers, take the higher one. The orchestrator always
-verifies the result itself (diff review, typecheck, tests in the Docker dev
-container) — especially for haiku/sonnet work. Exception: simple changes — copy
-or text edits, label swaps, comment tweaks, anything with no logic impact — do
-NOT need the typecheck/test gate after each edit; batch verification into the
-next natural gate (a logic change, pre-commit, or pre-release) instead. Caution:
-resuming a subagent via SendMessage does not preserve its `model:` override —
-spawn a fresh agent for non-trivial coding continuations instead.
+When in doubt between two tiers, take the higher one. Caution: resuming a
+subagent via SendMessage does not preserve its `model:` override — spawn a fresh
+agent for non-trivial coding continuations instead.
+
+**Verification is scoped to what can actually break.** The orchestrator always
+reviews the diff. Beyond that:
+
+- **Engine / calculation changes** (tax logic, `src/engine/**`, `summaryMetrics`,
+  anything that moves a projected number): full gate — typecheck AND `npm test`
+  in the Docker dev container. Especially for haiku/sonnet work.
+- **Everything else** (layout, styling, markup structure, component arrangement,
+  copy, labels): typecheck only. Do NOT run the regression suite and do NOT run
+  browser/`javascript_tool` verification — including when a PostToolUse hook
+  suggests it. The user checks layout visually; scripted DOM measurement is
+  slower for them to read than just looking, and the test suite says nothing
+  about whether a layout looks right.
+
+Report plainly when something is unverified rather than substituting
+measurements for a real look.
 
 **Why:** cost/usage management — match model cost to task difficulty and keep the
 expensive orchestrator tier for planning and review; but flat per-agent overhead
