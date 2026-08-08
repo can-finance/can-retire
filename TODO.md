@@ -2,41 +2,30 @@
 
 ## Feature ideas
 
-Build order (decided 2026-07-18): named scenario storage -> scenario comparison
-page -> meltdown optimizer. All three shipped. The optimizer's results view is
-just a comparison with a machine-generated scenario, and hand-tweaked
-comparisons are the ground truth for validating the optimizer's recommendations
-before trusting the search.
-
 ### RRSP meltdown optimizer
 Recommend when to retire and how much RRSP/RRIF to decumulate in which years,
 rather than the user hand-tuning `rrspMeltStartAge`/`rrspMeltAmount` by eye.
 Pure search loop over existing engine inputs (`src/utils/meltdownOptimizer.ts`
 + `MeltdownOptimizerView`), no engine changes — an objective-mode abstraction
 lets each mode define its own decision variables, scoring, and feasibility bar
-over one shared coordinate-descent search.
+over one shared coordinate-descent search. Two objective modes have shipped:
+v1 (maximize net estate, v0.8.0) and Phase 2 (max sustainable spend, v0.9.0).
+Phase 2's success-bar machinery is the pattern Phase 3 should reuse — a
+user-pickable 75/85/95% MC bar enforced by an adaptive bracket-and-refine
+step-down (gap-scaled steps, baseline-rate warm start, upward search so a low
+warm start can't understate the answer), with the planner logic kept pure and
+unit-tested MC-free.
 
-- **v1 (estate objective) — shipped 2026-07-21.** Maximize `netEstateValue`
-  subject to `totalShortfall` ≤ $1k, searching per-person melt amount and
-  (opt-out toggle) CPP/OAS start ages; MC-validates the winner + runners-up.
-- **Phase 2 (max-spend objective) — shipped 2026-07-22, v0.9.0.** Fix
-  retirement age, solve for the highest sustainable `postRetirementSpend` via
-  per-candidate bisection; also searches `withdrawalStrategy`. MC success bar
-  is user-pickable (75/85/95%, default 85) and enforced by an adaptive
-  bracket-and-refine step-down (gap-scaled steps, baseline-rate warm start,
-  upward search so a low warm start can't understate the answer) — the
-  planner logic is pure and unit-tested MC-free.
 - **Phase 3 — "When can I retire?" (next up).** See spec below.
 - **Phase 4 — the engine phase.** See spec below.
 
 **Implementation order (decided 2026-07-22):** Phase 3, then Phase 4 (engine
 work), then backlog knobs. Rationale: performance is currently fine, so the
-worker solves a problem we don't have yet; the objective modes are pure
-search-layer work — high user value, zero engine risk — while the engine phase
-carries the only real regression risk and refines the *form* of answers rather
-than answering new questions. Nothing in the objectives is discarded when the
-engine phase lands: candidate grids swap dollars→thresholds, outer loops
-unchanged.
+worker solves a problem we don't have yet; Phase 3 is pure search-layer work —
+high user value, zero engine risk — while the engine phase carries the only
+real regression risk and refines the *form* of answers rather than answering
+new questions. Nothing in the objectives is discarded when the engine phase
+lands: candidate grids swap dollars→thresholds, outer loops unchanged.
 
 **Phase 3 — "When can I retire?" mode (specced 2026-07-21).** The third member of the
 objective family — all three are duals of the same feasibility check: fix two
@@ -87,9 +76,8 @@ harness, and it's arguably the more important correctness change.
 
 **Modeling gap that biases recommendations (fix in Phase 4, decide before
 trusting post-65 advice):** only RRIF minimums (72+) count as eligible pension
-income today — the
-voluntary melt gets neither the $2,000 pension income credit nor pension income
-splitting. Real-world meltdown practice partially converts RRSP→RRIF at 65
+income today — the voluntary melt gets neither the $2,000 pension income credit
+nor pension income splitting. Real-world meltdown practice partially converts RRSP→RRIF at 65
 precisely to unlock both; for couples with lopsided RRSPs, splitting melt income
 at 65-71 is a significant win the engine can't see, so the optimizer currently
 over-favors pre-65 melting. Fix = model early RRIF conversion (treat post-65 melt
@@ -104,70 +92,58 @@ behind an explicit "convert to RRIF at 65" flag.
   (lifestyle choice, don't search it by default; distinct from Phase 3, which
   *solves for* the age).
 
-**SEO landing page shipped 2026-07-21** at `/rrsp-withdrawal-strategy/`
-(prerendered MPA route; CTA deep-links into the optimizer via `?optimize=1`).
-Future follow-up: watch Search Console for whether "meltdown"-flavoured
-queries justify a second, meltdown-titled page or an H1 tweak.
-
-**Known blind spot to disclose in the UI:** GIS is not modeled. For low-income
-households, pre-65 meltdown is often about protecting GIS eligibility — the
-optimizer's recommendations can't capture that. A footnote near the results is
-probably enough; silence is not.
+**SEO follow-up:** watch Search Console for whether "meltdown"-flavoured
+queries justify a second, meltdown-titled page alongside the shipped
+`/rrsp-withdrawal-strategy/`, or just an H1 tweak there.
 
 **Free from the engine** (for reference): RRIF minimums 71+, balance caps, TFSA
 room, terminal full inclusion, spousal rollover, melt destination TFSA-first then
 non-reg surplus sweep via `receivesSurplus`.
 
-### Year audit view — v1 shipped 2026-07-25
-Click a year in the breakdown table or a bar in the "Annual Cash Flow (Net)"
-chart → slide-over drawer reconciling prior year → this year: income sources
-(gross→tax→net), taxes, cash reconciliation, per-account waterfalls with
-derived growth, death-year variant. Deterministic projection only (no Monte
-Carlo). The identity-test harness surfaced (and led to fixing) the net-estate
-double-deduction and the stale-age withdrawal-solver bugs on day one. Full
-plan: `docs/year-audit-plan.md`. Remaining follow-up: Phase 2 "show the tax
-math" (re-run pure tax.ts functions per year, bracket-by-bracket display);
-known residual: the withdrawal solver's tax estimate still omits the
-pension/dividend/payroll credit arguments getFinalStats uses (~$275 worst-year
-cash-flow residual in the default scenario).
+### Year audit view — Phase 2
+V1 shipped in v0.11.0; full plan in `docs/year-audit-plan.md`. Remaining:
+Phase 2 "show the tax math" — re-run the pure `tax.ts` functions per year for a
+bracket-by-bracket display. Known residual to fix or disclose: the withdrawal
+solver's tax estimate still omits the pension/dividend/payroll credit arguments
+`getFinalStats` uses (~$275 worst-year cash-flow residual in the default
+scenario).
 
-### Monte Carlo realism (from 2026-07-18 discussion)
-Current model: single `volatility`, one lognormal draw applied identically to
-`capitalGrowth`/`rrspGrowth`/`tfsaGrowth`; the interest/bond and cash slices pay a
-fixed yield and their principal never moves. (The dividend slices no longer do —
-see below.)
-- **Lognormal draws — shipped 2026-07-25.** Replaced `mean + vol*Z` with
-  `exp(mu + sigma*Z) - 1`, `mu = ln(1+mean) - sigma^2/2`. Fixes the missing
-  volatility drag on median outcomes and makes sub-−100% returns impossible.
-- **Per-asset-class price volatility** (one-factor model): shock slice *balances*,
-  not yields — dividend stocks and bonds have stable income but volatile prices.
-  One market draw `Z` per year: capital-gain slice at ~15% vol × Z, dividend slice
-  at ~13% vol × Z (dividend stocks are ~0.85+ market-correlated), interest/bond
-  slice with its own small independent draw (~5% vol for bond funds, ~0 for GICs).
-  Do NOT give each class an independent draw — uncorrelated shocks fake a
-  diversification benefit and inflate success rates.
-  **Partly delivered 2026-07-26:** the dividend and foreign-dividend slices now DO
-  appreciate, at `DIVIDEND_EQUITY_BETA * (capitalGrowth − yield)` with beta = 0.85
-  (`projection.ts`, `growNonReg`). Since `capitalGrowth` is already the shocked draw
-  and the yields are unshocked, those slices automatically carry an effective market
-  beta of ~0.85 — so the correlation half of this bullet is done, and what remains is
-  class-specific VOLATILITY (a wider/narrower sigma per class, and the bond slice's
-  own small independent draw), not adding price growth. Beta 0.85 was chosen to match
-  the ~13%-vs-15% relationship above; keep the two consistent if either moves.
-  Implementation notes: the slice-weight renormalization for uneven slice growth
-  already exists (`projection.ts`, `growNonReg`) and now covers the dividend slices
-  too; each slice's price rate is floored at −100% so a blended growth factor can
-  never go negative; ACB stays untouched (price moves are unrealized); keep yield
-  income consistently on pre- or post-shock balances (today it is charged on the
+### Monte Carlo realism — class-specific volatility (from 2026-07-18 discussion)
+Current model: a single `volatility` drives one lognormal draw applied identically
+to `capitalGrowth`/`rrspGrowth`/`tfsaGrowth`; the dividend slices ride that same
+draw at a fixed beta; the interest/bond and cash slices pay a fixed yield and their
+principal never moves.
+
+What's already done (v0.11.0): lognormal draws (volatility drag modelled, sub-−100%
+returns impossible), and price appreciation on the dividend and foreign-dividend
+slices at `DIVIDEND_EQUITY_BETA * (capitalGrowth − yield)`, beta = 0.85
+(`projection.ts`, `growNonReg`). Because `capitalGrowth` is the shocked draw and the
+yields are unshocked, those slices already carry an effective market beta of ~0.85 —
+so the *correlation* half of the one-factor model is in place.
+
+What remains is per-class sigma, not per-class price growth:
+- Shock slice *balances*, not yields — dividend stocks and bonds have stable income
+  but volatile prices. One market draw `Z` per year: capital-gain slice at ~15% vol
+  × Z, dividend slice at ~13% vol × Z. Beta 0.85 was chosen to match that
+  13%-vs-15% relationship; keep the two consistent if either moves.
+- Give the interest/bond slice its own small independent draw (~5% vol for bond
+  funds, ~0 for GICs) — but do NOT give every class an independent draw;
+  uncorrelated shocks fake a diversification benefit and inflate success rates.
+- Implementation notes: the slice-weight renormalization for uneven slice growth
+  already exists (`projection.ts`, `growNonReg`) and covers the dividend slices;
+  each slice's price rate is floored at −100% so a blended growth factor can never
+  go negative; ACB stays untouched (price moves are unrealized); keep yield income
+  consistently on pre- or post-shock balances (today it is charged on the
   start-of-year balance in Step 1, before Step 6 growth).
-  Yield-only volatility (shocking `returnRates.interest`/`dividend`) was considered
+- Yield-only volatility (shocking `returnRates.interest`/`dividend`) was considered
   and rejected — barely widens the fan, models the wrong risk.
 
 ## Low priority / deferred
 
-Deferred items, none blocking release. Context: the onboarding wizard edits a seeded
-draft; Save commits `retirement_sim_v2` exactly once; Skip/Cancel writes nothing;
-storage hooks never write on mount (first-run eligibility depends on key absence).
+Deferred items, none blocking release. Context for the onboarding ones below: the
+wizard edits a seeded draft; Save commits `retirement_sim_v2` exactly once;
+Skip/Cancel writes nothing; storage hooks never write on mount (first-run
+eligibility depends on key absence).
 
 ### Corrupt-storage self-healing
 `hasSavedPlan()` now validates the stored plan (so relaunch copy is honest), but a
@@ -199,12 +175,12 @@ screen/step under a `retirement_onboarding_draft_v1` key on step transitions, of
 "Continue where you left off?" on the intro, delete the key on Save/Skip. Decided
 2026-07-17 to ship without it and see whether anyone misses it.
 
-### Playwright / E2E smoke
-The only onboarding behaviors without automated coverage are browser-physical ones —
-scroll locking, focus restoration, mobile header layout — currently verified
-manually. A minimal Playwright smoke (fresh visitor → quick start → save → reload;
-mobile viewport pass) is worth adding around v1.0; not before (new toolchain + CI
-cost).
+### GIS not modeled — blind spot to disclose in the UI
+For low-income households, pre-65 meltdown is often about protecting GIS
+eligibility, and the optimizer's recommendations can't capture that. A footnote
+near the optimizer results is probably enough; silence is not. The
+`/rrsp-withdrawal-strategy/` page already carries a GIS caution, so the gap is
+specifically the results view.
 
 ### Pre-existing mobile horizontal overflow
 The year-by-year breakdown table (~1000px min width) forces horizontal scroll on

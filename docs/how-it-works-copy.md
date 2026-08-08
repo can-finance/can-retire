@@ -1,8 +1,7 @@
 # How It Works — page copy (approved 2026-07-18)
 
 Original approved copy for the How It Works page redesign, kept as a historical
-snapshot — do not update. The live text is in `src/components/pages/HowItWorks.tsx`;
-the current working copy is tracked in `how-it-works-copy-current.md`.
+snapshot — do not update. The live text is in `src/components/pages/HowItWorks.tsx`.
 
 ## Opening section
 
