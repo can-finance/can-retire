@@ -22,6 +22,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Pin the runtime that builds the deployed site. Without this the job runs
+      # on whatever Node the ubuntu-latest image happens to ship, which drifts
+      # independently of the dev container — keep this in step with Dockerfile.dev.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
       - name: Install, Test and Build
         run: |
           npm ci
