@@ -100,13 +100,30 @@ queries justify a second, meltdown-titled page alongside the shipped
 room, terminal full inclusion, spousal rollover, melt destination TFSA-first then
 non-reg surplus sweep via `receivesSurplus`.
 
+### Bridge income — recurring income in the pre-CPP/OAS years
+Specced 2026-08-08; full plan in `docs/bridge-income-plan.md`. The gap years are
+already *funded* correctly (gap analysis → drawdown), and DB pensions already have
+a bridge benefit — what's missing is any other time-limited stream: consulting,
+severance, rental, LIF income. The only workaround today is a one-time inflow,
+which `projection.ts` adds as **tax-free net cash**, so it silently understates tax
+in exactly the window the meltdown strategy targets. Plan: a per-person
+`TemporaryIncome[]` (amount, start/end age, indexed, and a `kind` of
+employment/pension/other that drives pension-credit and splitting eligibility),
+folded into `simulatePersonBaseYear` next to the DB pension, with the existing
+`bridgeAmount` migrated to a `kind: 'pension'` stream. Cheap independent win:
+give `OneTimeEvent` a `taxable` flag (default false, so nothing changes). Design
+alongside Phase 3, which moves the retirement age the stream is keyed to.
+
 ### Year audit view — Phase 2
 V1 shipped in v0.11.0; full plan in `docs/year-audit-plan.md`. Remaining:
 Phase 2 "show the tax math" — re-run the pure `tax.ts` functions per year for a
 bracket-by-bracket display. Known residual to fix or disclose: the withdrawal
 solver's tax estimate still omits the pension/dividend/payroll credit arguments
-`getFinalStats` uses (~$275 worst-year cash-flow residual in the default
-scenario).
+`getFinalStats` uses (~$325 worst-year cash-flow residual in the default scenario
+under the 2026 constants). The `couple` fixture crossed into the same
+credit-omission territory with the 2026 update ($8.58, up from $1.61) — a third
+scenario doing so is the signal to fix the solver's estimate rather than the
+fences.
 
 ### Monte Carlo realism — class-specific volatility (from 2026-07-18 discussion)
 Current model: a single `volatility` drives one lognormal draw applied identically
