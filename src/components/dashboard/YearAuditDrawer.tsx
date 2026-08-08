@@ -135,7 +135,7 @@ function SectionBlock({ section, hasSpouse, scale }: { section: AuditSection; ha
 
     return (
         <div>
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">{section.title}</h3>
+            <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-2">{section.title}</h3>
             <div className={cardClass}>
                 <table className="w-full text-sm">
                     {showSplit && (
@@ -329,12 +329,9 @@ export function YearAuditDrawer({
                         <Fragment key={section.key}>
                             {section.key === ACCOUNT_GROUP_START && (
                                 <div className="pt-4 border-t border-slate-200">
-                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                                    <h3 className="text-lg font-bold text-slate-500 uppercase tracking-widest">
                                         Account balances
                                     </h3>
-                                    <p className="text-xs text-slate-400 mt-1">
-                                        Where the money sat, not where it came from — each account's opening balance, flows and growth.
-                                    </p>
                                 </div>
                             )}
                             <SectionBlock section={section} hasSpouse={hasSpouse} scale={scale} />
