@@ -68,7 +68,7 @@ export function SettingsFields({ inputs, onChange }: {
                 // is worth the extra line — the alternative is a reader who thinks
                 // they enabled a meltdown and didn't, or who set both and cannot
                 // explain why the RRSP empties so fast.
-                tooltip={'ON = RRSP first: when a year falls short, draw from the RRSP before non-registered and TFSA.\nOFF = RRSP last: non-registered, then TFSA, then RRSP. Deferring can raise estate and lifetime tax.\n\nThis sets the ORDER accounts are drawn from — it is not the meltdown. Any RRSP Melt Amount you set still runs on top, every year until 71, whether or not you need the cash.'}
+                tooltip={'ON = RRSP first: when a year falls short, draw from the RRSP before non-registered and TFSA.\nOFF = RRSP last: non-registered, then TFSA, then RRSP. Deferring leaves more compounding tax-sheltered but a bigger bill at 72 and at death — neither order wins on every plan, so the Meltdown Optimizer tests both.\n\nThis sets the ORDER accounts are drawn from — it is not the meltdown. Any RRSP Melt Amount you set still runs on top, every year until 71, whether or not you need the cash.'}
             />
         </>
     );

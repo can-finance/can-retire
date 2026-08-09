@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to cover spending), Taxable Income, Avg Tax Rate, and OAS Clawback. The clawback
   figure is already part of Tax Paid — it is broken out to show how much of that
   bill it accounts for, not added on top of it.
+- **A "Marginal Rate" column in the year-by-year table**, beside Avg Tax Rate: what
+  the *next* $1,000 of ordinary income — an RRSP/RRIF withdrawal — would actually
+  cost you that year. It is measured against the real tax calculation, so it
+  includes the OAS clawback and the age-amount phase-out rather than just your
+  bracket: inside the clawback range a nominally 37% bracket can face 52%. Couples
+  get their spouse's figure on hover.
 - **Your first-year withdrawal rate**, under Household Spending, with the widely
   cited 4% guideline marked alongside it for comparison. Hover the label for what
   goes into the calculation.
@@ -25,6 +31,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   columns fewer for a single person, six for a couple. Remembered between visits.
 
 ### Changed
+- **The Meltdown Optimizer now searches the withdrawal order when maximizing your
+  estate**, instead of leaving it as you set it — it already did so when maximizing
+  spending. The order decides only the spending your other income doesn't cover, but
+  across our test plans holding it fixed cost up to 48% of the net estate (over
+  $120,000 on one plan, $160,000 on a couple). Neither order wins generally — most
+  plans did better with RRSP last, but one whose RRSP grew more slowly than its
+  non-registered account did better with RRSP first — so it is searched rather than
+  assumed, and a tie keeps the order you chose. **This changes the optimizer's
+  recommendations**, and "Apply to current plan" now writes the withdrawal order
+  along with the melt amount and CPP/OAS ages. The suggested order is shown in a
+  "Withdrawal order" row on the results, and your annual spending is still left
+  untouched.
+- **New plans now default to drawing RRSPs last** ("Fund spending from RRSP first"
+  starts off) rather than first. In 11 of our 13 test plans that left the larger
+  estate. Saved plans keep whatever order they were saved with; only new plans and
+  the sample numbers are affected.
 - **Text is larger and muted greys are darker throughout**, for readability. No
   projection figures change.
 - Estate tax and Net Pension no longer each take a column in the year-by-year table.
@@ -43,6 +65,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Estimated CPP and OAS benefit amounts updated to their 2026 maximums.
 
 ### Fixed
+- **The browser's Back button left the site instead of closing what was open.**
+  Comparing plans, the meltdown optimizer and the Year Audit drawer take over the
+  screen, so Back is the natural way to dismiss them — but it used to abandon the
+  dashboard entirely. Back now closes the topmost of them and returns you to where
+  you were; a second press leaves as before. Closing with the on-screen control
+  still works exactly as it did.
+- **Back during Guided Setup threw away everything you had typed, without asking.**
+  Nothing is saved until you press Save, so leaving the site mid-wizard lost the
+  lot. Back now behaves exactly like Escape or "Skip setup": if you have entered
+  anything, it asks first, and "Keep editing" returns you to the wizard with your
+  answers intact and Back still available. An untouched wizard still closes on the
+  first press, with nothing to confirm.
 - **The year-by-year table ignored the "Show Today's Dollars" toggle.** The charts,
   the table and the Year Audit drawer could show three different figures for the
   same year. The table now converts along with everything else. **Figures you read

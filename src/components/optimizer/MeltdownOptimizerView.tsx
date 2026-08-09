@@ -199,7 +199,7 @@ export function MeltdownOptimizerView({
                                 onSelect={() => setObjective('estate')}
                                 title="Leave the largest estate"
                                 sub="Shrinks the terminal tax bill so more passes to your heirs."
-                                detail="Adjusts RRSP melt and CPP/OAS timing — your spending stays as planned."
+                                detail="Adjusts RRSP melt, CPP/OAS timing and withdrawal order — your spending stays as planned."
                             />
                             <ObjectiveCard
                                 selected={objective === 'max-spend'}
@@ -348,8 +348,6 @@ export function MeltdownOptimizerView({
             onSave={() => {
                 // uniquePlanName appends " 2", " 3" on collision, so re-running
                 // the same objective stays readable in the plan list.
-                // than repeating "Suggested …". uniquePlanName appends " 2", " 3"
-                // on collision, so re-running the same objective stays readable.
                 const baseName = objectiveLabel(phase.result.objective);
                 setSavedName(onSavePlan(baseName, phase.result.recommendedInputs));
                 setSaveDialogOpen(true);
@@ -451,7 +449,7 @@ function ResultsView({
                 <p className="text-xs text-slate-500">
                     {result.objective === 'max-spend'
                         ? 'Applying overwrites your annual spending, RRSP melt amount, CPP/OAS start ages and withdrawal order on the plan you’re currently editing — everything else (balances, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'
-                        : 'Applying overwrites the RRSP melt amount and CPP/OAS start ages on the plan you’re currently editing — everything else (balances, spending, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'}
+                        : 'Applying overwrites the RRSP melt amount, CPP/OAS start ages and withdrawal order on the plan you’re currently editing — everything else (balances, spending, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'}
                 </p>
             )}
 
@@ -584,11 +582,29 @@ function ResultsView({
 }
 
 function RecommendationCard({ result }: { result: MeltdownResult }) {
+    // The estate search owns the household withdrawal order too, and applying
+    // writes it — so it gets its own row here, exactly as in max-spend mode.
+    // Without it a changed order would be applied to the user's plan silently.
+    const currentStrategy = result.baselineInputs.withdrawalStrategy ?? 'tax-efficient';
+    const suggestedStrategy = result.recommendedInputs.withdrawalStrategy ?? currentStrategy;
+    const householdRows = [
+        {
+            label: 'Withdrawal order',
+            current: strategyLabel(currentStrategy),
+            suggested: strategyLabel(suggestedStrategy),
+            changed: suggestedStrategy !== currentStrategy,
+        },
+    ];
+
     return (
         <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-            <h3 className="text-lg font-bold text-slate-900">Suggested meltdown</h3>
+            <h3 className="text-lg font-bold text-slate-900">{objectiveLabel(result.objective)}</h3>
 
-            <div className="mt-4 space-y-6">
+            <div className="mt-4">
+                <SimpleChangeTable title="Household" rows={householdRows} />
+            </div>
+
+            <div className="mt-6 space-y-6">
                 {result.decisions.map(d => (
                     <DecisionTable key={d.who} decision={d} showLabel={result.decisions.length > 1} />
                 ))}
@@ -665,13 +681,13 @@ function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDec
 
     const rows: { label: string; current: string; suggested: string; changed: boolean }[] = [
         {
-            label: 'RRSP melt',
+            label: 'RRSP melt amount',
             current: meltCell(d.originalMeltAmount),
             suggested: meltCell(d.meltAmount),
             changed: d.originalMeltAmount !== d.meltAmount,
         },
         {
-            label: 'Melt start age',
+            label: 'RRSP melt start age',
             current: currentMeltStart,
             suggested: suggestedMeltStart,
             changed: currentMeltStart !== suggestedMeltStart,
@@ -690,37 +706,10 @@ function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDec
         },
     ];
 
-    return (
-        <div>
-            {showLabel && <p className="mb-2 text-sm font-semibold text-slate-800">{d.label}</p>}
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                    <thead>
-                        <tr className="border-b border-slate-200">
-                            <th className="text-left font-medium text-slate-500 py-1.5 pr-4" />
-                            <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
-                                Current plan
-                            </th>
-                            <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
-                                Suggested
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map(row => (
-                            <tr key={row.label} className="border-b border-slate-100 last:border-0">
-                                <td className="text-left text-slate-500 py-1.5 pr-4">{row.label}</td>
-                                <td className="text-right py-1.5 pl-4 tabular-nums whitespace-nowrap text-slate-700">
-                                    {row.current}
-                                </td>
-                                <SuggestedCell value={row.suggested} changed={row.changed} />
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
+    // `rows` is already SimpleChangeTable's row shape, and the markup below the
+    // title was byte-identical to it — so this delegates rather than keeping a
+    // second copy of the same table in sync by hand.
+    return <SimpleChangeTable title={showLabel ? d.label : undefined} rows={rows} />;
 }
 
 function Headline({ label, value, tone }: { label: string; value: string; tone: 'good' | 'bad' | 'neutral' }) {
@@ -762,12 +751,18 @@ function SimpleChangeTable({
 }: { title?: string; rows: { label: string; current: string; suggested: string; changed: boolean }[] }) {
     return (
         <div>
-            {title && <p className="mb-2 text-sm font-semibold text-slate-800">{title}</p>}
             <div className="overflow-x-auto">
                 <table className="w-full text-sm border-collapse">
                     <thead>
                         <tr className="border-b border-slate-200">
-                            <th className="text-left font-medium text-slate-500 py-1.5 pr-4" />
+                            {/* Household / You / Spouse sits in the header row's otherwise
+                                empty first cell rather than on a line of its own above the
+                                table. Same information, one row of vertical space instead
+                                of two — and on a results screen that stacks a table per
+                                person, that adds up. */}
+                            <th className="text-left font-semibold text-slate-800 py-1.5 pr-4 whitespace-nowrap">
+                                {title}
+                            </th>
                             <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
                                 Current plan
                             </th>
@@ -858,7 +853,7 @@ function MaxSpendCard({ result, actions }: { result: MeltdownResult; actions?: R
             {actions}
 
             <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
-                <h3 className="text-lg font-bold text-slate-900">Suggested plan</h3>
+                <h3 className="text-lg font-bold text-slate-900">{objectiveLabel(result.objective)}</h3>
 
                 <div className="mt-4">
                     <SimpleChangeTable title="Household" rows={householdRows} />

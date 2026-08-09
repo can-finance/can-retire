@@ -11,7 +11,7 @@ export function HowItWorks() {
 
             {/* Opening Section */}
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-6">
-                <div className="max-w-none text-lg text-indigo-900/80 leading-relaxed space-y-4">
+                <div className="max-w-none text-base text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
                         Saving for retirement is one problem. Spending it is another — and in Canada, decisions on how to invest and withdraw in retirement can make a meaningful difference. When you take CPP/OAS, which account you drain first, which account you reinvest in — these choices can lead to tens of thousands of dollars — sometimes more — in tax savings.
                     </p>
@@ -27,7 +27,7 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Government benefit timing</h4>
-                            <p className="text-base text-indigo-900/80 leading-relaxed">
+                            <p className="text-sm text-indigo-900/80 leading-relaxed">
                                 See what starting CPP or OAS earlier or later does to your outcome. A built-in CPP calculator estimates your entitlement from your earnings history.
                             </p>
                         </div>
@@ -38,7 +38,7 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Withdrawal order</h4>
-                            <p className="text-base text-indigo-900/80 leading-relaxed">
+                            <p className="text-sm text-indigo-900/80 leading-relaxed">
                                 Compare draining RRSP/RRIF, TFSA, and non-registered accounts in different sequences — including an early "RRSP melt" to avoid large forced withdrawals (and tax bills) later.
                             </p>
                         </div>
@@ -49,7 +49,7 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Real Canadian taxes</h4>
-                            <p className="text-base text-indigo-900/80 leading-relaxed">
+                            <p className="text-sm text-indigo-900/80 leading-relaxed">
                                 Federal and provincial brackets for all 10 provinces and 3 territories, OAS clawback, capital gains with cost-base tracking, dividend credits, and automatic pension income splitting for couples.
                             </p>
                         </div>
@@ -60,14 +60,14 @@ export function HowItWorks() {
                         </svg>
                         <div>
                             <h4 className="font-bold text-indigo-900">Uncertainty</h4>
-                            <p className="text-base text-indigo-900/80 leading-relaxed">
+                            <p className="text-sm text-indigo-900/80 leading-relaxed">
                                 A Monte Carlo mode stress-tests your plan against volatile equity markets instead of assuming a smooth average return every year.
                             </p>
                         </div>
                     </div>
                 </div>
 
-                <div className="max-w-none text-lg text-indigo-900/80 leading-relaxed space-y-4">
+                <div className="max-w-none text-base text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
                         Everything runs entirely in your browser — no account, no server, none of your financial data ever leaves your device.
                     </p>
@@ -79,13 +79,13 @@ export function HowItWorks() {
 
             {/* Important Disclaimer */}
             <section className="bg-amber-50 rounded-3xl p-8 border border-amber-200 space-y-4">
-                <h2 className="text-xl font-bold text-amber-900 flex items-center gap-3">
+                <h2 className="text-2xl font-bold text-amber-900 flex items-center gap-3">
                     <svg className="w-6 h-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
                     </svg>
                     These are rough estimates — actual results will vary, often by a lot
                 </h2>
-                <div className="max-w-none text-lg text-amber-900/80 leading-relaxed space-y-3">
+                <div className="max-w-none text-base text-amber-900/80 leading-relaxed space-y-3">
                     <p>
                         Treat results as comparisons between plans, not forecasts. A small difference (even 1–2%) between assumed and actual returns, compounded over 20–30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
                     </p>
@@ -107,7 +107,7 @@ export function HowItWorks() {
 
             {/* Modelling overview */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
-                <p className="text-lg text-slate-600 leading-relaxed">
+                <p className="text-base text-slate-600 leading-relaxed">
                     This tool attempts to model the tax impact of your choices as accurately as is practical for
                     a planning tool. Income from each source — employment, CPP/OAS, RRIF withdrawals, interest,
                     dividends, and capital gains — is taxed under its own rules, and government entitlements such
@@ -124,7 +124,7 @@ export function HowItWorks() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
                         The engine performs a <strong>year-by-year cash flow simulation</strong> from your current age until your projected life expectancy (or your spouse's, whichever is later). Each year, the engine looks at:
                     </p>
@@ -149,15 +149,18 @@ export function HowItWorks() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
-                        <strong>RRSP last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched to defer taxes as long as possible. Deferral isn't free: the RRSP keeps growing, forced RRIF withdrawals get larger after 72, and whatever remains is fully taxed at death — so this strategy may result in a higher tax bill for your estate and higher total lifetime tax.
+                        <strong>RRSP last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched as long as possible. Deferral cuts both ways: the RRSP keeps compounding tax-sheltered, but forced RRIF withdrawals after 72 get larger and whatever remains is fully taxed at death.
                     </p>
                     <p>
-                        <strong>RRSP first:</strong> draws from RRSPs before the other accounts, so the balance shrinks during your lower-income years instead of compounding into larger forced RRIF withdrawals after 72 — which can reduce the tax bill at 72 or at death.
+                        <strong>RRSP first:</strong> draws from RRSPs before the other accounts, so the balance shrinks during your lower-income years instead of compounding into larger forced RRIF withdrawals after 72. That can lower the tax bill at 72 and at death — but it also empties the tax shelter early, leaving less growing inside it.
                     </p>
                     <p>
-                        Both settings control only the <strong>order</strong> accounts are drawn from to fund spending. Neither one is the RRSP meltdown: that is the separate <strong>RRSP Melt Amount</strong> set for each person, which withdraws a fixed sum every year from its start age until 71 whether or not the money is needed. A plan can run both at once — the meltdown withdraws its amount, and whatever spending is still unfunded is then drawn in the order chosen here.
+                        Neither order is generally better, and a smaller lifetime tax bill does not mean a larger estate — in our test plans the order that paid the least tax overall sometimes left the smaller estate. Which one wins depends on your own growth rates, spending and timing, so the <strong>Meltdown Optimizer</strong> tests both on your numbers rather than assuming one.
+                    </p>
+                    <p>
+                        Both settings control only the <strong>order</strong> accounts are drawn from to fund spending — the <strong>Fund spending from RRSP first</strong> switch under Settings. Neither one is the RRSP meltdown: that is the separate <strong>RRSP Melt Amount</strong> set for each person, which withdraws a fixed sum every year from its start age until 71 whether or not the money is needed. A plan can run both at once — the meltdown withdraws its amount, and whatever spending is still unfunded is then drawn in the order chosen here.
                     </p>
                 </div>
             </details>
@@ -171,7 +174,7 @@ export function HowItWorks() {
                     </svg>
                 </summary>
                 <div className="px-8 pb-8 -mt-2 space-y-8">
-                    <p className="text-lg text-slate-600 leading-relaxed">
+                    <p className="text-base text-slate-600 leading-relaxed">
                         The engine uses a built-in tax calculator for all 10 provinces and 3 territories.
                     </p>
 
@@ -218,7 +221,7 @@ export function HowItWorks() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
                         For couples, the engine automatically calculates the optimal amount of eligible pension income (like RRIF withdrawals) to "split" with a lower-earning spouse.
                     </p>
@@ -238,13 +241,13 @@ export function HowItWorks() {
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                     </svg>
                 </summary>
-                <div className="px-8 pb-8 -mt-2 max-w-none text-lg text-slate-600 leading-relaxed">
+                <div className="px-8 pb-8 -mt-2 max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
-                        Assets grow based on the return rates set in the <strong>Returns</strong> panel. The engine separates <strong>Yield</strong> (Dividends/Interest) from <strong>Capital Growth</strong>.
+                        Assets grow based on the return rates set in the <strong>Rates of Return</strong> panel. The engine separates <strong>yield</strong> (dividends and interest, entered as the Non-Reg Dividend, Foreign and Cash Interest rates) from <strong>price growth</strong> (<strong>Non-Reg Growth (price only)</strong>).
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>RRSP/TFSA:</strong> each account grows at its own whole-account return, reinvested and tax-sheltered — no yield/gains split needed.</li>
-                        <li><strong>Non-Registered:</strong> yield is paid out as cash (and taxed) each year. The Equity slice appreciates at the full Capital Growth rate. Dividend-paying stocks appreciate too — paying a dividend doesn't stop a share price rising, it just splits the return between cash and price — so the Canadian- and foreign-dividend slices grow at 85% of Capital Growth less their own yield, leaving them a slightly lower total return than pure growth equity. Bonds and cash are income-only: their principal doesn't move. Growth doesn't raise the ACB, so unrealized gains build up until realized by sales, Fund Turnover, or death.</li>
+                        <li><strong>Non-Registered:</strong> yield is paid out as cash (and taxed) each year. The Equity slice appreciates at the full Non-Reg Growth rate. Dividend-paying stocks appreciate too — paying a dividend doesn't stop a share price rising, it just splits the return between cash and price — so the Canadian- and foreign-dividend slices grow at 85% of that rate less their own yield, leaving them a slightly lower total return than pure growth equity. Bonds and cash are income-only: their principal doesn't move. Growth doesn't raise the ACB, so unrealized gains build up until realized by sales, Fund Turnover, or death.</li>
                     </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Multiple non-registered accounts</h3>
                     <p>
@@ -267,7 +270,7 @@ export function HowItWorks() {
                 <h2 className="text-2xl font-bold text-emerald-900">
                     Privacy & data security
                 </h2>
-                <div className="max-w-none text-lg text-slate-600 leading-relaxed">
+                <div className="max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
                         Your privacy is built into the architecture of this tool.
                         <strong> All calculations are performed locally within your web browser.</strong>
@@ -287,7 +290,7 @@ export function HowItWorks() {
                 <div className="space-y-6">
                     {FAQ_ITEMS.map(({ question, answer }) => (
                         <div key={question} className="space-y-2">
-                            <h4 className="font-bold text-slate-900">{question}</h4>
+                            <h3 className="font-bold text-slate-900">{question}</h3>
                             <p className="text-slate-600 leading-relaxed">{answer}</p>
                         </div>
                     ))}

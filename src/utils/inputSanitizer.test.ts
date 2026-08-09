@@ -51,7 +51,13 @@ describe('sanitizeSimulationInputs', () => {
     it('rejects unknown provinces and withdrawal strategies', () => {
         const result = sanitizeSimulationInputs({ person: {}, province: 'TX', withdrawalStrategy: 'yolo' })!;
         expect(result.province).toBe('ON');
-        expect(result.withdrawalStrategy).toBe('rrsp-first');
+        expect(result.withdrawalStrategy).toBe('tax-efficient');
+    });
+
+    it('keeps an explicit rrsp-first, and defaults a payload with no strategy to tax-efficient', () => {
+        expect(sanitizeSimulationInputs({ person: {}, withdrawalStrategy: 'rrsp-first' })!.withdrawalStrategy)
+            .toBe('rrsp-first');
+        expect(sanitizeSimulationInputs({ person: {} })!.withdrawalStrategy).toBe('tax-efficient');
     });
 
     it('scales down an asset mix that sums above 100%', () => {

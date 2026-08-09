@@ -324,6 +324,99 @@ describe('optimizeMeltdown vs brute-force oracle (estate objective)', () => {
     }, 120_000);
 });
 
+// --- Withdrawal order search (estate objective) ---------------------------
+//
+// The estate objective searches BOTH withdrawal orders. The order governs only
+// the residual spending deficit — RRIF minimums and the voluntary melt come out
+// first regardless — but with the melt fully searched in both arms it still
+// moves the estate by six figures on these fixtures, and which order wins is
+// plan-dependent. These tests pin both directions plus the no-difference case.
+
+// Retires at 65 (a 7-year melt window too short to drain the RRSP), RRSP growing
+// at 3% while the non-registered account grows at 6%. Draining the slow shelter
+// early to fund spending beats deferring it.
+const slowRrspInputs = (over: Partial<SimulationInputs> = {}): SimulationInputs => inputs({
+    person: person({
+        age: 65, retirementAge: 65, lifeExpectancy: 92,
+        rrsp: { type: 'RRSP', balance: 1_500_000 },
+        tfsa: { type: 'TFSA', balance: 100_000 },
+        nonRegisteredAccounts: [nonReg({ balance: 600_000, adjustedCostBase: 450_000 })],
+    }),
+    postRetirementSpend: 90_000,
+    returnRates: {
+        bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+        capitalGrowth: 0.06, rrspGrowth: 0.03, tfsaGrowth: 0.05, volatility: 0.02,
+    },
+    ...over,
+});
+
+// The same plan with the growth rates swapped: the shelter is now the fast
+// account, so deferring wins instead.
+const fastRrspInputs = (over: Partial<SimulationInputs> = {}): SimulationInputs => slowRrspInputs({
+    returnRates: {
+        bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+        capitalGrowth: 0.03, rrspGrowth: 0.06, tfsaGrowth: 0.05, volatility: 0.02,
+    },
+    ...over,
+});
+
+// Spends nothing, so no deficit is ever raised and the withdrawal order is never
+// consulted: the two arms score identically to the cent. A pure tie.
+const noDeficitInputs = (over: Partial<SimulationInputs> = {}): SimulationInputs => inputs({
+    person: person({
+        rrsp: { type: 'RRSP', balance: 900_000 },
+        tfsa: { type: 'TFSA', balance: 50_000 },
+        nonRegisteredAccounts: [nonReg({ balance: 150_000, adjustedCostBase: 120_000 })],
+    }),
+    postRetirementSpend: 0,
+    returnRates: {
+        bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+        capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.02,
+    },
+    ...over,
+});
+
+describe('optimizeMeltdown (estate objective searches the withdrawal order)', () => {
+    it('(o) flips to RRSP-first when the RRSP grows slower than the non-registered account', async () => {
+        const base = slowRrspInputs({ withdrawalStrategy: 'tax-efficient' });
+
+        // Ceiling for the user's current order, over the same melt/CPP/OAS space
+        // the optimizer searches. The recommendation has to beat it outright —
+        // which is only possible by changing the order.
+        const bestAtCurrentOrder = bruteForceBestEstate(base, false);
+        expect(bestAtCurrentOrder.feasible).toBeGreaterThan(0);
+
+        const res = await optimizeMeltdown(base, { ...ORACLE_OPTS, considerCppOas: false });
+
+        expect(res.improved).toBe(true);
+        expect(res.recommendedInputs.withdrawalStrategy).toBe('rrsp-first');
+        expect(res.recommendedMetrics.netEstateValue).toBeGreaterThan(bestAtCurrentOrder.best);
+    }, 120_000);
+
+    it('(p) flips the other way — to RRSP-last — when the RRSP is the faster-growing account', async () => {
+        const base = fastRrspInputs({ withdrawalStrategy: 'rrsp-first' });
+
+        const bestAtCurrentOrder = bruteForceBestEstate(base, false);
+        const res = await optimizeMeltdown(base, { ...ORACLE_OPTS, considerCppOas: false });
+
+        expect(res.improved).toBe(true);
+        expect(res.recommendedInputs.withdrawalStrategy).toBe('tax-efficient');
+        expect(res.recommendedMetrics.netEstateValue).toBeGreaterThan(bestAtCurrentOrder.best);
+    }, 120_000);
+
+    it('(q) keeps the order the user chose when it makes no difference to the estate', async () => {
+        for (const current of ['tax-efficient', 'rrsp-first'] as const) {
+            const base = noDeficitInputs({ withdrawalStrategy: current });
+            const res = await optimizeMeltdown(base, ORACLE_OPTS);
+
+            // Non-vacuous: a real melt improvement is found, so this is the
+            // recommendation path, not the "already looks good" bail-out.
+            expect(res.improved).toBe(true);
+            expect(res.recommendedInputs.withdrawalStrategy).toBe(current);
+        }
+    }, 120_000);
+});
+
 // --- Max-spend fixtures ---------------------------------------------------
 
 // Deep pockets, modest planned spend — the sustainable spend should land well
@@ -749,18 +842,28 @@ describe('applyMeltdownRecommendation', () => {
         expect(recommended).toEqual(recommendedSnapshot);
     });
 
-    it('carries postRetirementSpend + withdrawalStrategy only for max-spend recommendations', () => {
+    // Both objectives search the withdrawal order, so both must apply it —
+    // an estate winner on the other order that was displayed but not written
+    // would be the worst possible outcome. Only the SPEND stays max-spend's.
+    it('carries the withdrawal order for both objectives, but postRetirementSpend only for max-spend', () => {
         const current = inputs({ postRetirementSpend: 40_000, withdrawalStrategy: 'tax-efficient' });
         const recommended = inputs({ postRetirementSpend: 62_500, withdrawalStrategy: 'rrsp-first' });
 
-        // Default (estate): spend + strategy are left untouched.
+        // Default (estate): strategy comes across, spend is left untouched.
         const estate = applyMeltdownRecommendation(current, recommended);
         expect(estate.postRetirementSpend).toBe(40_000);
-        expect(estate.withdrawalStrategy).toBe('tax-efficient');
+        expect(estate.withdrawalStrategy).toBe('rrsp-first');
 
         // Max-spend: spend + strategy come from the recommendation.
         const maxSpend = applyMeltdownRecommendation(current, recommended, 'max-spend');
         expect(maxSpend.postRetirementSpend).toBe(62_500);
         expect(maxSpend.withdrawalStrategy).toBe('rrsp-first');
+    });
+
+    it('leaves the current withdrawal order alone when the recommendation carries none', () => {
+        const current = inputs({ withdrawalStrategy: 'rrsp-first' });
+        const recommended = inputs({ withdrawalStrategy: undefined });
+
+        expect(applyMeltdownRecommendation(current, recommended).withdrawalStrategy).toBe('rrsp-first');
     });
 });

@@ -2,10 +2,10 @@
 //
 // The engine (projection.ts / tax.ts / cpp.ts) is treated as a pure black box:
 // this module only rewrites a handful of per-person fields (rrspMeltAmount,
-// cppStartAge, oasStartAge) — plus, in max-spend mode, the household
-// withdrawalStrategy and postRetirementSpend — on deep clones of the base
-// inputs and re-runs runSimulation / runMonteCarlo to score each candidate.
-// Nothing here mutates the caller's inputs.
+// cppStartAge, oasStartAge) plus the household withdrawalStrategy — and, in
+// max-spend mode, postRetirementSpend — on deep clones of the base inputs and
+// re-runs runSimulation / runMonteCarlo to score each candidate. Nothing here
+// mutates the caller's inputs.
 //
 // Two objective modes share one coordinate-descent search (see the `Objective`
 // abstraction below); a future "when can I retire?" mode is the same feasibility
@@ -14,7 +14,11 @@
 //  - 'estate' (default): maximize nominal netEstateValue subject to a $1k
 //    shortfall tolerance. A deterministic sweep picks a winner; a Monte Carlo
 //    pass then guards against a winner that looks great deterministically but is
-//    materially riskier than the baseline.
+//    materially riskier than the baseline. Both withdrawal orders are searched:
+//    the order governs only the residual spending deficit (RRIF minimums and the
+//    voluntary melt come out first regardless), but measured across 13 test
+//    plans, holding it fixed cost up to 48% of net estate — and which order wins
+//    is plan-dependent, so it has to be searched rather than assumed.
 //  - 'max-spend': fix the plan's shape and solve for the highest sustainable
 //    postRetirementSpend. Each candidate is scored by bisecting spend to ~$500
 //    precision (feasibility is monotone in spend); the deterministic winner's
@@ -82,8 +86,8 @@ export interface MaxSpendResult {
 }
 
 export interface MeltdownResult {
-    // Which objective produced this result. Drives both the UI rendering and how
-    // applyMeltdownRecommendation treats spend/strategy.
+    // Which objective produced this result. Drives both the UI rendering and
+    // whether applyMeltdownRecommendation carries the spend over.
     objective: 'estate' | 'max-spend';
 
     // For estate: false when nothing feasible beats the baseline. For max-spend:
@@ -391,7 +395,12 @@ export function initialStepDownSpend(args: {
 // --- Internal search plumbing --------------------------------------------
 
 interface PersonChoice { melt: number; cpp: number; oas: number; }
-interface Assignment { person: PersonChoice; spouse?: PersonChoice; strategy?: WithdrawalStrategy; }
+// Every candidate carries an explicit household withdrawal order — both
+// objectives search it, so there is no "leave it as the plan has it" case.
+interface Assignment { person: PersonChoice; spouse?: PersonChoice; strategy: WithdrawalStrategy; }
+// The per-person half of an assignment, before a descent tags it with the
+// strategy arm it belongs to.
+type UntaggedAssignment = Omit<Assignment, 'strategy'>;
 
 interface Evaluated {
     a: Assignment;
@@ -403,14 +412,13 @@ interface Evaluated {
     score: number;              // objective scalar: netEstateValue | max sustainable spend
     ageDist: number;   // |Δcpp|+|Δoas| vs current inputs (tie-break a)
     totalMelt: number; // household melt (tie-break b)
-    strategyMatchesCurrent: boolean; // tie-break c (max-spend only)
+    strategyMatchesCurrent: boolean; // tie-break c (both objectives)
 }
 
 function signatureOf(a: Assignment): string {
     const p = `${a.person.melt}/${a.person.cpp}/${a.person.oas}`;
     const s = a.spouse ? `${a.spouse.melt}/${a.spouse.cpp}/${a.spouse.oas}` : '-';
-    const strat = a.strategy ? `#${a.strategy}` : '';
-    return `${p}|${s}${strat}`;
+    return `${p}|${s}#${a.strategy}`;
 }
 
 function personChoices(melt: number[], cpp: number[], oas: number[]): PersonChoice[] {
@@ -430,7 +438,7 @@ function applyAssignment(base: SimulationInputs, a: Assignment): SimulationInput
     const next = structuredClone(base);
     applyChoice(next.person, a.person);
     if (next.spouse && a.spouse) applyChoice(next.spouse, a.spouse);
-    if (a.strategy) next.withdrawalStrategy = a.strategy;
+    next.withdrawalStrategy = a.strategy;
     return next;
 }
 
@@ -476,8 +484,7 @@ function abortError(): DOMException {
 // An objective bundles: how to score a candidate (and at what run cost), how to
 // compare two scored candidates, how dense the melt grid is, whether to refine,
 // and which household withdrawal strategies to search. Both modes reuse the same
-// coordinate-descent loop; only these knobs differ. The estate objective is
-// arranged to reproduce the pre-max-spend behaviour byte-for-byte.
+// coordinate-descent loop; only these knobs differ.
 
 interface ScoreOutput {
     inputs: SimulationInputs;   // possibly spend-adjusted
@@ -492,25 +499,34 @@ interface Objective {
     mode: 'estate' | 'max-spend';
     meltSteps: number;
     refine: boolean;
-    strategies: (WithdrawalStrategy | undefined)[];
+    strategies: WithdrawalStrategy[];
     score: (inputs: SimulationInputs) => ScoreOutput;
     cmp: (a: Evaluated, b: Evaluated) => number;
 }
 
 function estateObjective(): Objective {
     // Ranking: net estate desc, then closeness to current CPP/OAS, then smaller
-    // melt (identical to the original cmp, which read metrics.netEstateValue).
+    // melt, then prefer the plan's current withdrawal order — same shape as
+    // max-spend's cmp. The last tie-break matters now that both orders are
+    // searched: when the order makes no difference to the estate (common — it
+    // only governs the residual deficit), a tie must not gratuitously flip a
+    // setting the user chose.
     const cmp = (a: Evaluated, b: Evaluated): number => {
         const d = a.score - b.score;
         if (Math.abs(d) > TIE_EPS) return d > 0 ? -1 : 1;
         if (a.ageDist !== b.ageDist) return a.ageDist - b.ageDist;
-        return a.totalMelt - b.totalMelt;
+        if (a.totalMelt !== b.totalMelt) return a.totalMelt - b.totalMelt;
+        if (a.strategyMatchesCurrent !== b.strategyMatchesCurrent) return a.strategyMatchesCurrent ? -1 : 1;
+        return 0;
     };
     return {
         mode: 'estate',
         meltSteps: COARSE_STEPS,
         refine: true,
-        strategies: [undefined], // estate never searches the withdrawal strategy
+        // Both orders are searched. Direction is plan-dependent: across 13 test
+        // plans tax-efficient won 11, but an RRSP-growth-3% / non-reg-6% plan
+        // flipped to rrsp-first by $85k of net estate.
+        strategies: ['tax-efficient', 'rrsp-first'],
         score: (inputs) => {
             const results = runSimulation(inputs);
             const metrics = computeSummaryMetrics(results, inputs, false);
@@ -634,7 +650,7 @@ export async function optimizeMeltdown(
             score: sc.score,
             ageDist: ageDistance(base, a),
             totalMelt: householdMelt(a),
-            strategyMatchesCurrent: (a.strategy ?? currentStrategy) === currentStrategy,
+            strategyMatchesCurrent: a.strategy === currentStrategy,
         };
         cache.set(sig, ev);
         allEvals.push(ev);
@@ -656,11 +672,13 @@ export async function optimizeMeltdown(
     };
 
     // --- Deterministic search (one descent per searched strategy) ---
-    // The loop SHAPE is identical across modes; estate runs it once with no
-    // strategy override (byte-identical to the original), max-spend runs it once
-    // per withdrawal strategy, accumulating into the shared best/cache/allEvals.
-    const runDescent = async (strategy: WithdrawalStrategy | undefined): Promise<void> => {
-        const tag = (a: Assignment): Assignment => (strategy ? { ...a, strategy } : a);
+    // The loop SHAPE is identical across modes; each mode runs it once per
+    // withdrawal strategy, accumulating into the shared best/cache/allEvals.
+    // Signatures carry the strategy, so the arms never share cache entries — but
+    // they DO share the incumbent, which warm-starts the second arm from the
+    // first arm's coordinates and lets it stop early when it can't beat them.
+    const runDescent = async (strategy: WithdrawalStrategy): Promise<void> => {
+        const tag = (a: UntaggedAssignment): Assignment => ({ ...a, strategy });
 
         if (!hasSpouse) {
             await evalList(personChoices(p1Melt, p1Cpp, p1Oas).map(pc => tag({ person: pc })));
@@ -752,7 +770,17 @@ export async function optimizeMeltdown(
         }
     };
 
-    for (const strategy of objective.strategies) {
+    // The plan's CURRENT withdrawal order goes first. Ties keep the incumbent, so
+    // arm order decides them — and the cmp tie-break alone isn't enough, because
+    // the refinement phase lands the first arm on melt values that are off the
+    // coarse grid and therefore have no twin in the second arm to tie against.
+    // Searching the user's order first means an order-indifferent plan (the melt
+    // and RRIF minimums cover the spending, so the order is never consulted)
+    // keeps the setting they chose instead of flipping to whichever arm ran first.
+    const strategyOrder = [...objective.strategies].sort(
+        (a, b) => Number(b === currentStrategy) - Number(a === currentStrategy),
+    );
+    for (const strategy of strategyOrder) {
         await runDescent(strategy);
     }
 
@@ -1000,7 +1028,7 @@ function finishMaxSpend(args: FinishMaxSpendArgs): MeltdownResult {
         ? winner.metrics
         : computeSummaryMetrics(recResults, recommendedInputs, false);
 
-    const winningStrategy: WithdrawalStrategy = winner.a.strategy ?? currentStrategy;
+    const winningStrategy: WithdrawalStrategy = winner.a.strategy;
     const spendDelta = sustainableSpend - currentSpend;
     // "About right": within one precision step of the current planned spend.
     const onTrack = Math.abs(spendDelta) <= SPEND_PRECISION;
@@ -1053,9 +1081,11 @@ function finishMaxSpend(args: FinishMaxSpendArgs): MeltdownResult {
 // sides have a spouse; if the spouse was removed since the recommendation was
 // computed, `current` (spouse-less) wins untouched.
 //
-// In 'max-spend' mode the search also owns the household postRetirementSpend and
-// withdrawalStrategy, so those are carried over too — but ONLY for max-spend
-// recommendations, so an estate apply never starts clobbering spend/strategy.
+// BOTH objectives search the household withdrawalStrategy, so it is always
+// carried over (a recommendation whose winning order is never applied would be
+// displayed and then silently dropped). postRetirementSpend is max-spend's alone
+// — the estate search leaves spending exactly as planned — so an estate apply
+// still never touches it.
 export function applyMeltdownRecommendation(
     current: SimulationInputs,
     recommended: SimulationInputs,
@@ -1066,9 +1096,13 @@ export function applyMeltdownRecommendation(
     if (next.spouse && recommended.spouse) {
         copySearchedFields(next.spouse, recommended.spouse);
     }
+    // A recommendation always carries a strategy; the guard only keeps a
+    // hand-built payload without one from erasing the user's setting.
+    if (recommended.withdrawalStrategy) {
+        next.withdrawalStrategy = recommended.withdrawalStrategy;
+    }
     if (objective === 'max-spend') {
         next.postRetirementSpend = recommended.postRetirementSpend;
-        next.withdrawalStrategy = recommended.withdrawalStrategy;
     }
     return next;
 }
