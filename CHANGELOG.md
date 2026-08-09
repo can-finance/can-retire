@@ -8,23 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Choose which columns the year-by-year table shows.** Three generously sized
-  toggles above the table — Balances, Income and Tax — switch whole blocks of
-  columns on and off, and your choice is remembered between visits. Balances and
-  Income start on with Tax off, which is what fits on a normal screen without
-  scrolling sideways; switch Tax on when you want the detail, or open any row for
-  the full Year Audit. Year, Age and Sp Age are always shown.
+- **Your first-year withdrawal rate, under Household Spending.** How much comes out
+  of your accounts in your first year of retirement, as a share of what those
+  accounts hold at the start of that year. It sits beside the spending figures that
+  move it, with the widely cited 4% guideline marked on the scale for comparison —
+  the tool reports the number and the reference point, and leaves the judgement to
+  you. Hover the label for exactly what goes into the calculation.
+- **An "Account detail" switch above the year-by-year table.** Turn it off to hide
+  the individual RRSP, TFSA and non-registered columns (yours and your spouse's)
+  and keep just Total Assets and RRSP Drawn — six columns fewer for a couple, three
+  for a single person, and a good deal less sideways scrolling. Your choice is
+  remembered between visits.
 - **A "RRSP Drawn" column.** How much came out of RRSP/RRIF that year (household,
   before tax) — previously you could only infer it from the balance dropping.
   Hover a figure to see it split into the mandatory RRIF minimum, any voluntary
   meltdown, and any extra draw taken to cover spending.
-- **Taxable Income, Avg Tax Rate and OAS Clawback columns** in the table's Tax
-  group. Taxable income is the figure the brackets are applied to, so it makes Tax
+- **Taxable Income, Avg Tax Rate and OAS Clawback columns** in the year-by-year
+  table. Taxable income is the figure the brackets are applied to, so it makes Tax
   Paid interpretable; the average rate is tax paid divided by that income. The OAS
   clawback shown is already part of Tax Paid — it is broken out so you can see how
   much of the bill it accounts for, not added on top of it.
 
 ### Changed
+- **Estate tax has moved out of the year-by-year table's columns into a total row at the
+  bottom of the table.** As a column it showed a dash in every row but one — the year of
+  death — while costing about 100 pixels of width across all forty-odd rows. The figure
+  now sits in a total row at the foot of the table, labelled with the year it falls in
+  ("Estate tax at death (2066)") and lined up under Tax Paid. For a couple it lands in
+  the year of the *second* death, because
+  the first death rolls everything over to the survivor tax-free. Plans with no estate
+  tax to report no longer give up any width to it at all.
+- **The year-by-year table's "Net Pension" column only appears when you actually have
+  a workplace pension.** Most plans have none, and the column sat there showing a
+  zero in every row and pushing everything else sideways. It returns as soon as
+  either of you has defined-benefit pension income — bridge benefit included —
+  in any year of the projection.
 - **The year-by-year table now follows the "Show Today's Dollars" toggle.** It
   previously always showed future (nominal) dollars, even with the toggle on — so
   the charts, the table and the Year Audit drawer could show three different

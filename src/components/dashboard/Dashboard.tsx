@@ -22,6 +22,7 @@ import { formatCurrencyCAD } from '../../utils/formatters';
 import { computeSummaryMetrics } from '../../utils/summaryMetrics';
 import { SummaryHeader } from './SummaryHeader';
 import { PersonSection } from './PersonSection';
+import { WithdrawalRateReadout } from './WithdrawalRateReadout';
 import { PlanManager } from './PlanManager';
 import { ComparisonView } from '../comparison/ComparisonView';
 import { MeltdownOptimizerView } from '../optimizer/MeltdownOptimizerView';
@@ -414,6 +415,11 @@ export function Dashboard() {
                                 onChange={(expenses) => updateInputs({ ...inputs, oneTimeExpenses: expenses })}
                             />
                         </div>
+
+                        {/* Spending is what moves this number, so it reads out here rather
+                            than in the outcome header. Descriptive only — see the note in
+                            WithdrawalRateReadout.tsx. */}
+                        <WithdrawalRateReadout rate={metrics.initialWithdrawalRate} />
                     </CollapsibleSection>
 
                     {/* Settings */}
@@ -473,8 +479,12 @@ export function Dashboard() {
                     </CollapsibleSection>
                 </div>
 
-                {/* Main Content / Charts */}
-                <div className="lg:col-span-8 space-y-6">
+                {/* Main Content / Charts.
+                    A flex COLUMN, not `space-y-6`: the jump link at the foot of it is
+                    sized by the leftover space (see its own note below), and only a
+                    flex container can hand it that. Same visual rhythm — `gap-6`
+                    reproduces exactly what `space-y-6` was doing. */}
+                <div className="lg:col-span-8 flex flex-col gap-6">
                     {metrics.outOfMoneyAge && (
                         <div className="rounded-2xl border border-red-200 bg-gradient-to-r from-red-50 to-rose-50 p-4 flex items-start gap-4">
                             <div className="flex-shrink-0 w-9 h-9 rounded-full bg-red-100 flex items-center justify-center">
@@ -517,28 +527,59 @@ export function Dashboard() {
                     )}
 
                     {/* The input column is usually far taller than this one, and the
-                        year-by-year table now sits below BOTH columns, so a reader who
+                        year-by-year table sits below BOTH columns, so a reader who
                         doesn't scroll past that emptiness never learns it is there.
-                        This sits directly under the last chart — at the TOP of the dead
-                        space rather than pinned to its foot — so it is visible without
-                        scrolling through the gap first, which is the whole point.
-                        A real anchor, not a click handler: it gets focus, keyboard
-                        activation and browser Back for free. */}
+                        This fills the dead space with the text at the TOP of it, so it
+                        is visible without scrolling through the gap first, which is the
+                        whole point. A real anchor, not a click handler: it gets focus,
+                        keyboard activation and browser Back for free.
+
+                        `hidden lg:block`: below lg the two columns stack, so there is no
+                        gap and the link would point at something directly beneath it.
+
+                        `flex-1 min-h-0 overflow-hidden` is what makes it disappear when
+                        it isn't needed. The grid stretches both columns to the taller
+                        one's height, and this is the only flex item with a grow factor,
+                        so it is handed exactly the leftover: lots of slack and it fills
+                        the gap; none — the right column being the taller one — and it
+                        resolves to zero height instead of sitting redundantly on top of
+                        the table. Deliberately NOT a measured height (a ResizeObserver
+                        on the column would be measuring slack that this very element
+                        consumes, which oscillates); flexbox settles it in one pass.
+
+                        EVERYTHING visible — the dashed box included — is absolutely
+                        positioned inside that sizing box, which is the other half of the
+                        collapse. A flex item contributes its CONTENT size to its
+                        container's intrinsic height, `flex-basis: 0` or not, so with the
+                        label in normal flow this element still claimed its own 72px in
+                        the very case it is meant to vanish from, and even an empty
+                        bordered box leaves a 4px sliver (both measured). Out of flow, the
+                        <a> contributes nothing, resolves to zero height, and clips its
+                        own contents away to nothing. `items-start` keeps the text at the
+                        top of whatever space it does get; one compact line, so the band
+                        of heights where the clipping looks odd is narrow. */}
                     <a
                         href="#year-by-year"
-                        className="group flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-slate-200 py-6 text-slate-500 transition-colors hover:border-brand-300 hover:bg-brand-50/40 hover:text-brand-700"
+                        className="group relative hidden min-h-0 flex-1 overflow-hidden lg:block"
                     >
-                        <span className="text-lg font-semibold">Year-by-year table</span>
-                        <svg
-                            className="h-7 w-7 transition-transform group-hover:translate-y-1"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            aria-hidden="true"
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                        </svg>
+                        {/* Pinned to the TOP of the leftover space and sized to its own
+                            content — `inset-0` would stretch the dashed border down the
+                            whole gap, which reads as an empty drop zone rather than a
+                            link. The outer flex-1 box still absorbs the slack (and
+                            collapses to zero when there is none, clipping this away). */}
+                        <span className="absolute inset-x-0 top-0 flex items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 px-4 py-5 text-slate-500 transition-colors group-hover:border-brand-300 group-hover:bg-brand-50/40 group-hover:text-brand-700">
+                            <span className="text-lg font-semibold">Year-by-year table</span>
+                            <svg
+                                className="h-7 w-7 flex-shrink-0 transition-transform group-hover:translate-y-1"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                aria-hidden="true"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                            </svg>
+                        </span>
                     </a>
                 </div>
             </div>
