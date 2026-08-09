@@ -29,6 +29,19 @@ interface PlanManagerProps {
     onOptimize: () => void;
 }
 
+/*
+ * Spells out which plan is being edited, rather than leaving it to a pale tint.
+ * Always rendered — unlike the delete control beside it, this is state, not an
+ * action, so it must not wait for a hover that touch users never produce.
+ */
+function ActiveBadge() {
+    return (
+        <span className="ml-2 flex-shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+            Active
+        </span>
+    );
+}
+
 export function PlanManager({
     plans,
     activePlanId,
@@ -228,28 +241,39 @@ export function PlanManager({
             <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar pt-2 border-t">
                 {plans.length === 0 ? (
                     // Virtual state: one synthetic active row for the not-yet-persisted plan.
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-brand-50 border border-brand-100">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-brand-50 border-2 border-brand-500">
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate text-brand-900">{activePlanName}</p>
+                            <p className="text-sm font-semibold truncate text-brand-900">{activePlanName}</p>
                             <p className="text-xs text-slate-500">Not saved yet</p>
                         </div>
+                        <ActiveBadge />
                     </div>
                 ) : (
                     plans.map(p => (
                         <div
                             key={p.id}
+                            // Which plan you are editing is the single most important
+                            // fact in this list, and it used to be carried by brand-50
+                            // against slate-50 — a couple of percent of luminance
+                            // apart. Three signals now, none of them colour alone: a
+                            // full-strength outline, a bolder name, and a literal
+                            // "Active" badge. Every row carries border-2 (transparent
+                            // when inactive) so switching plans doesn't shift the list
+                            // by 2px per row.
                             className={`flex items-center justify-between p-2 rounded-lg group transition-all cursor-pointer ${activePlanId === p.id
-                                ? 'bg-brand-50 border border-brand-100'
-                                : 'bg-slate-50 border border-transparent hover:bg-slate-100'
+                                ? 'bg-brand-50 border-2 border-brand-500'
+                                : 'bg-slate-50 border-2 border-transparent hover:bg-slate-100'
                                 }`}
+                            aria-current={activePlanId === p.id ? 'true' : undefined}
                             onClick={() => onActivate(p.id)}
                         >
                             <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-medium truncate ${activePlanId === p.id ? 'text-brand-900' : 'text-slate-700'}`}>
+                                <p className={`text-sm truncate ${activePlanId === p.id ? 'font-semibold text-brand-900' : 'font-medium text-slate-700'}`}>
                                     {p.name}
                                 </p>
                                 <p className="text-xs text-slate-500">edited {new Date(p.lastSaved).toLocaleDateString()}</p>
                             </div>
+                            {activePlanId === p.id && <ActiveBadge />}
                             <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all">
                                 <button
                                     onClick={(e) => {

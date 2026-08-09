@@ -200,7 +200,11 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             pctInputRow('Inflation', run => run.comparand.inputs.inflationRate),
             pctInputRow('Equity growth', run => run.comparand.inputs.returnRates.capitalGrowth),
             pctInputRow('Bond return', run => run.comparand.inputs.returnRates.bondReturn),
-            pctInputRow('Volatility', run => run.comparand.inputs.returnRates.volatility),
+            // Volatility is not here with the other return assumptions: it is the
+            // only input that leaves the deterministic projection untouched
+            // (projection.ts reads it solely under `stochastic`), so listing it
+            // among inputs that move every outcome invited the reader to look for
+            // differences it cannot cause. It leads the Monte Carlo group instead.
         ]),
         { kind: 'group', label: 'Outcomes' },
         {
@@ -242,6 +246,16 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             delta: { kind: 'currency', dir: 'neutral', value: r => r.metrics.rrspBalanceAt71 },
         },
         { kind: 'group', label: 'Monte Carlo', note: '(range of outcomes under random market returns)' },
+        // The assumption that produces the three outcomes below it — volatility IS
+        // the "random" in "random market returns". Unlike the Plan inputs rows this
+        // shows even when both plans agree: it tells the reader what spread these
+        // numbers came from, which is worth stating whether or not it differs.
+        ...planInputRows([
+            {
+                ...pctInputRow('Assumed volatility', run => run.comparand.inputs.returnRates.volatility),
+                always: true,
+            },
+        ]),
         {
             kind: 'data',
             label: 'Success rate',

@@ -27,9 +27,21 @@ interface MeltdownOptimizerViewProps {
 
 type Objective = 'estate' | 'max-spend';
 
-// Human labels for the household withdrawal strategy (mirrors the app's relabel).
+/*
+ * What the search was solving for. Used both as the comparison run's label and
+ * as the name of the plan if it gets saved — deliberately one function, so the
+ * chart legend and the plan list can never call the same scenario two things.
+ */
+function objectiveLabel(objective: Objective): string {
+    return objective === 'max-spend' ? 'Maximize Spend' : 'Maximize Estate';
+}
+
+// Human labels for the household withdrawal strategy. Matches
+// ComparisonMetricsTable's wording. Deliberately no "(early melt)" here: this
+// setting is the drawdown ORDER, not the voluntary meltdown, which runs off
+// each person's RRSP Melt Amount independently of it.
 function strategyLabel(s: 'tax-efficient' | 'rrsp-first' | undefined): string {
-    return s === 'rrsp-first' ? 'RRSP first (early melt)' : 'RRSP last (defer taxes)';
+    return s === 'rrsp-first' ? 'RRSP first' : 'RRSP last';
 }
 
 const SUCCESS_TARGETS: { value: number; label: string; blurb: string }[] = [
@@ -334,7 +346,11 @@ export function MeltdownOptimizerView({
             savedName={savedName}
             saveDialogOpen={saveDialogOpen}
             onSave={() => {
-                const baseName = phase.result.objective === 'max-spend' ? 'Suggested plan' : 'Suggested meltdown';
+                // uniquePlanName appends " 2", " 3" on collision, so re-running
+                // the same objective stays readable in the plan list.
+                // than repeating "Suggested …". uniquePlanName appends " 2", " 3"
+                // on collision, so re-running the same objective stays readable.
+                const baseName = objectiveLabel(phase.result.objective);
                 setSavedName(onSavePlan(baseName, phase.result.recommendedInputs));
                 setSaveDialogOpen(true);
             }}
@@ -400,7 +416,7 @@ function ResultsView({
             {
                 comparand: {
                     id: 'suggested',
-                    name: result.objective === 'max-spend' ? 'Suggested plan' : 'Suggested meltdown',
+                    name: objectiveLabel(result.objective),
                     inputs: result.recommendedInputs,
                 },
                 color: PLAN_COLORS[1],

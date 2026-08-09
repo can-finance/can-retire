@@ -38,6 +38,12 @@ export interface AuditLine {
     // itself so the drawer can scale it like any other amount.
     noteAmount?: number;
     kind?: AuditLineKind;
+    // Presentational: this line is a balance LEVEL, not a movement. Only the
+    // opening balance needs it — the closing balance is already `kind: 'result'`.
+    // It stays `kind: 'normal'` because it genuinely participates in the
+    // waterfall's arithmetic (opening + flows = closing); this flag only stops
+    // the drawer colouring a level as though it were an increase.
+    level?: boolean;
 }
 
 export interface AuditCheck {
@@ -532,7 +538,7 @@ function accountSection(
     const startBal = spec.balance(start);
     const endBal = spec.balance(end);
     const lines: AuditLine[] = [
-        { label: 'Opening balance', amount: startBal }
+        { label: 'Opening balance', amount: startBal, level: true }
     ];
 
     if (spec.reinvested > EPS) lines.push({ label: 'Surplus reinvested', amount: spec.reinvested });

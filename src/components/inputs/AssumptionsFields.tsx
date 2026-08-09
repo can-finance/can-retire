@@ -60,8 +60,15 @@ export function SettingsFields({ inputs, onChange }: {
             <Toggle
                 checked={inputs.withdrawalStrategy === 'rrsp-first'}
                 onChange={(val) => onChange({ withdrawalStrategy: val ? 'rrsp-first' : 'tax-efficient' })}
-                label="Withdraw from RRSP first"
-                tooltip={'ON = RRSP first (early melt): drain the RRSP first.\nOFF = RRSP last (defer taxes): non-registered first, then TFSA, then RRSP. Deferring can raise estate and lifetime tax.'}
+                label="Fund spending from RRSP first"
+                // The "(early melt)" phrasing this used to carry implied the toggle
+                // WAS the meltdown. It isn't: the voluntary melt runs off each
+                // person's RRSP Melt Amount and never consults withdrawalStrategy
+                // (projection.ts, "Voluntary Meltdown"), so the two stack. Saying so
+                // is worth the extra line — the alternative is a reader who thinks
+                // they enabled a meltdown and didn't, or who set both and cannot
+                // explain why the RRSP empties so fast.
+                tooltip={'ON = RRSP first: when a year falls short, draw from the RRSP before non-registered and TFSA.\nOFF = RRSP last: non-registered, then TFSA, then RRSP. Deferring can raise estate and lifetime tax.\n\nThis sets the ORDER accounts are drawn from — it is not the meltdown. Any RRSP Melt Amount you set still runs on top, every year until 71, whether or not you need the cash.'}
             />
         </>
     );

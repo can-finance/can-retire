@@ -154,7 +154,10 @@ export function HowItWorks() {
                         <strong>RRSP last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched to defer taxes as long as possible. Deferral isn't free: the RRSP keeps growing, forced RRIF withdrawals get larger after 72, and whatever remains is fully taxed at death — so this strategy may result in a higher tax bill for your estate and higher total lifetime tax.
                     </p>
                     <p>
-                        <strong>RRSP first (early melt):</strong> draws from RRSPs first to "melt" the balance early at lower tax brackets, potentially reducing large tax bills at age 72 or at death.
+                        <strong>RRSP first:</strong> draws from RRSPs before the other accounts, so the balance shrinks during your lower-income years instead of compounding into larger forced RRIF withdrawals after 72 — which can reduce the tax bill at 72 or at death.
+                    </p>
+                    <p>
+                        Both settings control only the <strong>order</strong> accounts are drawn from to fund spending. Neither one is the RRSP meltdown: that is the separate <strong>RRSP Melt Amount</strong> set for each person, which withdraws a fixed sum every year from its start age until 71 whether or not the money is needed. A plan can run both at once — the meltdown withdraws its amount, and whatever spending is still unfunded is then drawn in the order chosen here.
                     </p>
                 </div>
             </details>

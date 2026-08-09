@@ -48,6 +48,24 @@ const ACCOUNT_ACCENT: Partial<Record<AuditSectionKey, string>> = {
 // plain card style, which is enough to set it apart from the waterfalls.
 const ACCOUNT_GROUP_START: AuditSectionKey = 'accountsRRSP';
 
+// Only the three account waterfalls encode direction by colour. In these
+// sections a line is a movement in a balance, so up/down is a real axis and
+// green/red reads as direction.
+//
+// Deliberately NOT applied to cashFlow or estate: a negative there is a
+// deduction (spending, terminal tax), and a positive is not "the balance went
+// up", so a green/red scale would be asserting something the numbers don't mean.
+//
+// Note this makes the account sections MORE neutral, not less. Negatives already
+// rendered rose while positives sat plain, so a withdrawal looked like a fault
+// and growth looked unremarkable — which is backwards in a decumulation plan,
+// where drawing the RRSP down is the strategy working. A symmetric scale reads
+// as an axis rather than a verdict. The sign is still carried by the − prefix,
+// so colour is never the only signal.
+const DIRECTIONAL_SECTIONS = new Set<AuditSectionKey>([
+    'accountsRRSP', 'accountsTFSA', 'accountsNonReg',
+]);
+
 // `formatCurrencyCAD` doesn't sign negatives the way the rest of the app does
 // (see YearlyBreakdownTable's shortfall cell) — prefix the minus ourselves.
 function fmtAmt(v: number): string {
@@ -74,8 +92,23 @@ function LineRow({
     const amt = line.amount / scale;
     const redTint = amt < 0 && DEDUCTION_SECTIONS.has(sectionKey);
 
+    // A movement in an account balance: 'normal' kind (so not a subtotal, the
+    // closing 'result', an 'info' annotation or a 'reference' headline) and not
+    // the opening balance, which is a level rather than a change.
+    // emerald-700 rather than -600: 5.0:1 on white versus 3.8:1, and 600 fails
+    // AA for text this size.
+    const isRise = !isInfo
+        && amt > 0
+        && (line.kind ?? 'normal') === 'normal'
+        && !line.level
+        && DIRECTIONAL_SECTIONS.has(sectionKey);
+
     const labelClass = isInfo ? 'text-slate-500' : 'text-slate-700';
-    const amountClass = isInfo ? 'text-slate-500' : redTint ? 'text-rose-600' : 'text-slate-900';
+    const amountClass = isInfo
+        ? 'text-slate-500'
+        : redTint ? 'text-rose-600'
+        : isRise ? 'text-emerald-700'
+        : 'text-slate-900';
     const rowClass = heavy ? 'border-t-2 border-slate-200' : '';
     const weightClass = heavy ? 'font-semibold' : '';
 
