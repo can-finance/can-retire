@@ -8,10 +8,9 @@ import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult }
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { YearlyBreakdownTable } from './YearlyBreakdownTable';
 import {
+    ACCOUNT_DETAIL_STORAGE_KEY,
     averageTaxRate,
-    COLUMN_GROUPS_STORAGE_KEY,
-    DEFAULT_COLUMN_GROUPS,
-    type ColumnGroup,
+    DEFAULT_ACCOUNT_DETAIL,
 } from './yearlyBreakdownColumns';
 
 // React's act() warns unless it knows it's running in a test environment.
@@ -48,17 +47,65 @@ const COUPLE = inputs({
     postRetirementSpend: 100_000,
 });
 
+// The base fixtures carry no DB pension at all, so the Net Pension column is
+// absent from them — every expectation below is written against that.
 const SINGLE_RESULTS = runSimulation(SINGLE);
 const COUPLE_RESULTS = runSimulation(COUPLE);
+
+// ...and these two do have one, so the column comes back.
+const PENSION_SINGLE_RESULTS = runSimulation(inputs({
+    person: person({ pension: { annualAmount: 40_000, startAge: 65, indexedToInflation: true } }),
+}));
+// Only the SPOUSE has the pension: netPensionIncome is the combined household
+// figure, so one pass over the data has to find it wherever it comes from.
+const SPOUSE_PENSION_RESULTS = runSimulation(inputs({
+    spouse: person({
+        age: 63, rrsp: { type: 'RRSP', balance: 400_000 },
+        pension: { annualAmount: 30_000, startAge: 65, indexedToInflation: true },
+    }),
+    postRetirementSpend: 100_000,
+}));
+
+// Nothing taxable survives to the death year: no RRSP, no unrealized non-reg
+// gain, no benefits (dies before either start age), so the deemed disposition is
+// worth nothing and the estate-tax footer must not render.
+const NO_ESTATE_TAX_RESULTS = runSimulation(inputs({
+    person: person({
+        rrsp: { type: 'RRSP', balance: 0 },
+        tfsa: { type: 'TFSA', balance: 900_000 },
+        nonRegisteredAccounts: [nonReg()],
+        cppContributedYears: 0, cppStartAge: 70, oasStartAge: 70, lifeExpectancy: 68,
+    }),
+    postRetirementSpend: 40_000,
+}));
 
 function headerLabels(): string[] {
     return screen.getAllByRole('columnheader').map(th => th.textContent ?? '');
 }
 
 function bodyRows(): HTMLElement[] {
-    // The header row is the only <tr> inside <thead>; everything else is a data row.
-    const table = screen.getByRole('table');
-    return within(table).getAllByRole('row').slice(1) as HTMLElement[];
+    // Scoped to <tbody>, so neither the sticky header nor the estate-tax <tfoot>
+    // total can ever be mistaken for a data row.
+    const tbody = screen.getByRole('table').querySelector('tbody')!;
+    return within(tbody).getAllByRole('row') as HTMLElement[];
+}
+
+/** The estate-tax total row, or null when the table renders no <tfoot> at all. */
+function footerRow(): HTMLElement | null {
+    const tfoot = screen.getByRole('table').querySelector('tfoot');
+    return tfoot ? (within(tfoot).getByRole('row') as HTMLElement) : null;
+}
+
+/** Rows the engine charged terminal tax on, by the file's ">$1" nominal rule. */
+function terminalRows(data: SimulationResult[]): SimulationResult[] {
+    return data.filter(r => (r.totalTerminalTax ?? 0) > 1);
+}
+
+function estateTotal(data: SimulationResult[], adjusted = false): number {
+    return terminalRows(data).reduce(
+        (sum, r) => sum + (adjusted ? r.totalTerminalTax! / r.inflationFactor : r.totalTerminalTax!),
+        0
+    );
 }
 
 /** Text of the body cell sitting under the named header, in the first data row. */
@@ -68,9 +115,33 @@ function firstRowCell(label: string): string {
     return (within(bodyRows()[0]).getAllByRole('cell')[idx].textContent ?? '').trim();
 }
 
-function seedGroups(groups: ColumnGroup[]) {
-    window.localStorage.setItem(COLUMN_GROUPS_STORAGE_KEY, JSON.stringify(groups));
+// --- The full column vocabulary, in render order ---------------------------
+const ANCHORS = ['Year', 'Age'];
+const SP_ANCHORS = ['Year', 'Age', 'Sp Age'];
+const OWN_BALANCES = ['RRSP', 'TFSA', 'Non-Reg'];
+const SP_BALANCES = ['Sp RRSP', 'Sp TFSA', 'Sp Non-Reg'];
+// What survives the account-detail toggle: a household total and a flow.
+const BALANCE_SUMMARY = ['Total Assets', 'RRSP Drawn'];
+const PENSION_COL = 'Net Pension';
+const INCOME_COLS = ['Net CPP', 'Net OAS', 'Total Spend', 'Surplus / Shortfall'];
+// Estate tax is deliberately NOT among them — it is a <tfoot> total, not a column.
+const TAX_COLS = ['Taxable Income', 'Tax Paid', 'OAS Clawback', 'Avg Tax Rate'];
+
+/** Every column the table should render, for a given household/option shape. */
+function expectedLabels({ spouse = false, detail = true, pension = false } = {}): string[] {
+    const balances = detail
+        ? [...OWN_BALANCES, ...(spouse ? SP_BALANCES : [])]
+        : [];
+    const income = pension
+        ? ['Net CPP', 'Net OAS', PENSION_COL, 'Total Spend', 'Surplus / Shortfall']
+        : INCOME_COLS;
+    return [
+        ...(spouse ? SP_ANCHORS : ANCHORS),
+        ...balances, ...BALANCE_SUMMARY, ...income, ...TAX_COLS,
+    ];
 }
+
+const detailToggle = () => screen.getByRole('button', { name: 'Account detail' });
 
 beforeEach(() => window.localStorage.clear());
 afterEach(() => { cleanup(); window.localStorage.clear(); });
@@ -95,8 +166,7 @@ describe('YearlyBreakdownTable — inflation adjustment', () => {
         expect(adjusted).not.toBe(nominal);
     });
 
-    it('adjusts tax-group currency columns too, and leaves the average rate alone', () => {
-        seedGroups(['tax']);
+    it('adjusts the tax currency columns too, and leaves the average rate alone', () => {
         const idx = 10;
         const row = SINGLE_RESULTS[idx];
         const rate = averageTaxRate(row);
@@ -121,115 +191,101 @@ describe('YearlyBreakdownTable — inflation adjustment', () => {
     });
 });
 
-describe('YearlyBreakdownTable — column groups', () => {
-    const BALANCE_COLS = ['RRSP', 'TFSA', 'Non-Reg', 'Total Assets', 'RRSP Drawn'];
-    const INCOME_COLS = ['Net CPP', 'Net OAS', 'Net Pension', 'Total Spend', 'Surplus / Shortfall'];
-    const TAX_COLS = ['Taxable Income', 'Tax Paid', 'OAS Clawback', 'Avg Tax Rate', 'Estate Tax'];
-    const ANCHORS = ['Year', 'Age'];
-
-    it('defaults to Balances + Income with Tax off', () => {
-        expect(DEFAULT_COLUMN_GROUPS).toEqual(['balances', 'income']);
+describe('YearlyBreakdownTable — the column set', () => {
+    it('shows every column there is, for a single person', () => {
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        const labels = headerLabels();
-        expect(labels).toEqual([...ANCHORS, ...BALANCE_COLS, ...INCOME_COLS]);
-        expect(screen.getByRole('button', { name: 'Balances' })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByRole('button', { name: 'Income' })).toHaveAttribute('aria-pressed', 'true');
-        expect(screen.getByRole('button', { name: 'Tax' })).toHaveAttribute('aria-pressed', 'false');
+        expect(headerLabels()).toEqual(expectedLabels());
     });
 
-    it('a toggle click adds/removes exactly that group\'s columns', async () => {
+    it('shows every column there is, plus the spouse ones, for a couple', () => {
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true }));
+    });
+
+    it('offers exactly one column control — no group toggles', () => {
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        expect(screen.getAllByRole('button').map(b => b.textContent)).toEqual(['Account detail']);
+        for (const gone of ['Balances', 'Income', 'Tax']) {
+            expect(screen.queryByRole('button', { name: gone })).toBeNull();
+        }
+    });
+});
+
+describe('YearlyBreakdownTable — account detail', () => {
+    it('is on by default and shows every per-account balance column', () => {
+        expect(DEFAULT_ACCOUNT_DETAIL).toBe(true);
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'true');
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true }));
+    });
+
+    it('switching it off hides exactly the six per-account columns for a couple', async () => {
+        const user = userEvent.setup();
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        const before = headerLabels();
+
+        await user.click(detailToggle());
+
+        const after = headerLabels();
+        expect(before.filter(l => !after.includes(l))).toEqual([...OWN_BALANCES, ...SP_BALANCES]);
+        expect(after).toEqual(expectedLabels({ spouse: true, detail: false }));
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('drops three columns for a single person, keeping Total Assets and RRSP Drawn', async () => {
         const user = userEvent.setup();
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-
-        await user.click(screen.getByRole('button', { name: 'Tax' }));
-        expect(headerLabels()).toEqual([...ANCHORS, ...BALANCE_COLS, ...INCOME_COLS, ...TAX_COLS]);
-
-        await user.click(screen.getByRole('button', { name: 'Balances' }));
-        expect(headerLabels()).toEqual([...ANCHORS, ...INCOME_COLS, ...TAX_COLS]);
-
-        await user.click(screen.getByRole('button', { name: 'Income' }));
-        expect(headerLabels()).toEqual([...ANCHORS, ...TAX_COLS]);
-
-        await user.click(screen.getByRole('button', { name: 'Tax' }));
-        // Anchors survive even with every group off.
-        expect(headerLabels()).toEqual(ANCHORS);
+        await user.click(detailToggle());
+        expect(headerLabels()).toEqual(expectedLabels({ detail: false }));
     });
 
-    it('two toggles dispatched in the same tick both take effect', () => {
-        // Regression: the setter takes a value rather than an updater, so without the
-        // ref mirror the second click rebuilt the list from the pre-click state and
-        // silently undid the first. Browser automation hits this; a human rarely does.
+    it('is never disabled — there is nothing left to gate it on', async () => {
+        const user = userEvent.setup();
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        act(() => {
-            screen.getByRole('button', { name: 'Balances' }).click();
-            screen.getByRole('button', { name: 'Tax' }).click();
-        });
-        expect(headerLabels()).toEqual([...ANCHORS, ...INCOME_COLS, ...TAX_COLS]);
+        expect(detailToggle()).not.toHaveAttribute('aria-disabled');
+        await user.click(detailToggle());
+        expect(detailToggle()).not.toHaveAttribute('aria-disabled');
     });
 
     it('persists the choice to localStorage and reads it back on mount', async () => {
         const user = userEvent.setup();
-        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        await user.click(screen.getByRole('button', { name: 'Tax' }));
-        await user.click(screen.getByRole('button', { name: 'Income' }));
-        expect(JSON.parse(window.localStorage.getItem(COLUMN_GROUPS_STORAGE_KEY)!)).toEqual(['balances', 'tax']);
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        await user.click(detailToggle());
+        expect(JSON.parse(window.localStorage.getItem(ACCOUNT_DETAIL_STORAGE_KEY)!)).toBe(false);
 
         cleanup();
-        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        expect(headerLabels()).toEqual([...ANCHORS, ...BALANCE_COLS, ...TAX_COLS]);
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, detail: false }));
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'false');
     });
 
     it('falls back to the default when the persisted value is junk', () => {
-        window.localStorage.setItem(COLUMN_GROUPS_STORAGE_KEY, '"not-an-array"');
+        window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, '"nope"');
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        expect(headerLabels()).toEqual([...ANCHORS, ...BALANCE_COLS, ...INCOME_COLS]);
+        expect(headerLabels()).toContain('RRSP');
     });
 
-    it('drops unknown group ids from a persisted value', () => {
-        window.localStorage.setItem(COLUMN_GROUPS_STORAGE_KEY, JSON.stringify(['tax', 'wat', 'tax']));
+    it('two clicks in one tick land on the original value, not a lost first click', () => {
+        // Regression: the setter takes a value rather than an updater, so without the
+        // ref mirror the second click rebuilt from the pre-click state and silently
+        // undid the first. Browser automation hits this; a human rarely does.
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        expect(headerLabels()).toEqual([...ANCHORS, ...TAX_COLS]);
+        act(() => {
+            detailToggle().click();
+            detailToggle().click();
+        });
+        expect(headerLabels()).toContain('RRSP');
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'true');
     });
 
-    // The whole point of the single-source column list: header and body can never
-    // drift. Check every group combination, single and spouse.
-    const COMBOS: ColumnGroup[][] = [
-        [], ['balances'], ['income'], ['tax'],
-        ['balances', 'income'], ['balances', 'tax'], ['income', 'tax'],
-        ['balances', 'income', 'tax'],
-    ];
-
-    for (const spouse of [false, true]) {
-        for (const combo of COMBOS) {
-            it(`header and body stay aligned — ${spouse ? 'couple' : 'single'}, groups [${combo.join(',')}]`, () => {
-                seedGroups(combo);
-                const data = spouse ? COUPLE_RESULTS : SINGLE_RESULTS;
-                render(<YearlyBreakdownTable data={data} hasSpouse={spouse} />);
-
-                const headerCount = screen.getAllByRole('columnheader').length;
-                const rows = bodyRows();
-                expect(rows.length).toBe(data.length);
-                for (const row of rows) {
-                    expect(within(row).getAllByRole('cell')).toHaveLength(headerCount);
-                }
-
-                // Anchors are outside every group and always lead.
-                const labels = headerLabels();
-                expect(labels.slice(0, spouse ? 3 : 2)).toEqual(spouse ? ['Year', 'Age', 'Sp Age'] : ['Year', 'Age']);
-                expect(headerCount).toBe((spouse ? 3 : 2) + combo.reduce(
-                    (n, g) => n + (g === 'balances' ? (spouse ? 8 : 5) : 5), 0));
-            });
-        }
-    }
-
-    it('keeps the frozen columns sticky with their pinned offsets when groups change', async () => {
+    it('keeps the anchors leading and frozen whether detail is on or off', async () => {
         const user = userEvent.setup();
-        seedGroups([]);
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
 
         const expectFrozen = () => {
             const heads = screen.getAllByRole('columnheader');
             const cells = within(bodyRows()[0]).getAllByRole('cell');
+            expect(heads.slice(0, 3).map(h => h.textContent)).toEqual(SP_ANCHORS);
             const lefts = ['left-0', 'left-[72px]', 'left-[136px]'];
             for (let i = 0; i < 3; i++) {
                 for (const el of [heads[i], cells[i]]) {
@@ -241,20 +297,124 @@ describe('YearlyBreakdownTable — column groups', () => {
             expect(heads[2].className).toContain('shadow-[1px_0_0_0_rgb(226_232_240)]');
             expect(heads[1].className).not.toContain('shadow-[1px_0_0_0_rgb(226_232_240)]');
             // ...and never on the first scrolling column, whatever it happens to be.
-            if (heads.length > 3) expect(heads[3].className).not.toContain('sticky left-');
+            expect(heads[3].className).not.toContain('sticky left-');
         };
 
         expectFrozen();
-        await user.click(screen.getByRole('button', { name: 'Tax' }));
+        await user.click(detailToggle());
         expectFrozen();
-        await user.click(screen.getByRole('button', { name: 'Balances' }));
-        expectFrozen();
-        await user.click(screen.getByRole('button', { name: 'Income' }));
+        await user.click(detailToggle());
         expectFrozen();
     });
 });
 
-describe('YearlyBreakdownTable — new columns', () => {
+describe('YearlyBreakdownTable — Net Pension column', () => {
+    it('is absent when the household has no DB pension anywhere in the projection', () => {
+        expect(SINGLE_RESULTS.every(r => r.netPensionIncome <= 1)).toBe(true);
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        expect(headerLabels()).not.toContain(PENSION_COL);
+        expect(screen.queryByRole('columnheader', { name: PENSION_COL })).toBeNull();
+    });
+
+    it('appears, between Net OAS and Total Spend, when there is one', () => {
+        expect(PENSION_SINGLE_RESULTS.some(r => r.netPensionIncome > 1)).toBe(true);
+        render(<YearlyBreakdownTable data={PENSION_SINGLE_RESULTS} />);
+        const labels = headerLabels();
+        expect(labels).toEqual(expectedLabels({ pension: true }));
+        expect(labels.indexOf(PENSION_COL)).toBe(labels.indexOf('Net OAS') + 1);
+    });
+
+    it('appears when only the SPOUSE has the pension — the figure is a household one', () => {
+        render(<YearlyBreakdownTable data={SPOUSE_PENSION_RESULTS} hasSpouse />);
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, pension: true }));
+    });
+
+    it('renders the household figure, and a You/Spouse split on hover for a couple', async () => {
+        const user = userEvent.setup();
+        const idx = SPOUSE_PENSION_RESULTS.findIndex(r => r.netPensionIncome > 1);
+        expect(idx).toBeGreaterThanOrEqual(0);
+        const row = SPOUSE_PENSION_RESULTS[idx];
+
+        render(<YearlyBreakdownTable data={SPOUSE_PENSION_RESULTS} hasSpouse />);
+        const labels = headerLabels();
+        const cell = within(bodyRows()[idx]).getAllByRole('cell')[labels.indexOf(PENSION_COL)];
+        expect(cell.textContent).toBe(formatCurrencyCAD(row.netPensionIncome));
+
+        await user.hover(within(cell).getByText(formatCurrencyCAD(row.netPensionIncome)));
+        const tip = screen.getByRole('tooltip').textContent ?? '';
+        expect(tip).toContain(`You: ${formatCurrencyCAD(row.personNetPension)}`);
+        expect(tip).toContain(`Spouse: ${formatCurrencyCAD(row.spouseNetPension)}`);
+    });
+
+    it('uses the file\'s ">$1" materiality rule, so a token pension does not earn a column', () => {
+        // A pension small enough that no year clears $1 net. The assertion on the
+        // data comes first, so if the fixture ever became material this test fails
+        // loudly rather than quietly checking nothing.
+        const token = runSimulation(inputs({
+            person: person({ pension: { annualAmount: 1, startAge: 65, indexedToInflation: false } }),
+        }));
+        expect(token.some(r => r.netPensionIncome > 0)).toBe(true);
+        expect(token.every(r => r.netPensionIncome <= 1)).toBe(true);
+        render(<YearlyBreakdownTable data={token} />);
+        expect(headerLabels()).not.toContain(PENSION_COL);
+    });
+
+    it('is decided on nominal figures, so the today\'s-dollars toggle cannot change it', () => {
+        for (const [data, want] of [[SINGLE_RESULTS, false], [PENSION_SINGLE_RESULTS, true]] as const) {
+            for (const adjusted of [false, true]) {
+                render(<YearlyBreakdownTable data={data} inflationAdjusted={adjusted} />);
+                expect(headerLabels().includes(PENSION_COL)).toBe(want);
+                cleanup();
+            }
+        }
+    });
+
+    it('does not disturb header/body alignment when it drops out', () => {
+        for (const data of [SINGLE_RESULTS, PENSION_SINGLE_RESULTS]) {
+            render(<YearlyBreakdownTable data={data} />);
+            const headerCount = screen.getAllByRole('columnheader').length;
+            for (const row of bodyRows()) {
+                expect(within(row).getAllByRole('cell')).toHaveLength(headerCount);
+            }
+            cleanup();
+        }
+    });
+});
+
+describe('YearlyBreakdownTable — header and body stay aligned', () => {
+    // The whole point of the single-source column list: header and body can never
+    // drift. Cover both household sizes, both detail settings, with and without a
+    // pension — i.e. every filter that can remove a column.
+    const SETS = [
+        { name: 'single', data: SINGLE_RESULTS, spouse: false, pension: false },
+        { name: 'couple', data: COUPLE_RESULTS, spouse: true, pension: false },
+        { name: 'single with pension', data: PENSION_SINGLE_RESULTS, spouse: false, pension: true },
+        { name: 'couple with spouse pension', data: SPOUSE_PENSION_RESULTS, spouse: true, pension: true },
+    ];
+
+    for (const set of SETS) {
+        for (const detail of [true, false]) {
+            it(`${set.name}, account detail ${detail ? 'on' : 'off'}`, () => {
+                window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, JSON.stringify(detail));
+                render(<YearlyBreakdownTable data={set.data} hasSpouse={set.spouse} />);
+
+                const labels = headerLabels();
+                expect(labels).toEqual(expectedLabels({ spouse: set.spouse, detail, pension: set.pension }));
+
+                const rows = bodyRows();
+                expect(rows.length).toBe(set.data.length);
+                for (const row of rows) {
+                    expect(within(row).getAllByRole('cell')).toHaveLength(labels.length);
+                }
+
+                // Anchors are unconditional and always lead.
+                expect(labels.slice(0, set.spouse ? 3 : 2)).toEqual(set.spouse ? SP_ANCHORS : ANCHORS);
+            });
+        }
+    }
+});
+
+describe('YearlyBreakdownTable — column detail', () => {
     it('RRSP Drawn shows the household total and a three-way split tooltip', async () => {
         const user = userEvent.setup();
         const idx = COUPLE_RESULTS.findIndex(r => r.totalRRSPWithdrawal > 1);
@@ -283,18 +443,34 @@ describe('YearlyBreakdownTable — new columns', () => {
         }
     });
 
-    it('the OAS Clawback header warns that it is inside Tax Paid, not on top of it', () => {
-        seedGroups(['tax']);
+    it('the OAS Clawback header warns that it is inside Tax Paid, not on top of it', async () => {
+        const user = userEvent.setup();
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
         const th = screen.getByRole('columnheader', { name: 'OAS Clawback' });
-        const tip = th.getAttribute('title') ?? '';
-        expect(tip).toMatch(/Part of Tax Paid, not a charge on top of it/);
-        expect(tip).toMatch(/count it twice/i);
+        // A HelpTooltip like every other tooltip in the table, not a native `title`
+        // (which needs a long hover on exactly the right text and never shows on touch).
+        expect(th).not.toHaveAttribute('title');
+
+        await user.hover(within(th).getByText('OAS Clawback'));
+        const tip = screen.getByRole('tooltip').textContent ?? '';
+        expect(tip).toMatch(/already included in tax paid/i);
+        expect(tip).toMatch(/not added on top/i);
+    });
+
+    it('gives every column header a HelpTooltip rather than a native title', async () => {
+        const user = userEvent.setup();
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        for (const th of screen.getAllByRole('columnheader')) {
+            const label = th.textContent ?? '';
+            expect(th, `"${label}" still carries a native title`).not.toHaveAttribute('title');
+            await user.hover(within(th).getByText(label));
+            expect(screen.getByRole('tooltip').textContent ?? '').not.toBe('');
+            await user.unhover(within(th).getByText(label));
+        }
     });
 
     it('Avg Tax Rate matches the "Effective rate" line in the Tax Paid tooltip', async () => {
         const user = userEvent.setup();
-        seedGroups(['tax']);
         const idx = SINGLE_RESULTS.findIndex(r => averageTaxRate(r) !== null);
         expect(idx).toBeGreaterThanOrEqual(0);
         const row = SINGLE_RESULTS[idx];
@@ -310,19 +486,175 @@ describe('YearlyBreakdownTable — new columns', () => {
 
     it('renders a dash rather than a rate when there is no taxable income', () => {
         // A pure-TFSA household never has taxable income, so the guard fires every year.
-        const noTax = runSimulation(inputs({
-            person: person({
-                rrsp: { type: 'RRSP', balance: 0 },
-                tfsa: { type: 'TFSA', balance: 900_000 },
-                nonRegisteredAccounts: [nonReg()],
-                cppContributedYears: 0, cppStartAge: 70, oasStartAge: 70, lifeExpectancy: 68,
-            }),
-            postRetirementSpend: 40_000,
-        }));
-        seedGroups(['tax']);
+        const noTax = NO_ESTATE_TAX_RESULTS;
         render(<YearlyBreakdownTable data={noTax} />);
         expect(averageTaxRate(noTax[0])).toBeNull();
         expect(firstRowCell('Avg Tax Rate')).toBe('—');
         expect(firstRowCell('OAS Clawback')).toBe('—');
+    });
+});
+
+describe('YearlyBreakdownTable — estate tax footer', () => {
+    it('has no Estate Tax column — the figure is a footer total', () => {
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        expect(headerLabels()).not.toContain('Estate Tax');
+        expect(screen.queryByRole('columnheader', { name: 'Estate Tax' })).toBeNull();
+    });
+
+    it('totals the terminal tax and names the year it lands in', () => {
+        const charged = terminalRows(SINGLE_RESULTS);
+        expect(charged).toHaveLength(1);
+
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        const foot = footerRow()!;
+        expect(foot).not.toBeNull();
+        expect(within(foot).getByRole('rowheader').textContent)
+            .toBe(`Estate tax at death (${charged[0].year})`);
+        expect(foot.textContent).toContain(formatCurrencyCAD(estateTotal(SINGLE_RESULTS)));
+    });
+
+    it('for a couple, names the SECOND death — the first rolls over tax-free', () => {
+        // The engine only assesses a deemed disposition when nobody survives, so the
+        // first death produces a rollover and a zero, and the whole bill surfaces later.
+        const firstDeath = COUPLE_RESULTS.findIndex(r => r.isDeathYear);
+        expect(firstDeath).toBeGreaterThanOrEqual(0);
+        expect(COUPLE_RESULTS[firstDeath].rrspRolledToSpouse!).toBeGreaterThan(0);
+        expect(COUPLE_RESULTS[firstDeath].totalTerminalTax ?? 0).toBeCloseTo(0, 6);
+
+        const charged = terminalRows(COUPLE_RESULTS);
+        expect(charged).toHaveLength(1);
+        expect(charged[0].year).toBeGreaterThan(COUPLE_RESULTS[firstDeath].year);
+
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        expect(within(footerRow()!).getByRole('rowheader').textContent)
+            .toBe(`Estate tax at death (${charged[0].year})`);
+    });
+
+    it('is absent entirely when no year carries a material terminal tax', () => {
+        expect(terminalRows(NO_ESTATE_TAX_RESULTS)).toHaveLength(0);
+        render(<YearlyBreakdownTable data={NO_ESTATE_TAX_RESULTS} />);
+        expect(footerRow()).toBeNull();
+        expect(screen.queryByText(/Estate tax at death/)).toBeNull();
+    });
+
+    it('keeps the terminal-tax explanation, on the footer label', async () => {
+        const user = userEvent.setup();
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        await user.hover(within(footerRow()!).getByText(/Estate tax at death/));
+        const tip = screen.getByRole('tooltip').textContent ?? '';
+        expect(tip).toContain('deemed disposition of RRSP/RRIF');
+        expect(tip).toContain('unrealized capital gains');
+        expect(tip).toMatch(/already deducted from the account balances/i);
+    });
+
+    it('explains the spousal rollover only when there is a spouse', async () => {
+        const user = userEvent.setup();
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        await user.hover(within(footerRow()!).getByText(/Estate tax at death/));
+        expect(screen.getByRole('tooltip').textContent).toMatch(/second death/);
+
+        cleanup();
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        await user.hover(within(footerRow()!).getByText(/Estate tax at death/));
+        expect(screen.getByRole('tooltip').textContent).not.toMatch(/second death/);
+    });
+
+    it('follows the today\'s-dollars toggle, using the taxed row\'s inflationFactor', () => {
+        const charged = terminalRows(SINGLE_RESULTS)[0];
+        expect(charged.inflationFactor).toBeGreaterThan(1.2);
+
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        const nominal = footerRow()!.textContent ?? '';
+        expect(nominal).toContain(formatCurrencyCAD(charged.totalTerminalTax!));
+
+        cleanup();
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} inflationAdjusted />);
+        const adjusted = footerRow()!.textContent ?? '';
+        expect(adjusted).toContain(formatCurrencyCAD(estateTotal(SINGLE_RESULTS, true)));
+        expect(adjusted).not.toBe(nominal);
+    });
+
+    it('is decided on nominal figures, so the toggle cannot make it appear or vanish', () => {
+        for (const [data, want] of [[SINGLE_RESULTS, true], [NO_ESTATE_TAX_RESULTS, false]] as const) {
+            for (const adjusted of [false, true]) {
+                render(<YearlyBreakdownTable data={data} inflationAdjusted={adjusted} />);
+                expect(footerRow() !== null).toBe(want);
+                cleanup();
+            }
+        }
+    });
+
+    // The whole point of deriving the index: the amount must track Tax Paid through
+    // every filter that can add or remove a column ahead of it.
+    const FOOTER_SETS = [
+        { name: 'single', data: SINGLE_RESULTS, spouse: false },
+        { name: 'couple', data: COUPLE_RESULTS, spouse: true },
+        { name: 'single with pension', data: PENSION_SINGLE_RESULTS, spouse: false },
+        { name: 'couple with spouse pension', data: SPOUSE_PENSION_RESULTS, spouse: true },
+    ];
+
+    for (const set of FOOTER_SETS) {
+        for (const detail of [true, false]) {
+            it(`puts the amount under Tax Paid — ${set.name}, account detail ${detail ? 'on' : 'off'}`, () => {
+                window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, JSON.stringify(detail));
+                render(<YearlyBreakdownTable data={set.data} hasSpouse={set.spouse} />);
+
+                const labels = headerLabels();
+                const frozen = set.spouse ? 3 : 2;
+                const taxPaidIdx = labels.indexOf('Tax Paid');
+                expect(taxPaidIdx).toBeGreaterThanOrEqual(frozen);
+
+                const foot = footerRow()!;
+                // The label occupies the frozen anchors via colSpan; every remaining
+                // column gets its own cell, so cell N is column N + frozen.
+                const head = within(foot).getByRole('rowheader') as HTMLTableCellElement;
+                expect(head).toHaveAttribute('colspan', String(frozen));
+
+                const cells = within(foot).getAllByRole('cell');
+                expect(cells).toHaveLength(labels.length - frozen);
+
+                const amount = formatCurrencyCAD(estateTotal(set.data));
+                expect(cells[taxPaidIdx - frozen].textContent).toBe(amount);
+                // ...and nothing anywhere else in the row.
+                cells.forEach((cell, i) => {
+                    if (i !== taxPaidIdx - frozen) expect(cell.textContent).toBe('');
+                });
+                // Total cells rendered must still span the table exactly.
+                expect(head.colSpan + cells.length).toBe(labels.length);
+            });
+        }
+    }
+
+    it('is an ordinary last row — it scrolls with the table rather than pinning to the box', () => {
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        const foot = footerRow()!;
+        const head = within(foot).getByRole('rowheader');
+        const cells = within(foot).getAllByRole('cell');
+
+        // Nothing pins the row to the bottom of the scroll box any more, and with the
+        // vertical sticky gone there is no z-layering left to justify.
+        for (const el of [head, ...cells]) {
+            expect(el.className).not.toContain('bottom-0');
+            expect(el.className).not.toMatch(/\bz-\d/);
+            // A normal row can carry an ordinary top border — the sticky-cell shadow
+            // workaround is gone.
+            expect(el.className).toContain('border-t');
+            expect(el.className).not.toContain('shadow-[0_-1px');
+        }
+
+        // The HORIZONTAL freeze survives: the label stays in the frozen region, opaque
+        // (cells scroll under it) and carrying the frozen region's edge rule, and it is
+        // the only positioned cell in the row so it paints above them without a z-index.
+        expect(head.className).toContain('sticky');
+        expect(head.className).toContain('left-0');
+        expect(head.className).toContain('bg-slate-50');
+        expect(head.className).toContain('shadow-[1px_0_0_0_rgb(226_232_240)]');
+        for (const cell of cells) expect(cell.className).not.toContain('sticky');
+    });
+
+    it('is not counted as a data row', () => {
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        expect(bodyRows()).toHaveLength(SINGLE_RESULTS.length);
+        expect(footerRow()).not.toBeNull();
     });
 });

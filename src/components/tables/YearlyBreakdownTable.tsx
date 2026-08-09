@@ -4,14 +4,12 @@ import { formatCurrencyCAD } from '../../utils/formatters';
 import { usePersistentState } from '../../hooks/usePersistentState';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import {
-    COLUMN_GROUPS,
-    COLUMN_GROUPS_STORAGE_KEY,
-    DEFAULT_COLUMN_GROUPS,
+    ACCOUNT_DETAIL_STORAGE_KEY,
+    DEFAULT_ACCOUNT_DETAIL,
     averageTaxRate,
     formatPercent1,
     reinvestedTotal,
-    sanitizeColumnGroups,
-    type ColumnGroup,
+    sanitizeAccountDetail,
 } from './yearlyBreakdownColumns';
 
 /**
@@ -93,24 +91,51 @@ function TipValue({ tip, border, children }: { tip: string; border: string; chil
 // ---------------------------------------------------------------------------
 
 /*
- * A column is defined exactly once: its label, tooltip, alignment, group, cell
- * colour and its render function all live in the same object, and the header row
- * and the body rows are both derived from the same filtered array. The previous
+ * A column is defined exactly once: its label, tooltip, alignment, cell colour
+ * and its render function all live in the same object, and the header row and
+ * the body rows are both derived from the same filtered array. The previous
  * shape — a header list plus a hand-maintained parallel run of <td>s — could
- * silently drift out of alignment, and with groups switching columns on and off
- * that drift would have been a matter of time.
+ * silently drift out of alignment, and with columns dropping in and out that
+ * drift would have been a matter of time.
  *
- * `group: undefined` means "always visible": Year / Age / Sp Age are the frozen
- * row anchors and are never part of a toggleable group. They are also always the
- * FIRST columns in this list, which is what lets the frozen-column logic below
- * stay a simple index comparison no matter which groups are on.
+ * Year / Age / Sp Age are the frozen row anchors: unconditional (no
+ * `accountDetail`, no `relevant`) and always the FIRST columns in this list,
+ * which is what lets the frozen-column logic below stay a simple index
+ * comparison however the rest of the list is filtered.
  */
 interface ColumnDef {
     key: string;
     label: string;
     tooltip: string;
     align: 'left' | 'right';
-    group?: ColumnGroup;
+    /*
+     * A single account's BALANCE (yours or your spouse's), as opposed to a
+     * household summary figure. These are what the "Account detail" toggle
+     * switches off, leaving Total Assets and RRSP Drawn behind — see the note
+     * in yearlyBreakdownColumns.ts. Marked here, on the column, so the filter
+     * never carries a hand-maintained key list.
+     *
+     * All of these sit after the frozen anchors, so dropping them cannot
+     * disturb the "anchors sort first" invariant the frozen-column index test
+     * relies on.
+     */
+    accountDetail?: boolean;
+    /*
+     * "Does this column say anything about THIS projection?" — a predicate over
+     * the whole data set, evaluated once per data set (not per row) and used to
+     * drop the column entirely when the answer is no. A column with no
+     * `relevant` is unconditional.
+     *
+     * Declared on the column rather than special-cased in the filter for the
+     * same reason `accountDetail` is: the next column that wants this (Estate
+     * Tax on a plan with none, OAS Clawback that never bites) adds a one-line
+     * predicate and nothing else has to change.
+     *
+     * Predicates judge materiality on NOMINAL figures with the file's `> 1`
+     * convention — whether a column is worth showing is a property of the
+     * projection, not of the display units the reader has selected.
+     */
+    relevant?: (data: SimulationResult[]) => boolean;
     /*
      * Headers are `whitespace-nowrap` by default, which makes a long label set the
      * column's minimum width all on its own. "Surplus / Shortfall" is the one label
@@ -152,18 +177,18 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
     // --- Balances -----------------------------------------------------------
     columns.push(
         {
-            key: 'rrsp', label: 'RRSP', group: 'balances', align: 'right', className: 'text-sky-600',
+            key: 'rrsp', label: 'RRSP', accountDetail: true, align: 'right', className: 'text-sky-600',
             tooltip: 'Your RRSP balance after contributions, withdrawals, and growth. Withdrawals are fully taxable.',
             cell: (row, adj) => money(adj(row.accounts.rrsp))
         },
         {
-            key: 'tfsa', label: 'TFSA', group: 'balances', align: 'right', className: 'text-emerald-600',
+            key: 'tfsa', label: 'TFSA', accountDetail: true, align: 'right', className: 'text-emerald-600',
             tooltip: 'Your TFSA balance after contributions, withdrawals, and growth. Withdrawals are tax-free.',
             cell: (row, adj) => money(adj(row.accounts.tfsa))
         },
         {
-            key: 'nonReg', label: 'Non-Reg', group: 'balances', align: 'right', className: 'text-amber-600',
-            tooltip: 'Your Non-registered balance. Capital gains are calculated against your adjusted cost base (ACB); only 50% of gains are taxable.',
+            key: 'nonReg', label: 'Non-Reg', accountDetail: true, align: 'right', className: 'text-amber-600',
+            tooltip: 'Your Non-registered balance. Only 50% of the gain above your adjusted cost base (ACB) is taxable.',
             cell: (row, adj) => showMixDrift && row.nonRegMix && row.accounts.nonRegistered > 1
                 ? <TipValue tip={mixTooltip(row.nonRegMix)} border="border-amber-200">{money(adj(row.accounts.nonRegistered))}</TipValue>
                 : money(adj(row.accounts.nonRegistered))
@@ -173,17 +198,17 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
     if (hasSpouse) {
         columns.push(
             {
-                key: 'spRrsp', label: 'Sp RRSP', group: 'balances', align: 'right', className: 'text-sky-400',
+                key: 'spRrsp', label: 'Sp RRSP', accountDetail: true, align: 'right', className: 'text-sky-400',
                 tooltip: "Spouse's RRSP balance",
                 cell: (row, adj) => row.spouseAccounts ? money(adj(row.spouseAccounts.rrsp)) : '-'
             },
             {
-                key: 'spTfsa', label: 'Sp TFSA', group: 'balances', align: 'right', className: 'text-emerald-400',
+                key: 'spTfsa', label: 'Sp TFSA', accountDetail: true, align: 'right', className: 'text-emerald-400',
                 tooltip: "Spouse's TFSA balance",
                 cell: (row, adj) => row.spouseAccounts ? money(adj(row.spouseAccounts.tfsa)) : '-'
             },
             {
-                key: 'spNonReg', label: 'Sp Non-Reg', group: 'balances', align: 'right', className: 'text-amber-400',
+                key: 'spNonReg', label: 'Sp Non-Reg', accountDetail: true, align: 'right', className: 'text-amber-400',
                 tooltip: "Spouse's Non-registered balance",
                 cell: (row, adj) => showMixDrift && row.spouseNonRegMix && row.spouseAccounts && row.spouseAccounts.nonRegistered > 1
                     ? <TipValue tip={mixTooltip(row.spouseNonRegMix)} border="border-amber-200">{money(adj(row.spouseAccounts.nonRegistered))}</TipValue>
@@ -194,14 +219,14 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
 
     columns.push(
         {
-            key: 'total', label: 'Total Assets', group: 'balances', align: 'right', className: 'font-medium text-slate-900',
+            key: 'total', label: 'Total Assets', align: 'right', className: 'font-medium text-slate-900',
             tooltip: 'Sum of all account balances (yours + spouse if applicable)',
             cell: (row, adj) => money(adj(row.totalAssets))
         },
         {
-            key: 'rrspWithdrawn', label: 'RRSP Drawn', group: 'balances', align: 'right',
+            key: 'rrspWithdrawn', label: 'RRSP Drawn', align: 'right',
             className: row => row.totalRRSPWithdrawal > 1 ? 'text-sky-700' : 'text-slate-300',
-            tooltip: 'Gross RRSP/RRIF withdrawn this year (household, before tax) — the mandatory RRIF minimum plus any voluntary meltdown plus any extra draw taken to fund spending. Hover a figure for the split.',
+            tooltip: 'Gross RRSP/RRIF withdrawn this year (household, before tax). Hover a figure for the split.',
             cell: (row, adj) => row.totalRRSPWithdrawal > 1
                 ? <TipValue tip={withdrawalBreakdown(row, adj)} border="border-sky-200">{money(adj(row.totalRRSPWithdrawal))}</TipValue>
                 : DASH
@@ -209,34 +234,39 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
 
         // --- Income ---------------------------------------------------------
         {
-            key: 'netCPP', label: 'Net CPP', group: 'income', align: 'right', className: 'text-blue-600',
+            key: 'netCPP', label: 'Net CPP', align: 'right', className: 'text-blue-600',
             tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).',
             cell: (row, adj) => hasSpouse && row.netCPPIncome > 1
                 ? <TipValue tip={`You: ${money(adj(row.personNetCPP))}\nSpouse: ${money(adj(row.spouseNetCPP))}`} border="border-blue-200">{money(adj(row.netCPPIncome))}</TipValue>
                 : money(adj(row.netCPPIncome))
         },
         {
-            key: 'netOAS', label: 'Net OAS', group: 'income', align: 'right', className: 'text-blue-600',
+            key: 'netOAS', label: 'Net OAS', align: 'right', className: 'text-blue-600',
             tooltip: 'Combined Old Age Security benefits (Net of Tax).',
             cell: (row, adj) => hasSpouse && row.netOASIncome > 1
                 ? <TipValue tip={`You: ${money(adj(row.personNetOAS))}\nSpouse: ${money(adj(row.spouseNetOAS))}`} border="border-blue-200">{money(adj(row.netOASIncome))}</TipValue>
                 : money(adj(row.netOASIncome))
         },
         {
-            key: 'netPension', label: 'Net Pension', group: 'income', align: 'right', className: 'text-blue-600',
+            key: 'netPension', label: 'Net Pension', align: 'right', className: 'text-blue-600',
             tooltip: 'Combined workplace defined-benefit pension income, including any bridge benefit (Net of Tax).',
+            // Most households have no DB pension, and a column of zeroes stretching
+            // the table sideways is worse than no column. netPensionIncome is the
+            // combined household figure (bridge benefit included), so one pass over
+            // the projection settles it for both people.
+            relevant: data => data.some(row => row.netPensionIncome > 1),
             cell: (row, adj) => hasSpouse && row.netPensionIncome > 1
                 ? <TipValue tip={`You: ${money(adj(row.personNetPension))}\nSpouse: ${money(adj(row.spouseNetPension))}`} border="border-blue-200">{money(adj(row.netPensionIncome))}</TipValue>
                 : money(adj(row.netPensionIncome))
         },
         {
-            key: 'netIncome', label: 'Total Spend', group: 'income', align: 'right', className: 'text-green-600',
+            key: 'netIncome', label: 'Total Spend', align: 'right', className: 'text-green-600',
             tooltip: "What the household actually spent this year. Equals your spending target unless accounts ran short.",
             cell: (row, adj) => money(adj(row.netIncome))
         },
         {
-            key: 'surplusShortfall', label: 'Surplus / Shortfall', group: 'income', align: 'right', wrapHeader: true,
-            tooltip: 'Green (+): income exceeded the spending target; the excess was reinvested into TFSA/RRSP/Non-Reg. Red (−): spending that could NOT be funded after draining all accounts.',
+            key: 'surplusShortfall', label: 'Surplus / Shortfall', align: 'right', wrapHeader: true,
+            tooltip: 'Green (+): income beat the spending target and the excess was reinvested. Red (−): spending that could not be funded after every account ran dry.',
             className: row => row.shortfall > 1 ? 'font-bold text-red-600' : reinvestedTotal(row) > 1 ? 'text-emerald-600' : 'text-slate-300',
             cell: (row, adj) => {
                 if (row.shortfall > 1) return `−${money(adj(row.shortfall))}`;
@@ -247,43 +277,101 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
 
         // --- Tax ------------------------------------------------------------
         {
-            key: 'taxableIncome', label: 'Taxable Income', group: 'tax', align: 'right', className: 'text-slate-700',
-            tooltip: 'Household taxable income for the year, before tax: employment, CPP, OAS, pension and RRSP/RRIF withdrawals plus the taxable portion of investment income (grossed-up dividends, the taxable half of realized capital gains), less deductions. This is the figure the tax brackets are applied to.',
+            key: 'taxableIncome', label: 'Taxable Income', align: 'right', className: 'text-slate-700',
+            tooltip: 'Household taxable income for the year, after deductions — the figure the tax brackets are applied to.',
             cell: (row, adj) => money(adj(row.grossIncome))
         },
         {
-            key: 'taxPaid', label: 'Tax Paid', group: 'tax', align: 'right', className: 'text-red-500',
+            key: 'taxPaid', label: 'Tax Paid', align: 'right', className: 'text-red-500',
             tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback',
             cell: (row, adj) => row.taxPaid > 1
                 ? <TipValue tip={taxBreakdown(row, hasSpouse, adj)} border="border-red-200">{money(adj(row.taxPaid))}</TipValue>
                 : money(adj(row.taxPaid))
         },
         {
-            key: 'oasClawback', label: 'OAS Clawback', group: 'tax', align: 'right',
+            key: 'oasClawback', label: 'OAS Clawback', align: 'right',
             // Deliberately a lighter red than Tax Paid: this is a slice OF that
             // number, not another charge sitting beside it.
             className: row => row.oasClawbackPaid > 1 ? 'text-red-400' : 'text-slate-300',
-            tooltip: 'Part of Tax Paid, not a charge on top of it. This is how much of that same tax bill is OAS being clawed back (the OAS recovery tax). Adding this column to Tax Paid would count it twice.',
+            tooltip: 'The OAS recovery tax. Already included in Tax Paid — shown separately, not added on top.',
             cell: (row, adj) => row.oasClawbackPaid > 1 ? money(adj(row.oasClawbackPaid)) : DASH
         },
         {
-            key: 'avgTaxRate', label: 'Avg Tax Rate', group: 'tax', align: 'right',
+            key: 'avgTaxRate', label: 'Avg Tax Rate', align: 'right',
             className: row => averageTaxRate(row) !== null ? 'text-red-500' : 'text-slate-300',
-            tooltip: 'Tax Paid divided by Taxable Income — the average rate across all of this year\'s income, not the top bracket you touch. The same figure appears as "Effective rate" in the Tax Paid tooltip. Unaffected by the today\'s-dollars toggle.',
+            tooltip: 'Tax Paid divided by Taxable Income — the average rate across this year\'s income, not the top bracket you touch.',
             cell: row => {
                 const rate = averageTaxRate(row);
                 return rate === null ? DASH : formatPercent1(rate);
             }
         },
-        {
-            key: 'estateTax', label: 'Estate Tax', group: 'tax', align: 'right',
-            className: row => (row.totalTerminalTax ?? 0) > 1 ? 'font-bold text-red-600' : 'text-slate-300',
-            tooltip: 'Terminal tax at death: deemed disposition of RRSP/RRIF plus unrealized capital gains. Already deducted from the account balances shown on this row.',
-            cell: (row, adj) => (row.totalTerminalTax ?? 0) > 1 ? money(adj(row.totalTerminalTax!)) : DASH
-        },
+        // NOTE: terminal ("estate") tax deliberately has no column — it is non-zero
+        // on exactly one row out of forty-odd, so a column spent ~130px of a table
+        // that is already too wide to say "—" forty-two times. It is a <tfoot>
+        // total instead; see estateTaxFooter below.
     );
 
     return columns;
+}
+
+// ---------------------------------------------------------------------------
+// Estate tax footer
+// ---------------------------------------------------------------------------
+
+/*
+ * Terminal tax at death, as a total row at the foot of the table rather than a
+ * column.
+ *
+ * WHEN it lands, from the engine (projection.ts, "Step 7: Terminal Tax"): a death
+ * only triggers a deemed disposition when there is NO surviving spouse. For a
+ * couple whose deaths fall in different years the first death rolls the RRSP/RRIF,
+ * TFSA and non-registered ACB over to the survivor tax-free (totalTerminalTax is
+ * 0 on that row) and the whole bill surfaces at the second death; if both die in
+ * the same year, both estates are assessed onto that one row. So in practice
+ * exactly one row ever carries the tax.
+ *
+ * "In practice" is not "by construction", though, and a footer that silently
+ * showed one of two figures would be worse than no footer — hence the collection
+ * below totals every material row and names every year it found, and the label
+ * only says "(2066)" when 2066 really is the only one.
+ */
+interface EstateTaxFooter {
+    /** Household terminal tax, in the reader's chosen dollars. */
+    amount: number;
+    /** e.g. "Estate tax at death (2066)". */
+    label: string;
+}
+
+function joinYears(years: number[]): string {
+    if (years.length === 1) return String(years[0]);
+    return `${years.slice(0, -1).join(', ')} and ${years[years.length - 1]}, combined`;
+}
+
+/**
+ * Null when no year carries a material terminal tax — most plans that end with a
+ * drained RRSP, and every all-TFSA one — in which case no footer renders at all.
+ *
+ * Materiality is judged on the NOMINAL figure, the same `> 1` convention the
+ * column `relevant` predicates use: whether the line is worth showing is a
+ * property of the projection, not of the display units the reader selected. The
+ * AMOUNT then goes through the same per-row `adj` as every other currency figure
+ * in the table, using the inflationFactor of the row that carries the tax.
+ */
+function estateTaxFooter(data: SimulationResult[], inflationAdjusted: boolean): EstateTaxFooter | null {
+    const rows = data.filter(row => (row.totalTerminalTax ?? 0) > 1);
+    if (rows.length === 0) return null;
+    const amount = rows.reduce(
+        (sum, row) => sum + makeAdjust(row, inflationAdjusted)(row.totalTerminalTax!),
+        0
+    );
+    return { amount, label: `Estate tax at death (${joinYears(rows.map(r => r.year))})` };
+}
+
+function estateTaxTooltip(hasSpouse: boolean): string {
+    const base = 'Terminal tax at death: deemed disposition of RRSP/RRIF plus unrealized capital gains. Already deducted from the account balances shown for that year.';
+    return hasSpouse
+        ? `${base}\n\nThe first death rolls everything over to the survivor tax-free, so the bill lands in the year of the second death.`
+        : base;
 }
 
 // ---------------------------------------------------------------------------
@@ -314,9 +402,8 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
  * Sp Age 80px — pinned a shade above each for headroom against font variation,
  * which costs the table only ~16px of extra width.
  *
- * Column groups do not disturb any of this: the three anchors are outside every
- * group, so they are always present and always the leading columns whatever is
- * toggled on.
+ * Nothing that filters the column list disturbs any of this: the three anchors
+ * are unconditional, so they are always present and always the leading columns.
  */
 const FROZEN_WIDTH = ['min-w-[72px]', 'min-w-[64px]', 'min-w-[88px]'];
 const FROZEN_LEFT = ['left-0', 'left-[72px]', 'left-[136px]'];
@@ -335,15 +422,28 @@ function HeaderCell({ label, tooltip, align, sticky, wrap = false }: { label: st
             // sticky has the broader browser support. The opaque `bg-slate-50` has to
             // live here too — it used to be on <thead>, but body rows scroll *under*
             // the header now and a transparent header cell would show them through.
-            className={`sticky top-0 bg-slate-50 px-3 py-2 font-semibold text-slate-600 cursor-help ${wrap ? '' : 'whitespace-nowrap'} ${align === 'right' ? 'text-right' : 'text-left'} ${sticky}`}
-            title={tooltip}
+            //
+            // The explanation is a HelpTooltip, not a native `title`: same treatment as
+            // this table's own body cells and the rest of the app (see HelpTooltip's
+            // docstring — a title needs a long hover on exactly the right text and never
+            // appears on touch). It renders position:fixed, so the scroll box's overflow
+            // does not clip it. Alignment and wrapping still belong to the <th>: the
+            // tooltip's wrapper is an inline-block, so `text-right`/`text-left` place it
+            // and `whitespace-nowrap` inherits into it.
+            className={`sticky top-0 bg-slate-50 px-3 py-2 font-semibold text-slate-600 ${wrap ? '' : 'whitespace-nowrap'} ${align === 'right' ? 'text-right' : 'text-left'} ${sticky}`}
         >
-            <span className="border-b border-dashed border-slate-400">{label}</span>
+            <HelpTooltip text={tooltip}>
+                <span className="cursor-help border-b border-dashed border-slate-400">{label}</span>
+            </HelpTooltip>
         </th>
     );
 }
 
-function GroupToggle({ label, hint, active, onToggle }: { label: string; hint: string; active: boolean; onToggle: () => void }) {
+function ColumnToggle({ label, hint, active, onToggle }: { label: string; hint: string; active: boolean; onToggle: () => void }) {
+    const shell = active
+        ? 'border-brand-600 bg-brand-600 text-white hover:bg-brand-700 hover:border-brand-700'
+        : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50';
+    const box = active ? 'border-white bg-white/25' : 'border-slate-300 bg-white';
     return (
         <button
             type="button"
@@ -352,15 +452,11 @@ function GroupToggle({ label, hint, active, onToggle }: { label: string; hint: s
             title={hint}
             // Deliberately large (px-4 py-2, 16px type, a real 20px checkbox): the
             // readers of this table should not have to hunt for a tiny chip.
-            className={`flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-semibold transition-colors ${
-                active
-                    ? 'border-brand-600 bg-brand-600 text-white hover:bg-brand-700 hover:border-brand-700'
-                    : 'border-slate-300 bg-white text-slate-600 hover:border-slate-400 hover:bg-slate-50'
-            }`}
+            className={`flex items-center gap-2 rounded-lg border-2 px-4 py-2 text-sm font-semibold transition-colors ${shell}`}
         >
             <span
                 aria-hidden="true"
-                className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 ${active ? 'border-white bg-white/25' : 'border-slate-300 bg-white'}`}
+                className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border-2 ${box}`}
             >
                 {active && (
                     <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={3}>
@@ -386,39 +482,77 @@ interface YearlyBreakdownTableProps {
 }
 
 export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ data, hasSpouse = false, showMixDrift = false, inflationAdjusted = false, onSelectYear }: YearlyBreakdownTableProps) {
-    const [groups, setGroups] = usePersistentState<ColumnGroup[]>(COLUMN_GROUPS_STORAGE_KEY, DEFAULT_COLUMN_GROUPS, sanitizeColumnGroups);
-
-    // usePersistentState's setter takes a VALUE, not an updater, so two toggles
-    // dispatched in the same tick would both read the same pre-click `groups` and
+    // The one display option: the per-account balance columns.
+    //
+    // usePersistentState's setter takes a VALUE, not an updater, so two clicks
+    // dispatched in the same tick would both read the same pre-click state and
     // the first would be lost. Mirroring the latest value in a ref keeps each
     // toggle building on the one before it without reaching into the hook. The
-    // ref is written in an effect (never during render); toggleGroup writes it
+    // ref is written in an effect (never during render); the toggle writes it
     // eagerly as well, which is what makes a same-tick pair compose.
-    const groupsRef = useRef(groups);
-    useEffect(() => { groupsRef.current = groups; }, [groups]);
+    const [accountDetail, setAccountDetail] = usePersistentState<boolean>(ACCOUNT_DETAIL_STORAGE_KEY, DEFAULT_ACCOUNT_DETAIL, sanitizeAccountDetail);
+    const accountDetailRef = useRef(accountDetail);
+    useEffect(() => { accountDetailRef.current = accountDetail; }, [accountDetail]);
 
-    const toggleGroup = useCallback((id: ColumnGroup) => {
-        const cur = groupsRef.current;
-        const next = cur.includes(id) ? cur.filter(g => g !== id) : [...cur, id];
-        groupsRef.current = next;
-        setGroups(next);
-    }, [setGroups]);
+    const toggleAccountDetail = useCallback(() => {
+        const next = !accountDetailRef.current;
+        accountDetailRef.current = next;
+        setAccountDetail(next);
+    }, [setAccountDetail]);
 
     // Rebuilt only when the shape of the table changes — not on every render, and
     // notably not when the inflation toggle flips (the adjustment is applied per
     // row at render time, so the definitions stay independent of it).
     const allColumns = useMemo(() => buildColumns(hasSpouse, showMixDrift), [hasSpouse, showMixDrift]);
+    // Each `relevant` predicate runs once per data set here, never per row.
     const columns = useMemo(
-        () => allColumns.filter(c => !c.group || groups.includes(c.group)),
-        [allColumns, groups]
+        () => allColumns.filter(c => (!c.accountDetail || accountDetail) && (!c.relevant || c.relevant(data))),
+        [allColumns, accountDetail, data]
     );
 
-    // Year + Age, and Sp Age when there is a spouse. These are never in a group,
-    // so this count is independent of which groups are active.
+    // Year + Age, and Sp Age when there is a spouse. These columns are
+    // unconditional, so this count never depends on what was filtered out.
     const frozenCount = hasSpouse ? 3 : 2;
 
+    // Hidden entirely when no year carries a material terminal tax.
+    const footer = useMemo(() => estateTaxFooter(data, inflationAdjusted), [data, inflationAdjusted]);
+
+    /*
+     * The footer's amount belongs under Tax Paid. Its position is DERIVED from
+     * the rendered array, never hardcoded: the column set is dynamic (the
+     * account-detail toggle, the pension column's `relevant` predicate), so a
+     * literal index would silently drift under a neighbouring heading the next
+     * time a column drops in or out.
+     *
+     * `footerCells` is the run of columns AFTER the frozen anchors — the anchors
+     * are covered by the label's colSpan — so the amount's index within it is
+     * offset by frozenCount. Tax Paid is unconditional today, so the fallback is
+     * defensive only: if it ever stopped being rendered the amount lands in the
+     * last column (still right-aligned, still legible) rather than throwing or
+     * appearing under an unrelated heading.
+     */
+    const footerCells = columns.slice(frozenCount);
+    const taxPaidIndex = columns.findIndex(c => c.key === 'taxPaid');
+    const amountIndex = taxPaidIndex >= frozenCount ? taxPaidIndex - frozenCount : footerCells.length - 1;
+
+    /*
+     * `isolate` on the card below (CSS isolation: isolate) is LOAD-BEARING — do
+     * not remove it.
+     *
+     * The table's own sticky layers (frozen headers z-30, scrolling headers z-20,
+     * frozen body cells z-10) are pinned to the top of the scroll box, which is
+     * exactly what they should be. Without a stacking context of their own,
+     * though, those z-indices compete with the PAGE's sticky layers — the app
+     * header (z-50) and the SummaryHeader (z-20) — and once the page scrolls far
+     * enough that this card's top passes under the summary cards, the column
+     * headers paint straight over them.
+     *
+     * Isolating the card puts 30/20/10 in a private stacking context whose own
+     * level is `auto`, so the internal layering keeps working and the whole card
+     * paints beneath the page's sticky layers, where it belongs.
+     */
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+        <div className="isolate bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
                 <div>
                     <h2 className="text-xl font-bold text-slate-900">Year-by-Year Breakdown</h2>
@@ -427,17 +561,14 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                         {onSelectYear && ' Click a year for a full breakdown.'}
                     </p>
                 </div>
-                <div role="group" aria-label="Column groups" className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-slate-600 mr-1">Columns:</span>
-                    {COLUMN_GROUPS.map(g => (
-                        <GroupToggle
-                            key={g.id}
-                            label={g.label}
-                            hint={g.hint}
-                            active={groups.includes(g.id)}
-                            onToggle={() => toggleGroup(g.id)}
-                        />
-                    ))}
+                    <ColumnToggle
+                        label="Account detail"
+                        hint="Show each RRSP, TFSA and non-registered balance separately. Off leaves Total Assets and RRSP Drawn, and makes the table narrower."
+                        active={accountDetail}
+                        onToggle={toggleAccountDetail}
+                    />
                 </div>
             </div>
             {/*
@@ -450,8 +581,17 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
               * which makes the sticky header work, and as a bonus keeps us clear of the
               * page's two other sticky layers (app header at top-0, SummaryHeader at
               * top-16): in here the header just sticks at top-0 with no offset maths.
+              *
+              * The height is derived from that sticky stack rather than a flat
+              * fraction of the viewport: app header 65px + SummaryHeader ~183px ≈
+              * 17rem. A flat `70vh` happens to fit on a 900px-tall screen, but on a
+              * shorter laptop the box runs past the fold and its column headers end
+              * up parked behind the summary cards. `max()` keeps a 24rem floor so a
+              * very short viewport gets a scrollable box rather than a useless
+              * letterbox — and because this is a MAX-height, a short table still
+              * collapses to its own height either way.
               */}
-            <div className="overflow-auto max-h-[70vh]">
+            <div className="overflow-auto max-h-[max(24rem,calc(100vh_-_17rem))]">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50">
                         <tr>
@@ -516,6 +656,51 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                             );
                         })}
                     </tbody>
+                    {/*
+                      * A real <tfoot>, but an ordinary last row: it scrolls with the
+                      * content rather than pinning itself to the bottom of the box.
+                      *
+                      * Only the horizontal freeze survives. The label still sits in the
+                      * frozen region (sticky left-0, opaque, carrying the frozen region's
+                      * edge rule) so it behaves like every other frozen cell when the
+                      * table is scrolled sideways; the scrolling cells are plain <td>s and
+                      * the sticky label paints over them without needing a z-index, being
+                      * the only positioned cell in the row.
+                      */}
+                    {footer && (
+                        <tfoot>
+                            <tr className="bg-slate-50">
+                                {/*
+                                  * The label must stay WRAPPABLE. A spanning cell contributes
+                                  * its min-content width to the columns it covers, so a
+                                  * `whitespace-nowrap` label here would widen Year/Age past
+                                  * the FROZEN_WIDTH pins — and the FROZEN_LEFT offsets those
+                                  * pins are derived from would then line the frozen columns up
+                                  * wrongly for every row in the table. Allowed to wrap it
+                                  * costs the layout nothing: measured in-browser, Year and Age
+                                  * stay at exactly 72px and 64px with this row present.
+                                  */}
+                                <th
+                                    scope="row"
+                                    colSpan={frozenCount}
+                                    className={`sticky left-0 border-t border-slate-300 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700 ${FROZEN_EDGE}`}
+                                >
+                                    <HelpTooltip text={estateTaxTooltip(hasSpouse)}>
+                                        <span className="cursor-help border-b border-dashed border-slate-400">{footer.label}</span>
+                                    </HelpTooltip>
+                                </th>
+                                {footerCells.map((col, i) => (
+                                    <td
+                                        key={col.key}
+                                        data-column={col.key}
+                                        className={`border-t border-slate-300 px-3 py-2 text-right ${i === amountIndex ? 'font-bold text-red-600' : ''}`}
+                                    >
+                                        {i === amountIndex ? money(footer.amount) : null}
+                                    </td>
+                                ))}
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
         </div>

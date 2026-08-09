@@ -1,50 +1,36 @@
 import type { SimulationResult } from '../../engine/types';
 
 /*
- * Non-component half of YearlyBreakdownTable: the column-group vocabulary and
+ * Non-component half of YearlyBreakdownTable: the persisted display option and
  * the shared derivations. It lives in its own module because a .tsx file that
  * exports anything besides components loses React Fast Refresh (and trips
  * react-refresh/only-export-components).
  */
 
 // ---------------------------------------------------------------------------
-// Column groups
+// Account detail
 // ---------------------------------------------------------------------------
 
-export type ColumnGroup = 'balances' | 'income' | 'tax';
-
-export const COLUMN_GROUPS: { id: ColumnGroup; label: string; hint: string }[] = [
-    { id: 'balances', label: 'Balances', hint: 'Account balances, total assets, and RRSP/RRIF withdrawn' },
-    { id: 'income', label: 'Income', hint: 'Net CPP, OAS and pension, total spending, surplus/shortfall' },
-    { id: 'tax', label: 'Tax', hint: 'Taxable income, tax paid, OAS clawback, average rate, estate tax' },
-];
-
-export const COLUMN_GROUPS_STORAGE_KEY = 'yearly_table_column_groups_v1';
-
 /*
- * Default: Balances + Income on, Tax off.
+ * Every column in this table is always shown, with one exception: the
+ * per-account balances (RRSP / TFSA / Non-Reg, doubled for a couple). Those sit
+ * behind a single switch, because they are the one block a reader can give up
+ * without losing a fact — Total Assets summarises them, and RRSP Drawn (a FLOW,
+ * not a balance) carries the insight none of them do. Switching the detail off
+ * drops six columns for a couple, three for a single person.
  *
- * Measured at a 1440px viewport: the table's scroll box is 1231px wide and the
- * 13-column table was 1328px, so it scrolled sideways by 97px — enough to hide a
- * whole column, and side-scrolling a wide grid is exactly what this audience
- * struggles with. Balances + Income is 10 data columns and now measures 1231px,
- * i.e. it fits the scroll box exactly with no horizontal scrolling at all, which
- * is the entire point of the grouping. Tax detail is one click away, and every
- * row also opens the Year Audit drawer, which shows the full tax picture line by
- * line. (A couple adds Sp Age and three spouse balance columns, so the couple's
- * default is 16 columns and does still scroll — switching Balances off fits it.)
+ * Which columns those are is a property of each column (`accountDetail` on
+ * ColumnDef), not a key list kept next to the filter — the filter never has to
+ * be revisited when a column is added.
  */
-export const DEFAULT_COLUMN_GROUPS: ColumnGroup[] = ['balances', 'income'];
+export const ACCOUNT_DETAIL_STORAGE_KEY = 'yearly_table_account_detail_v1';
 
-const VALID_GROUPS: string[] = COLUMN_GROUPS.map(g => g.id);
+/** Default ON: the detailed view is what the table has always shown. */
+export const DEFAULT_ACCOUNT_DETAIL = true;
 
-// localStorage is user-editable and survives across releases, so validate.
-// An EMPTY array is a legitimate persisted choice (every group switched off),
-// so only a non-array payload falls back to the default.
-export function sanitizeColumnGroups(raw: unknown): ColumnGroup[] | null {
-    if (!Array.isArray(raw)) return null;
-    const clean = raw.filter((g): g is ColumnGroup => typeof g === 'string' && VALID_GROUPS.includes(g));
-    return [...new Set(clean)];
+// localStorage is user-editable; anything that isn't a boolean falls back.
+export function sanitizeAccountDetail(raw: unknown): boolean | null {
+    return typeof raw === 'boolean' ? raw : null;
 }
 
 // ---------------------------------------------------------------------------
