@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { evenTicks } from '../../utils/chartTicks';
 import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import type { ComparisonChartRow, ComparisonRun, BandMode } from '../../utils/comparison';
 import { MAX_COMPARANDS } from '../../utils/comparison';
@@ -19,6 +20,9 @@ type IndexedRow = Record<string, number | [number, number] | undefined>;
 
 export const ComparisonChart = React.memo(function ComparisonChart({ data, runs, bandMode, inflationAdjusted }: ComparisonChartProps) {
     const slots = runs.slice(0, MAX_COMPARANDS);
+    // Calendar years, so a lower budget than the age charts use: "2046" is
+    // roughly twice the width of "64", and the labels crowd at half the count.
+    const yearTicks = useMemo(() => evenTicks(data.map(d => Number(d.year)), 6), [data]);
 
     return (
         <div className="h-[350px] lg:h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
@@ -31,6 +35,8 @@ export const ComparisonChart = React.memo(function ComparisonChart({ data, runs,
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis
                         dataKey="year"
+                        ticks={yearTicks}
+                        interval={0}
                         type="number"
                         domain={['dataMin', 'dataMax']}
                         allowDecimals={false}

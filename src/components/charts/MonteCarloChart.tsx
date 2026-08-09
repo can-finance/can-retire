@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { evenTicks } from '../../utils/chartTicks';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { SimulationResult, MonteCarloResult } from '../../engine/types';
 import { formatCurrencyShort } from '../../utils/formatters';
@@ -27,6 +28,9 @@ export const MonteCarloChart = React.memo(function MonteCarloChart({ data, monte
             };
         });
     }, [data, monteCarlo, inflationAdjusted]);
+    // Uniform, round-numbered age ticks. Recharts' own selection drops whatever
+    // does not fit, which leaves visibly uneven gaps along the axis.
+    const ageTicks = useMemo(() => evenTicks(data.map(d => d.age)), [data]);
 
     return (
         <div className="h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
@@ -42,6 +46,8 @@ export const MonteCarloChart = React.memo(function MonteCarloChart({ data, monte
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis
                         dataKey="age"
+                        ticks={ageTicks}
+                        interval={0}
                         stroke="#64748b"
                         tick={{ fontSize: 14 }}
                         tickLine={false}

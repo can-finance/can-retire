@@ -6,6 +6,7 @@ import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
 import type { LegendEntry } from './ChartLegend';
 import { ChartTooltip } from './ChartTooltip';
+import { evenTicks } from '../../utils/chartTicks';
 import type { TooltipRow } from './ChartTooltip';
 
 interface WealthChartProps {
@@ -47,6 +48,9 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
             };
         });
     }, [data, hasSpouse, inflationAdjusted]);
+    // Uniform, round-numbered age ticks. Recharts' own selection drops whatever
+    // does not fit, which leaves visibly uneven gaps along the axis.
+    const ageTicks = useMemo(() => evenTicks(data.map(d => d.age)), [data]);
 
     return (
         <div className="h-[350px] lg:h-[450px] w-full rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
@@ -86,6 +90,8 @@ export const WealthChart = React.memo(function WealthChart({ data, hasSpouse, in
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis
                         dataKey="age"
+                        ticks={ageTicks}
+                        interval={0}
                         stroke="#64748b"
                         tick={{ fontSize: 14 }}
                         tickLine={false}

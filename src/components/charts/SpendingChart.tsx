@@ -6,6 +6,7 @@ import { formatCurrencyShort } from '../../utils/formatters';
 import { ChartLegend } from './ChartLegend';
 import type { LegendEntry } from './ChartLegend';
 import { ChartTooltip } from './ChartTooltip';
+import { evenTicks } from '../../utils/chartTicks';
 import type { TooltipRow } from './ChartTooltip';
 
 interface SpendingChartProps {
@@ -61,6 +62,9 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
             };
         });
     }, [data, inflationAdjusted]);
+    // Uniform, round-numbered age ticks. Recharts' own selection drops whatever
+    // does not fit, which leaves visibly uneven gaps along the axis.
+    const ageTicks = useMemo(() => evenTicks(data.map(d => d.age)), [data]);
 
     // Applied to every Bar so hovering any segment of a stacked column reads as
     // clickable when a click handler is actually wired up.
@@ -94,6 +98,8 @@ export const SpendingChart = React.memo(function SpendingChart({ data, inflation
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                     <XAxis
                         dataKey="age"
+                        ticks={ageTicks}
+                        interval={0}
                         stroke="#64748b"
                         tick={{ fontSize: 14 }}
                         tickLine={false}
