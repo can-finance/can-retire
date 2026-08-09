@@ -62,7 +62,7 @@ export function BenefitsFields({
     onPatch: (patch: Partial<Person>) => void;
     labels: BenefitsFieldsLabels;
 }) {
-    // Years Contributed only feeds the plan's simple CPP estimate; once a CPP
+    // CPP Years only feeds the plan's simple CPP estimate; once a CPP
     // Calculator estimate is applied (cppAnnualOverride), the engine uses that
     // fixed annual amount instead and this field has no effect.
     const cppOverrideApplied = person.cppAnnualOverride != null;
@@ -76,7 +76,7 @@ export function BenefitsFields({
                 disabled={cppOverrideApplied}
                 tooltip={cppOverrideApplied
                     ? "Not used while a CPP Calculator estimate is applied."
-                    : "Years you paid into CPP. The plan estimates CPP as Years Contributed ÷ 40 of the maximum."} />
+                    : "Years you paid into CPP — your working years between 18 and 65, up to 47. The plan estimates your CPP as that count ÷ 40 of the maximum, assuming those years were at or near CPP's maximum earnings. Earned less? The CPP Calculator works from your actual earnings."} />
             <FinancialInput label={labels.oasStartAge} prefix="" value={person.oasStartAge}
                 onChange={(e) => onPatch({ oasStartAge: Number(e.target.value) })}
                 tooltip="Between 65 and 70. Starting later increases the monthly amount." />

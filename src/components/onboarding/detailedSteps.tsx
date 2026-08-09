@@ -18,7 +18,7 @@ import type { Person, SimulationInputs } from '../../engine/types';
 // (see ABOUT_LABELS etc. in ../dashboard/PersonSection.tsx for the dashboard's
 // terser equivalents).
 const WIZARD_ABOUT_LABELS = { age: 'Current age', retirementAge: 'Retirement age', lifeExpectancy: 'Life expectancy' };
-const WIZARD_BENEFITS_LABELS = { cppStartAge: 'CPP start age', yearsContributed: 'Years contributed', oasStartAge: 'OAS start age' };
+const WIZARD_BENEFITS_LABELS = { cppStartAge: 'CPP start age', yearsContributed: 'CPP years', oasStartAge: 'OAS start age' };
 const WIZARD_MELTDOWN_LABELS = { meltStartAge: 'Melt start age', meltAmount: 'Melt amount per year' };
 const WIZARD_PENSION_LABELS = {
     section: 'Workplace pension',

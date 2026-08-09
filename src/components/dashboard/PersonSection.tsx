@@ -10,7 +10,7 @@ import { getValidationErrors } from '../../utils/personValidation';
 // (see WIZARD_*_LABELS in ../onboarding/detailedSteps.tsx), since these sit in
 // a dense sidebar of many fields rather than one wizard step at a time.
 const ABOUT_LABELS = { age: 'Current Age', retirementAge: 'Retirement Age', lifeExpectancy: 'Life Expectancy' };
-const BENEFITS_LABELS = { cppStartAge: 'CPP Start Age', yearsContributed: 'Years Contributed', oasStartAge: 'OAS Start Age' };
+const BENEFITS_LABELS = { cppStartAge: 'CPP Start Age', yearsContributed: 'CPP Years', oasStartAge: 'OAS Start Age' };
 const MELTDOWN_LABELS = { meltStartAge: 'RRSP Melt Start Age', meltAmount: 'RRSP Melt Amount' };
 const PENSION_LABELS = {
     section: 'Workplace Pension (DB)',
@@ -117,7 +117,7 @@ export function PersonSection({
                 <BenefitsFields person={person} onPatch={onPatch} labels={BENEFITS_LABELS} />
 
                 {person.cppAnnualOverride == null && (
-                    <HelpTooltip text="The plan estimates CPP as Years Contributed ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings and can feed the result back into this plan.">
+                    <HelpTooltip text="The plan estimates CPP as CPP Years ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings and can feed the result back into this plan.">
                         <a
                             href="/cpp-calculator/"
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
@@ -134,7 +134,7 @@ export function PersonSection({
                             <span className="font-bold">
                                 {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(person.cppAnnualOverride)}/yr
                             </span>{' '}
-                            (Years Contributed is ignored)
+                            (CPP Years is ignored)
                         </p>
                         <button
                             onClick={() => onChange('cppAnnualOverride', undefined)}

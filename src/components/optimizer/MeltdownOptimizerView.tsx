@@ -418,76 +418,19 @@ function ResultsView({
 
     const secondary = secondaryBtn;
 
-    return (
-        <div className="flex flex-col gap-6">
-            <h2 className="text-2xl font-bold text-slate-900">
-                RRSP Meltdown Optimizer
-                <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded font-bold align-middle">BETA</span>
-            </h2>
-
-            {result.objective === 'max-spend' ? (
-                result.improved ? (
-                    <MaxSpendCard result={result} />
-                ) : (
-                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
-                        <p className="text-base font-bold text-emerald-900">Your planned spending is about right</p>
-                        <p className="mt-1.5 text-sm text-emerald-800">
-                            Your current spending is about the most your savings can sustainably
-                            support at the {result.maxSpend?.mcSuccessTarget}% success level — we
-                            couldn't find a meaningfully higher figure without pushing the plan past
-                            that bar. The comparison below shows the numbers.
-                        </p>
-                    </div>
-                )
-            ) : result.improved ? (
-                <RecommendationCard result={result} />
-            ) : (
-                <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
-                    <p className="text-base font-bold text-emerald-900">Your current plan already looks good</p>
-                    <p className="mt-1.5 text-sm text-emerald-800">
-                        We couldn't find a meltdown schedule that meaningfully beats what you've
-                        already got — your RRSP drawdown, CPP and OAS timing are close to optimal
-                        for leaving the largest estate. The comparison below shows the numbers.
-                    </p>
-                </div>
-            )}
-
-            <div className="flex flex-wrap items-center justify-end gap-4 -mb-3">
-                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                    {BAND_OPTIONS.map(opt => (
-                        <button
-                            key={opt.mode}
-                            onClick={() => onBandMode(opt.mode)}
-                            aria-pressed={bandMode === opt.mode}
-                            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-                                bandMode === opt.mode
-                                    ? 'bg-brand-600 text-white shadow-sm'
-                                    : 'text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="w-full sm:w-auto sm:min-w-[16rem]">
-                    <Toggle
-                        checked={isInflationAdjusted}
-                        onChange={onToggleInflation}
-                        label="Show Today's Dollars (Inflation-Adjusted)"
-                    />
-                </div>
-            </div>
-
-            <ComparisonChart
-                data={chartData}
-                runs={runs}
-                bandMode={bandMode}
-                inflationAdjusted={isInflationAdjusted}
-            />
-            <ComparisonSummaryCards runs={runs} />
-            <ComparisonMetricsTable runs={runs} inflationAdjusted={isInflationAdjusted} />
-
+    /*
+     * The caveat travels with the buttons — it describes what Apply overwrites,
+     * so it has to be read before the button, not stranded elsewhere on the page.
+     *
+     * Where this lands depends on the result shape. A max-spend recommendation
+     * splits into an answer box and a detail box, so the actions slot BETWEEN
+     * them (passed into MaxSpendCard). Every other shape is a single box, and
+     * the actions follow it directly. Either way they sit above the chart and
+     * comparison table, which are evidence for the recommendation rather than
+     * something you must read before acting on it.
+     */
+    const actions = (
+        <>
             {result.improved && (
                 <p className="text-xs text-slate-500">
                     {result.objective === 'max-spend'
@@ -526,6 +469,84 @@ function ResultsView({
                     {exitLabel}
                 </button>
             </div>
+        </>
+    );
+
+    // MaxSpendCard renders `actions` itself, between its two boxes — don't
+    // render them a second time at view level.
+    const actionsInCard = result.objective === 'max-spend' && result.improved;
+
+    return (
+        <div className="flex flex-col gap-6">
+            <h2 className="text-2xl font-bold text-slate-900">
+                RRSP Meltdown Optimizer
+                <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded font-bold align-middle">BETA</span>
+            </h2>
+
+            {result.objective === 'max-spend' ? (
+                result.improved ? (
+                    <MaxSpendCard result={result} actions={actions} />
+                ) : (
+                    <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
+                        <p className="text-base font-bold text-emerald-900">Your planned spending is about right</p>
+                        <p className="mt-1.5 text-sm text-emerald-800">
+                            Your current spending is about the most your savings can sustainably
+                            support at the {result.maxSpend?.mcSuccessTarget}% success level — we
+                            couldn't find a meaningfully higher figure without pushing the plan past
+                            that bar. The comparison below shows the numbers.
+                        </p>
+                    </div>
+                )
+            ) : result.improved ? (
+                <RecommendationCard result={result} />
+            ) : (
+                <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
+                    <p className="text-base font-bold text-emerald-900">Your current plan already looks good</p>
+                    <p className="mt-1.5 text-sm text-emerald-800">
+                        We couldn't find a meltdown schedule that meaningfully beats what you've
+                        already got — your RRSP drawdown, CPP and OAS timing are close to optimal
+                        for leaving the largest estate. The comparison below shows the numbers.
+                    </p>
+                </div>
+            )}
+
+            {!actionsInCard && actions}
+
+            <div className="flex flex-wrap items-center justify-end gap-4 -mb-3">
+                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                    {BAND_OPTIONS.map(opt => (
+                        <button
+                            key={opt.mode}
+                            onClick={() => onBandMode(opt.mode)}
+                            aria-pressed={bandMode === opt.mode}
+                            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                                bandMode === opt.mode
+                                    ? 'bg-brand-600 text-white shadow-sm'
+                                    : 'text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="w-full sm:w-auto sm:min-w-[16rem]">
+                    <Toggle
+                        checked={isInflationAdjusted}
+                        onChange={onToggleInflation}
+                        label="Show Today's Dollars (Inflation-Adjusted)"
+                    />
+                </div>
+            </div>
+
+            <ComparisonChart
+                data={chartData}
+                runs={runs}
+                bandMode={bandMode}
+                inflationAdjusted={isInflationAdjusted}
+            />
+            <ComparisonSummaryCards runs={runs} />
+            <ComparisonMetricsTable runs={runs} inflationAdjusted={isInflationAdjusted} />
 
             <Dialog
                 open={saveDialogOpen}
@@ -756,7 +777,15 @@ function SimpleChangeTable({
     );
 }
 
-function MaxSpendCard({ result }: { result: MeltdownResult }) {
+/*
+ * `actions` is slotted between the two boxes rather than rendered after the
+ * card: the first box is the answer ("you could sustainably spend X"), the
+ * second is the detail behind it. Someone who has read the answer and wants to
+ * act on it shouldn't have to scroll past the suggested-plan tables to reach
+ * Apply — and someone who wants the detail hasn't lost anything by scrolling
+ * past the buttons.
+ */
+function MaxSpendCard({ result, actions }: { result: MeltdownResult; actions?: React.ReactNode }) {
     const ms = result.maxSpend!;
     // The figure only deserves good-news framing when it actually cleared the
     // user's success bar — a cap-hit spend is an optimistic upper bound, not a
@@ -809,6 +838,8 @@ function MaxSpendCard({ result }: { result: MeltdownResult }) {
                     {metTarget ? `(target ${ms.mcSuccessTarget}%)` : `— short of the ${ms.mcSuccessTarget}% target`}
                 </p>
             </div>
+
+            {actions}
 
             <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
                 <h3 className="text-lg font-bold text-slate-900">Suggested plan</h3>

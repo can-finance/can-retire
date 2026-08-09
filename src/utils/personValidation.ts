@@ -56,7 +56,7 @@ const CHECKS: Check[] = [
     {
         scope: 'benefits',
         failed: (p) => p.cppContributedYears < 0 || p.cppContributedYears > 47,
-        message: 'Years contributed must be between 0 and 47',
+        message: 'CPP Years must be between 0 and 47',
     },
     {
         // Depends on `age`, but the melt start age is the field to change — the
