@@ -32,7 +32,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                 <div className="space-y-1.5">
                     <h2 className="text-sm font-bold text-slate-900">Try a second plan and compare</h2>
                     <p className="text-sm text-slate-600">
-                        In the Plans panel, <span className="font-semibold">Duplicate Plan</span> copies your current
+                        In the Plan Manager panel, <span className="font-semibold">Duplicate Plan</span> copies your current
                         plan so you can change one assumption — retire earlier, spend more, start CPP later. Then use{' '}
                         <span className="font-semibold">Compare Plans</span> to see the plans side by side.
                     </p>
@@ -50,7 +50,7 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                 <div className="space-y-1.5">
                     <h2 className="text-sm font-bold text-slate-900">Sharing your plan</h2>
                     <p className="text-sm text-slate-600">
-                        The <span className="font-semibold">Share</span> button (in the Plans panel) packs your whole
+                        The <span className="font-semibold">Share</span> button (in the Plan Manager panel) packs your whole
                         plan into the link itself — anyone you send it to can see your numbers.
                     </p>
                 </div>

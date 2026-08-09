@@ -156,14 +156,15 @@ export function PlanManager({
                                 className={`${titleClass} bg-transparent outline-none border-b border-brand-400 min-w-0`}
                             />
                         ) : (
-                            <button
-                                onClick={startEdit}
-                                aria-label="Rename plan"
-                                title="Click to rename"
-                                className={`${titleClass} text-left hover:text-brand-600 transition-colors`}
-                            >
-                                {activePlanName}
-                            </button>
+                            <HelpTooltip text="Click to rename this plan.">
+                                <button
+                                    onClick={startEdit}
+                                    aria-label="Rename plan"
+                                    className={`${titleClass} text-left hover:text-brand-600 transition-colors`}
+                                >
+                                    {activePlanName}
+                                </button>
+                            </HelpTooltip>
                         )}
                         <HelpTooltip text="A plan holds everything you've entered — ages, incomes, accounts, spending, and assumptions. Plans are saved locally in your browser on this device — nothing is uploaded to any server. Clearing browser data removes them; use Share to create a backup link that contains all of a plan's data.">
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-slate-300 hover:text-slate-500 transition-colors cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -171,11 +172,16 @@ export function PlanManager({
                             </svg>
                         </HelpTooltip>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
-                        {activeLastSaved
-                            ? `edited ${new Date(activeLastSaved).toLocaleDateString()}`
-                            : 'Not saved yet — edits save automatically'}
-                    </p>
+                    {/* No "edited …" line here — every edit writes through immediately,
+                        so the date is always today and says nothing. It stays in the plan
+                        list below, where comparing dates across plans is the point.
+                        The not-yet-saved case still earns a line: it tells a first-time
+                        visitor their typing is being kept without them doing anything. */}
+                    {!activeLastSaved && (
+                        <p className="text-xs text-slate-500 font-medium uppercase tracking-wider">
+                            Not saved yet — edits save automatically
+                        </p>
+                    )}
                 </div>
                 <div className="flex items-center flex-wrap gap-2">
                     <HelpTooltip text="Copies a shareable backup link containing all of this plan's data — every input and assumption is encoded in the link itself, nothing is stored on any server. Opening it restores the full plan. Anyone with the link can see the numbers in it.">
@@ -198,7 +204,7 @@ export function PlanManager({
                     </button>
                     <button
                         onClick={onNewPlanGuided}
-                        title="Create a new plan from scratch via guided setup"
+                        title="Create a new plan from scratch via Guided Setup"
                         className="text-xs bg-slate-50 text-slate-500 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors border border-slate-200"
                     >
                         New Plan
@@ -227,7 +233,7 @@ export function PlanManager({
                     schedule. Always available (works on a single plan). */}
                 <button
                     onClick={onOptimize}
-                    title="Search for the RRSP-meltdown schedule that leaves the largest estate"
+                    title="Search RRSP meltdown schedules for the largest after-tax estate, or the most you can spend each year"
                     className="mt-2 w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2.5 rounded-lg hover:bg-emerald-100 transition-colors font-medium border border-emerald-100 text-sm"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

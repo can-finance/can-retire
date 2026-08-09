@@ -178,8 +178,18 @@ export function ComparisonView({
 
     return (
         <div className="flex flex-col gap-6">
-            {/* Header: title + band control + inflation toggle + exit */}
+            {/* Header: exit + title + band control + inflation toggle.
+                Back leads, at top left, because that is where a hand goes for it —
+                and the browser's own Back button is no help here, since comparing is
+                a state toggle inside the dashboard rather than a navigation. */}
             <div className="flex flex-wrap items-center gap-4">
+                <button onClick={onExit} className={`${secondaryBtn} inline-flex items-center gap-1.5`}>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to Dashboard
+                </button>
+
                 <h2 className="text-2xl font-bold text-slate-900 mr-auto">Compare Plans</h2>
 
                 <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
@@ -206,10 +216,6 @@ export function ComparisonView({
                         label="Show Today's Dollars (Inflation-Adjusted)"
                     />
                 </div>
-
-                <button onClick={onExit} className={secondaryBtn}>
-                    Back to Dashboard
-                </button>
             </div>
 
             {/* Chip picker */}

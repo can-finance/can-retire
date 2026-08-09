@@ -156,7 +156,7 @@ export function PersonSection({
                     labels={MELTDOWN_LABELS} />
 
                 {onOpenOptimizer && (
-                    <HelpTooltip text="Searches annual RRSP withdrawal amounts — and optionally CPP/OAS timing — for the combination that leaves the largest after-tax estate, then lets you apply it to this plan.">
+                    <HelpTooltip text="Searches annual RRSP withdrawal amounts — and optionally CPP/OAS timing — for the combination that leaves the largest after-tax estate — or the one that lets you spend the most each year — then lets you apply it to this plan.">
                         <button
                             type="button"
                             onClick={onOpenOptimizer}

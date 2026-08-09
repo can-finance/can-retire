@@ -287,7 +287,7 @@ describe('mergeSimpleAnswers', () => {
         const seed = baseDraft();
         seed.oneTimeExpenses = [{ id: 'e1', name: 'Reno', amount: 30000, age: 60, type: 'expense' }];
         const out = mergeSimpleAnswers(seed, baseAnswers);
-        expect(out.withdrawalStrategy).toBe('rrsp-first');
+        expect(out.withdrawalStrategy).toBe(INITIAL_INPUTS.withdrawalStrategy);
         expect(out.useIncomeSplitting).toBe(true);
         expect(out.returnRates).toEqual(INITIAL_INPUTS.returnRates);
         expect(out.oneTimeExpenses).toEqual(seed.oneTimeExpenses);

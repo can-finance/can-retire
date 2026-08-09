@@ -191,7 +191,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
                 pairText(run.comparand.inputs.person.lifeExpectancy, run.comparand.inputs.spouse?.lifeExpectancy),
             ),
             textInputRow('Province', run => run.comparand.inputs.province),
-            textInputRow('Withdrawal strategy', run =>
+            textInputRow('Withdrawal order', run =>
                 (run.comparand.inputs.withdrawalStrategy ?? 'tax-efficient') === 'rrsp-first'
                     ? 'RRSP first'
                     : 'RRSP last',
@@ -209,7 +209,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         { kind: 'group', label: 'Outcomes' },
         {
             kind: 'data',
-            label: 'Money runs out (baseline scenario, not Monte Carlo)',
+            label: 'Money runs out (baseline plan, not Monte Carlo)',
             cell: run => outOfMoneyCell(run),
             // Later depletion is better; "Never" (null age) has no numeric delta → "—".
             delta: { kind: 'age', dir: 'higher', value: r => r.metrics.outOfMoneyAge },

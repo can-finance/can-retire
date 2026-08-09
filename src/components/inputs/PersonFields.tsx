@@ -139,7 +139,7 @@ export function MeltdownFields({
             <FinancialInput label={labels.meltStartAge} prefix="" accentColor={rrspColor}
                 value={person.rrspMeltStartAge || person.retirementAge}
                 onChange={(e) => onPatch({ rrspMeltStartAge: Number(e.target.value) })}
-                tooltip="Age to begin deliberate early RRSP withdrawals. Melt automatically stops at age 71 (before mandatory RRIF conversion at 72)." />
+                tooltip="Age to begin deliberate early RRSP withdrawals. The melt runs to age 71 — the year your RRSP must convert to a RRIF. Mandatory minimum withdrawals start the year after, at 72." />
             <FinancialInput label={labels.meltAmount} accentColor={rrspColor}
                 value={person.rrspMeltAmount || 0}
                 onChange={(e) => onPatch({ rrspMeltAmount: Number(e.target.value) })}

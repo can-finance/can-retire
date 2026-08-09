@@ -19,7 +19,7 @@ import type { Person, SimulationInputs } from '../../engine/types';
 // terser equivalents).
 const WIZARD_ABOUT_LABELS = { age: 'Current age', retirementAge: 'Retirement age', lifeExpectancy: 'Life expectancy' };
 const WIZARD_BENEFITS_LABELS = { cppStartAge: 'CPP start age', yearsContributed: 'CPP years', oasStartAge: 'OAS start age' };
-const WIZARD_MELTDOWN_LABELS = { meltStartAge: 'Melt start age', meltAmount: 'Melt amount per year' };
+const WIZARD_MELTDOWN_LABELS = { meltStartAge: 'RRSP melt start age', meltAmount: 'RRSP melt amount' };
 const WIZARD_PENSION_LABELS = {
     section: 'Workplace pension',
     annualAmount: 'Annual pension amount',

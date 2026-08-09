@@ -13,7 +13,7 @@ const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
     { id: 'dashboard', label: 'Dashboard', href: '/' },
     { id: 'cpp-calculator', label: 'CPP Calculator', href: '/cpp-calculator/' },
     { id: 'rrsp-withdrawal-strategy', label: 'RRSP Withdrawal Strategy', href: '/rrsp-withdrawal-strategy/' },
-    { id: 'how-it-works', label: 'How does this work?', href: '/how-it-works/' },
+    { id: 'how-it-works', label: 'How it works', href: '/how-it-works/' },
 ];
 
 // Single source for the "re-run setup" button's label, shared with the copy
@@ -156,7 +156,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                             opens the overlay in place; the standalone MPA pages have no
                             overlay of their own, so they link to /?setup=1, which navigates
                             to the dashboard and opens the overlay there. */}
-                        <HelpTooltip text="Re-run the guided setup. Your current numbers are pre-filled — nothing changes until you save the plan.">
+                        <HelpTooltip text="Re-run the Guided Setup. Your current numbers are pre-filled — nothing changes until you save the plan.">
                             {onLaunchOnboarding ? (
                                 <button
                                     onClick={onLaunchOnboarding}
@@ -231,15 +231,6 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                     <p className="text-xs text-slate-500">
                         &copy; {new Date().getFullYear()} Canadian Retirement Asset Planning tool · Version {__APP_VERSION__} ·{' '}
                         <a
-                            href="https://github.com/can-finance/can-retire"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
-                        >
-                            Source on GitHub
-                        </a>
-                        {' '}·{' '}
-                        <a
                             href="https://github.com/can-finance/can-retire/blob/main/CHANGELOG.md"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -283,7 +274,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
             >
                 <p>
                     This permanently deletes every saved plan and all entered figures from this browser, and
-                    returns the app to the guided setup. This can't be undone.
+                    returns the app to the Guided Setup. This can't be undone.
                 </p>
             </Dialog>
         </div>

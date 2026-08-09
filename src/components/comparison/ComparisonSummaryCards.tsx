@@ -92,7 +92,7 @@ export function ComparisonSummaryCards({ runs }: ComparisonSummaryCardsProps) {
             />
             <StatCard
                 label="Money runs out"
-                note="(baseline scenario, not Monte Carlo)"
+                note="(baseline plan, not Monte Carlo)"
                 runs={runs}
                 best={bestMoneyRunsOut}
                 value={(run, isBest) =>

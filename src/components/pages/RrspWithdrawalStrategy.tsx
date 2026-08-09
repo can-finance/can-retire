@@ -38,7 +38,7 @@ export function RrspWithdrawalStrategy() {
             {/* Why deferral backfires */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-900">Why "withdraw as late as possible" often backfires</h2>
-                <div className="max-w-none text-lg text-slate-600 leading-relaxed space-y-4">
+                <div className="max-w-none text-base text-slate-600 leading-relaxed space-y-4">
                     <p>
                         The instinct with an RRSP is to defer tax for as long as possible — leave it untouched, let
                         it grow, and worry about withdrawals later. That instinct can be expensive. Deferral is not
@@ -69,7 +69,7 @@ export function RrspWithdrawalStrategy() {
             {/* The meltdown strategy */}
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-4">
                 <h2 className="text-2xl font-bold text-indigo-900">The RRSP meltdown strategy</h2>
-                <div className="max-w-none text-lg text-indigo-900/80 leading-relaxed space-y-4">
+                <div className="max-w-none text-base text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
                         The RRSP meltdown strategy flips the default. Instead of deferring, you deliberately draw the
                         RRSP down during your <strong>low-income years</strong> — typically the window between
@@ -130,7 +130,7 @@ export function RrspWithdrawalStrategy() {
             {/* How the optimizer works */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-900">How the optimizer works</h2>
-                <div className="max-w-none text-lg text-slate-600 leading-relaxed space-y-4">
+                <div className="max-w-none text-base text-slate-600 leading-relaxed space-y-4">
                     <p>
                         The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
                         your retirement using real Canadian tax rules, then searches for the schedule that best
@@ -153,7 +153,7 @@ export function RrspWithdrawalStrategy() {
             {/* Accuracy */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100 space-y-4">
                 <h2 className="text-2xl font-bold text-slate-900">How accurate is this calculation?</h2>
-                <div className="max-w-none text-lg text-slate-600 leading-relaxed space-y-4">
+                <div className="max-w-none text-base text-slate-600 leading-relaxed space-y-4">
                     <p>
                         Exactly as accurate as its inputs — which are a mix of things you know and things nobody
                         knows. Your ages, current account balances, and today's tax rules are known precisely, and
@@ -194,7 +194,7 @@ export function RrspWithdrawalStrategy() {
             {/* Closing CTA */}
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 text-center space-y-4">
                 <h2 className="text-2xl font-bold text-indigo-900">See your own numbers</h2>
-                <p className="max-w-2xl mx-auto text-indigo-900/80 leading-relaxed">
+                <p className="max-w-2xl mx-auto text-base text-indigo-900/80 leading-relaxed">
                     Every situation is different. Run the optimizer on your own balances, income, and province to
                     see whether an RRSP meltdown could cut your lifetime tax bill and leave more behind — all
                     calculated privately in your browser.
