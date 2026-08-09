@@ -113,6 +113,18 @@ export interface SimulationResult {
     taxPaid: number; // Combined tax
     personTaxPaid: number; // Primary person's share (post-split when splitting applies)
     spouseTaxPaid: number; // Spouse's share (post-split when splitting applies)
+    // Effective marginal tax rate on the NEXT $1,000 of ORDINARY income (an
+    // RRSP/RRIF withdrawal), per person, measured by differencing the real tax
+    // function on the income they are finally assessed on (post-split). Because
+    // it is differenced rather than read off a bracket table it carries the OAS
+    // clawback's 15% recovery tax, the age-amount phase-out and — in Ontario —
+    // the surtax and health premium. A capital gain or dividend faces a
+    // different rate.
+    //
+    // Undefined for a person who is not alive that year (no rate, as opposed to
+    // a 0% rate) and for every year of a stochastic run, where nothing reads it.
+    personMarginalRate?: number;
+    spouseMarginalRate?: number;
     oasClawbackPaid: number; // Household OAS recovery tax included in taxPaid (pre-split)
     // Investment tax by source (marginal attribution: extra tax that source adds
     // on top of all other income). dividendTaxPaid can be negative — the dividend

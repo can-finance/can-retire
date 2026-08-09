@@ -177,6 +177,67 @@ function solveGrossWithdrawal(
     return { gross, tax: marginalTax };
 }
 
+// --- Helper: Effective Marginal Tax Rate ---
+/**
+ * Size of the income probe used to measure a marginal rate, in nominal dollars.
+ *
+ * Deliberately $1,000 rather than a $1 derivative: `calculateTotalTax` is full of
+ * thresholds, caps and floors (the OAS clawback ceiling, the Ontario Health
+ * Premium's frozen bands, credits floored at zero), and a probe that small reads
+ * whichever knife-edge it happens to land on. A $1,000 step averages over that.
+ * The cost is that a probe straddling a bracket boundary reports a BLEND of the
+ * two rates — which is why the UI states the $1,000 basis rather than presenting
+ * the number as a bracket lookup.
+ */
+export const MARGINAL_RATE_PROBE = 1000;
+
+/**
+ * The rate on a person's next $1,000 of ORDINARY income (an RRSP/RRIF
+ * withdrawal), measured by differencing the real tax function rather than read
+ * off a bracket table.
+ *
+ * Differencing is the whole point: it picks up everything that rides on top of
+ * the statutory bracket — the OAS clawback's 15% recovery tax, the age-amount
+ * phase-out, the Ontario surtax and health premium — so a retiree nominally in a
+ * 30% bracket but inside the clawback zone reports the high-40s rate they
+ * actually face.
+ *
+ * `oasReceived` is what makes the clawback appear at all; passing 0 silently
+ * degrades this to a bracket-only rate.
+ *
+ * The three credit arguments are passed for one reason: the floor. Credits are
+ * income-invariant across a $1,000 probe, so they cancel in the subtraction
+ * everywhere the person actually owes tax — but `calculateIncomeTax` floors a
+ * bill at zero, and omitting them moves where that floor sits. A low-income year
+ * whose real bill is nil would then report a positive marginal rate beside a $0
+ * Tax Paid cell, which is exactly the early-retirement melt window this tool
+ * exists to reason about. They must match what `getFinalStats` passes.
+ *
+ * One approximation: after pension splitting the pension-credit eligibility
+ * follows the split income, and `qualifiedPension` here is struck before that.
+ * It shifts the floor slightly for a splitting couple, and not the rate itself
+ * at any income where tax is actually owed.
+ *
+ * Ordinary income only. A capital gain (50% inclusion) or an eligible dividend
+ * (38% gross-up, then a credit) faces a different rate.
+ */
+function marginalTaxRate(
+    taxableIncome: number,
+    oasReceived: number,
+    province: string,
+    inflationFactor: number,
+    age: number,
+    eligiblePensionIncome: number,
+    grossedUpDividends: number,
+    creditablePayroll: number
+): number {
+    const at = (income: number) => calculateTotalTax(
+        income, oasReceived, province, inflationFactor, age,
+        eligiblePensionIncome, grossedUpDividends, creditablePayroll
+    ).total;
+    return (at(taxableIncome + MARGINAL_RATE_PROBE) - at(taxableIncome)) / MARGINAL_RATE_PROBE;
+}
+
 // --- DB Pension Income ---
 // `annualAmount` is the pension's purchasing-power value at its START age. To turn
 // that into nominal dollars we escalate by inflation over the years between the
@@ -854,6 +915,11 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
         // Per-person tax for the table breakdown (replaced by post-split amounts below)
         let pTaxPaid = pFinal?.finalTax || 0;
         let sTaxPaid = sFinal?.finalTax || 0;
+        // Taxable income each person actually faces once the return is filed —
+        // the base the marginal-rate probe is struck against. Starts at the
+        // pre-split figure and is moved by Step 5.5 when splitting is elected.
+        let pTaxableFiled = pFinal?.finalTaxable || 0;
+        let sTaxableFiled = sFinal?.finalTaxable || 0;
         let pensionSplitAmount = 0;
         let taxSavingsFromSplit = 0;
         // Splitting saving the engine could not put anywhere (neither spouse holds a
@@ -891,6 +957,15 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 pTaxPaid = splitResult.person1NewTax;
                 sTaxPaid = splitResult.person2NewTax;
 
+                // The election moves `splitAmount` of taxable income from the
+                // transferor's return to the recipient's. calculateOptimalSplit
+                // returns only the two new tax bills, but the income each side is
+                // finally assessed on is exactly this shift — the same arithmetic
+                // its own splitTaxes() does internally.
+                const toRecipient = splitResult.fromPerson === 1 ? 1 : -1;
+                pTaxableFiled -= toRecipient * splitResult.splitAmount;
+                sTaxableFiled += toRecipient * splitResult.splitAmount;
+
                 // Sweep the saving into a non-registered account, exactly as the
                 // RRSP-deduction refund is swept above (and, like it, before Step 6,
                 // so the cash grows this year). Splitting is elected on the tax return
@@ -924,6 +999,36 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
                 }
             }
         }
+
+        // --- Step 5.6: Effective Marginal Tax Rate ---
+        // Per person, on the taxable income they are finally assessed on (Step 5.5
+        // has already moved any split pension income between the two returns).
+        //
+        // Deterministic runs ONLY. Monte Carlo runs this loop 200 times over and
+        // never reads the rate — it reports asset percentiles — so the two extra
+        // calculateTotalTax calls per person per year would be pure cost. Left
+        // undefined there, and for anyone not alive this year: a dead person has no
+        // rate, which is not the same fact as a 0% rate.
+        // Same credit arguments getFinalStats passes to calculateTotalTax, struck the
+        // same way — qualifiedPension applies the age-65 rule to RRIF income, and the
+        // dividend gross-up is 1.38. They only move the zero-tax floor (see
+        // marginalTaxRate), but that floor is where a melt-window year sits.
+        const personMarginalRate = !stochastic && pAlive && pBase && pFinal
+            ? marginalTaxRate(
+                pTaxableFiled, pBase.oasIncome, province, inflationFactor, pAge,
+                pFinal.dbPensionIncome + (pAge >= 65 ? pFinal.rrifIncome : 0),
+                pBase.divIncome * 1.38,
+                pBase.payrollCreditable,
+            )
+            : undefined;
+        const spouseMarginalRate = !stochastic && sAlive && sBase && sFinal
+            ? marginalTaxRate(
+                sTaxableFiled, sBase.oasIncome, province, inflationFactor, sAge!,
+                sFinal.dbPensionIncome + (sAge! >= 65 ? sFinal.rrifIncome : 0),
+                sBase.divIncome * 1.38,
+                sBase.payrollCreditable,
+            )
+            : undefined;
 
         // --- Step 6: Asset Growth (End of Year) ---
 
@@ -1240,6 +1345,8 @@ export function runSimulation(inputs: SimulationInputs, stochastic: boolean = fa
             spouseNonRegDriftMix: sAlive && s ? driftingNonRegMix(s) : undefined,
             personTaxPaid: pTaxPaid,
             spouseTaxPaid: sTaxPaid,
+            personMarginalRate,
+            spouseMarginalRate,
             // Household OAS clawback (pre-split; splitting's effect is in taxSavingsFromSplit)
             oasClawbackPaid: (pFinal?.oasRecovery || 0) + (sFinal?.oasRecovery || 0),
             // Investment tax by source (household, marginal attribution, pre-split)

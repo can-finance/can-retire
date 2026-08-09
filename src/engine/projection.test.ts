@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { runSimulation, runMonteCarlo, lognormalReturn, DIVIDEND_EQUITY_BETA } from './projection';
-import { calculateIncomeTax, calculateOASClawback, calculateTotalTax } from './tax';
+import { runSimulation, runMonteCarlo, lognormalReturn, DIVIDEND_EQUITY_BETA, MARGINAL_RATE_PROBE } from './projection';
+import { calculateIncomeTax, calculateOASClawback, calculateTotalTax, TAX_CONSTANTS } from './tax';
 import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult } from './types';
 import { INITIAL_INPUTS } from '../utils/inputSanitizer';
 
@@ -1406,5 +1406,122 @@ describe('the pension-splitting saving is real cash and gets banked', () => {
         const i = firstSplitYear(res);
         expect(i).toBeGreaterThan(0);
         expect(res[i].unallocatedSplitSaving).toBeCloseTo(res[i].taxSavingsFromSplit!, 6);
+    });
+});
+
+describe('marginal tax rate', () => {
+    /*
+     * A single retiree parked INSIDE the OAS clawback range: OAS started at 65,
+     * a large RRIF, and a spending target big enough to keep taxable income
+     * between the clawback threshold and the income at which OAS is fully
+     * recovered. Zero inflation and zero returns, so nominal figures are the
+     * 2026 constants and the fixture cannot drift into a different band.
+     */
+    const clawbackZone = inputs({
+        person: person({
+            age: 71, lifeExpectancy: 80,
+            cppStartAge: 65, cppContributedYears: 40, oasStartAge: 65,
+            rrsp: { type: 'RRSP', balance: 1_200_000 }
+        }),
+        postRetirementSpend: 90_000
+    });
+
+    /** Statutory federal + provincial bracket rate at `taxable` — the naive answer. */
+    const bracketRate = (taxable: number, province: string, factor: number): number => {
+        const rateFor = (brackets: { threshold: number; rate: number }[]) =>
+            brackets.reduce((r, b) => (taxable >= b.threshold * factor ? b.rate : r), brackets[0].rate);
+        return rateFor(TAX_CONSTANTS.federalBrackets)
+            + rateFor(TAX_CONSTANTS.provincialBrackets[province]);
+    };
+
+    /** First year whose OAS is being clawed back but not yet fully recovered. */
+    const insideClawback = (res: SimulationResult[]) =>
+        res.findIndex(r => r.oasClawbackPaid > 1 && r.oasClawbackPaid < r.oasIncome - 1);
+
+    it('inside the OAS clawback range it is far above the statutory bracket rate', () => {
+        const res = runSimulation(clawbackZone);
+        const i = insideClawback(res);
+        expect(i, 'fixture should land a year inside the clawback range').toBeGreaterThanOrEqual(0);
+        const row = res[i];
+
+        const statutory = bracketRate(row.grossIncome, 'ON', row.inflationFactor);
+        // This is the whole point of differencing the tax function rather than
+        // reading a bracket: the 15% recovery tax rides on top of the bracket
+        // (net of its own deductibility), and the Ontario surtax multiplies what
+        // is left. A bracket lookup would report `statutory` and be badly wrong.
+        expect(row.personMarginalRate!).toBeGreaterThan(statutory + 0.10);
+        expect(row.personMarginalRate!).toBeGreaterThan(0.40);
+        // Still a plausible rate, not a runaway one
+        expect(row.personMarginalRate!).toBeLessThan(0.70);
+    });
+
+    it('is the $1,000-probe difference of the real tax function', () => {
+        const res = runSimulation(clawbackZone);
+        const i = insideClawback(res);
+        const row = res[i];
+        // Single person, so household taxable income IS this person's, and the
+        // household OAS is theirs — the definition can be reproduced exactly.
+        const at = (income: number) => calculateTotalTax(
+            income, row.oasIncome, 'ON', row.inflationFactor, row.age
+        ).total;
+        const expected = (at(row.grossIncome + MARGINAL_RATE_PROBE) - at(row.grossIncome))
+            / MARGINAL_RATE_PROBE;
+        expect(row.personMarginalRate!).toBeCloseTo(expected, 10);
+        expect(MARGINAL_RATE_PROBE).toBe(1000);
+    });
+
+    it('is undefined on a stochastic run — Monte Carlo must not pay for it', () => {
+        const res = runSimulation(inputs({
+            ...clawbackZone,
+            returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0, capitalGrowth: 0.05, volatility: 0.15 }
+        }), true);
+        expect(res.length).toBeGreaterThan(0);
+        for (const row of res) {
+            expect(row.personMarginalRate).toBeUndefined();
+            expect(row.spouseMarginalRate).toBeUndefined();
+        }
+        // ...and the same inputs run deterministically DO carry one
+        expect(runSimulation(clawbackZone)[0].personMarginalRate).toBeDefined();
+    });
+
+    it('is undefined for a person who has died, not 0%', () => {
+        const res = runSimulation(inputs({
+            person: person({ age: 65, lifeExpectancy: 80, rrsp: { type: 'RRSP', balance: 800_000 } }),
+            spouse: person({ age: 65, lifeExpectancy: 70, rrsp: { type: 'RRSP', balance: 400_000 } }),
+            postRetirementSpend: 60_000
+        }));
+        const widowed = res.filter(r => r.spouseAccounts === undefined);
+        expect(widowed.length).toBeGreaterThan(0);
+        for (const row of widowed) {
+            expect(row.spouseMarginalRate).toBeUndefined();
+            expect(row.spouseMarginalRate).not.toBe(0);
+            // The survivor still has one
+            expect(row.personMarginalRate).toBeDefined();
+        }
+    });
+
+    it('is struck against post-split income when pension splitting applies', () => {
+        // One spouse holds a $100k DB pension and nothing else does: splitting
+        // halves it, which drops the transferor out of the clawback range.
+        const couple = (useIncomeSplitting: boolean) => inputs({
+            useIncomeSplitting,
+            postRetirementSpend: 70_000,
+            person: person({
+                age: 70, lifeExpectancy: 80, oasStartAge: 65,
+                pension: { annualAmount: 100_000, startAge: 65, indexedToInflation: false }
+            }),
+            spouse: person({ age: 70, lifeExpectancy: 80, oasStartAge: 65 })
+        });
+
+        const split = runSimulation(couple(true))[0];
+        const noSplit = runSimulation(couple(false))[0];
+
+        expect(split.pensionSplitAmount!).toBeGreaterThan(1_000);
+        // Pre-split the transferor is deep in the clawback range; post-split they
+        // are not, and the rate the table shows has to be the one they face.
+        expect(noSplit.personMarginalRate!).toBeGreaterThan(0.40);
+        expect(split.personMarginalRate!).toBeLessThan(noSplit.personMarginalRate! - 0.05);
+        // The recipient picks the income up, so their rate rises
+        expect(split.spouseMarginalRate!).toBeGreaterThan(noSplit.spouseMarginalRate!);
     });
 });

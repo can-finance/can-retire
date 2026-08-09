@@ -25,8 +25,18 @@ import type { SimulationResult } from '../../engine/types';
  */
 export const ACCOUNT_DETAIL_STORAGE_KEY = 'yearly_table_account_detail_v1';
 
-/** Default ON: the detailed view is what the table has always shown. */
-export const DEFAULT_ACCOUNT_DETAIL = true;
+/*
+ * Default OFF. The table's problem is width, and the per-account columns are
+ * the bulk of it: off drops three columns for a single person and six for a
+ * couple, which is the difference between a first look that fits and one that
+ * scrolls sideways. Total Assets still carries the balance story, and the
+ * breakdown is one click away.
+ *
+ * This reaches anyone with no stored preference, not only brand-new visitors
+ * — someone who has used the app but never touched the switch will see the
+ * table lose those columns.
+ */
+export const DEFAULT_ACCOUNT_DETAIL = false;
 
 // localStorage is user-editable; anything that isn't a boolean falls back.
 export function sanitizeAccountDetail(raw: unknown): boolean | null {

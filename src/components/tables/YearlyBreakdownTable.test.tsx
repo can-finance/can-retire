@@ -11,6 +11,7 @@ import {
     ACCOUNT_DETAIL_STORAGE_KEY,
     averageTaxRate,
     DEFAULT_ACCOUNT_DETAIL,
+    formatPercent1,
 } from './yearlyBreakdownColumns';
 
 // React's act() warns unless it knows it's running in a test environment.
@@ -79,6 +80,15 @@ const NO_ESTATE_TAX_RESULTS = runSimulation(inputs({
     postRetirementSpend: 40_000,
 }));
 
+// The PRIMARY person dies first and the spouse outlives them, so the later rows
+// have no marginal rate of their own to report — the one case that has to render
+// a dash rather than 0%.
+const WIDOWED_SPOUSE_RESULTS = runSimulation(inputs({
+    person: person({ age: 65, lifeExpectancy: 70 }),
+    spouse: person({ age: 63, rrsp: { type: 'RRSP', balance: 400_000 } }),
+    postRetirementSpend: 100_000,
+}));
+
 function headerLabels(): string[] {
     return screen.getAllByRole('columnheader').map(th => th.textContent ?? '');
 }
@@ -125,10 +135,18 @@ const BALANCE_SUMMARY = ['Total Assets', 'RRSP Drawn'];
 const PENSION_COL = 'Net Pension';
 const INCOME_COLS = ['Net CPP', 'Net OAS', 'Total Spend', 'Surplus / Shortfall'];
 // Estate tax is deliberately NOT among them — it is a <tfoot> total, not a column.
-const TAX_COLS = ['Taxable Income', 'Tax Paid', 'OAS Clawback', 'Avg Tax Rate'];
+const TAX_COLS = ['Taxable Income', 'Tax Paid', 'OAS Clawback', 'Avg Tax Rate', 'Marginal Rate'];
 
-/** Every column the table should render, for a given household/option shape. */
-function expectedLabels({ spouse = false, detail = true, pension = false } = {}): string[] {
+/**
+ * Every column the table should render, for a given household/option shape.
+ *
+ * `detail` is deliberately REQUIRED rather than defaulted: DEFAULT_ACCOUNT_DETAIL
+ * has moved once already, and a default here would let it move again while every
+ * test that spelled out the full column vocabulary quietly started describing a
+ * different table. Each test says which setting it means, and pairs this with
+ * `setAccountDetail` so the render agrees with the expectation.
+ */
+function expectedLabels({ spouse = false, detail, pension = false }: { spouse?: boolean; detail: boolean; pension?: boolean }): string[] {
     const balances = detail
         ? [...OWN_BALANCES, ...(spouse ? SP_BALANCES : [])]
         : [];
@@ -141,7 +159,17 @@ function expectedLabels({ spouse = false, detail = true, pension = false } = {})
     ];
 }
 
-const detailToggle = () => screen.getByRole('button', { name: 'Account detail' });
+/**
+ * Pin the account-detail switch for the render that follows, through the same
+ * persisted key the component reads on mount. Only the tests ABOUT the default
+ * (and the two-clicks-in-a-tick regression, which cares about the delta rather
+ * than the starting point) leave it unset.
+ */
+function setAccountDetail(on: boolean): void {
+    window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, JSON.stringify(on));
+}
+
+const detailToggle = () => screen.getByRole('button', { name: 'Account details' });
 
 beforeEach(() => window.localStorage.clear());
 afterEach(() => { cleanup(); window.localStorage.clear(); });
@@ -179,9 +207,12 @@ describe('YearlyBreakdownTable — inflation adjustment', () => {
             .toBe(formatCurrencyCAD(row.grossIncome / row.inflationFactor));
         expect(cells[labels.indexOf('Tax Paid')].textContent)
             .toBe(formatCurrencyCAD(row.taxPaid / row.inflationFactor));
-        // A ratio of two nominal figures — the toggle must not move it.
+        // Ratios, not amounts — the toggle must not move either of them.
         expect(cells[labels.indexOf('Avg Tax Rate')].textContent)
             .toBe(`${(rate! * 100).toFixed(1)}%`);
+        expect(row.personMarginalRate, 'fixture should have a live person here').toBeDefined();
+        expect(cells[labels.indexOf('Marginal Rate')].textContent)
+            .toBe(formatPercent1(row.personMarginalRate!));
     });
 
     it('leaves Year and Age untouched by the toggle', () => {
@@ -192,19 +223,23 @@ describe('YearlyBreakdownTable — inflation adjustment', () => {
 });
 
 describe('YearlyBreakdownTable — the column set', () => {
+    // "Every column there is" means the widest table, which is account details ON
+    // — switched on explicitly, since that is no longer the default.
     it('shows every column there is, for a single person', () => {
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        expect(headerLabels()).toEqual(expectedLabels());
+        expect(headerLabels()).toEqual(expectedLabels({ detail: true }));
     });
 
     it('shows every column there is, plus the spouse ones, for a couple', () => {
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
-        expect(headerLabels()).toEqual(expectedLabels({ spouse: true }));
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, detail: true }));
     });
 
     it('offers exactly one column control — no group toggles', () => {
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
-        expect(screen.getAllByRole('button').map(b => b.textContent)).toEqual(['Account detail']);
+        expect(screen.getAllByRole('button').map(b => b.textContent)).toEqual(['Account details']);
         for (const gone of ['Balances', 'Income', 'Tax']) {
             expect(screen.queryByRole('button', { name: gone })).toBeNull();
         }
@@ -212,17 +247,23 @@ describe('YearlyBreakdownTable — the column set', () => {
 });
 
 describe('YearlyBreakdownTable — account detail', () => {
-    it('is on by default and shows every per-account balance column', () => {
-        expect(DEFAULT_ACCOUNT_DETAIL).toBe(true);
+    it('is OFF by default, so a reader with no stored preference gets the narrow table', () => {
+        // The default is the table's first impression, and the per-account columns
+        // are the bulk of its width — hence off. Nothing is stored here on purpose.
+        expect(DEFAULT_ACCOUNT_DETAIL).toBe(false);
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
-        expect(detailToggle()).toHaveAttribute('aria-pressed', 'true');
-        expect(headerLabels()).toEqual(expectedLabels({ spouse: true }));
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'false');
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, detail: false }));
+        // Total Assets and RRSP Drawn still carry the balance story.
+        for (const kept of BALANCE_SUMMARY) expect(headerLabels()).toContain(kept);
     });
 
     it('switching it off hides exactly the six per-account columns for a couple', async () => {
         const user = userEvent.setup();
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
         const before = headerLabels();
+        expect(before).toEqual(expectedLabels({ spouse: true, detail: true }));
 
         await user.click(detailToggle());
 
@@ -234,7 +275,9 @@ describe('YearlyBreakdownTable — account detail', () => {
 
     it('drops three columns for a single person, keeping Total Assets and RRSP Drawn', async () => {
         const user = userEvent.setup();
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        expect(headerLabels()).toEqual(expectedLabels({ detail: true }));
         await user.click(detailToggle());
         expect(headerLabels()).toEqual(expectedLabels({ detail: false }));
     });
@@ -249,7 +292,19 @@ describe('YearlyBreakdownTable — account detail', () => {
 
     it('persists the choice to localStorage and reads it back on mount', async () => {
         const user = userEvent.setup();
+        // Starts from the default (nothing stored), so the round trip covers the
+        // switched-ON value first...
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        await user.click(detailToggle());
+        expect(JSON.parse(window.localStorage.getItem(ACCOUNT_DETAIL_STORAGE_KEY)!)).toBe(true);
+
+        cleanup();
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, detail: true }));
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'true');
+
+        // ...and then the switched-OFF one, which now coincides with the default and
+        // so would survive a read that only honoured a truthy stored value.
         await user.click(detailToggle());
         expect(JSON.parse(window.localStorage.getItem(ACCOUNT_DETAIL_STORAGE_KEY)!)).toBe(false);
 
@@ -260,15 +315,24 @@ describe('YearlyBreakdownTable — account detail', () => {
     });
 
     it('falls back to the default when the persisted value is junk', () => {
+        // A TRUTHY non-boolean, so an unsanitized read would switch the detail on and
+        // the assertion below would catch it — the fallback has to reach the default,
+        // not merely something.
         window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, '"nope"');
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        expect(headerLabels()).toContain('RRSP');
+        expect(headerLabels()).toEqual(expectedLabels({ detail: DEFAULT_ACCOUNT_DETAIL }));
+        expect(headerLabels()).not.toContain('RRSP');
+        expect(detailToggle()).toHaveAttribute('aria-pressed', 'false');
     });
 
     it('two clicks in one tick land on the original value, not a lost first click', () => {
         // Regression: the setter takes a value rather than an updater, so without the
         // ref mirror the second click rebuilt from the pre-click state and silently
         // undid the first. Browser automation hits this; a human rarely does.
+        //
+        // Started explicitly ON so the pass condition is a column that is THERE
+        // rather than one that is merely still missing.
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
         act(() => {
             detailToggle().click();
@@ -280,6 +344,9 @@ describe('YearlyBreakdownTable — account detail', () => {
 
     it('keeps the anchors leading and frozen whether detail is on or off', async () => {
         const user = userEvent.setup();
+        // Starts ON — the widest table is the one most likely to disturb the frozen
+        // region — and the two clicks below take it off and back on again.
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
 
         const expectFrozen = () => {
@@ -316,17 +383,22 @@ describe('YearlyBreakdownTable — Net Pension column', () => {
         expect(screen.queryByRole('columnheader', { name: PENSION_COL })).toBeNull();
     });
 
+    // The pension column sits among the income columns, well clear of the
+    // per-account balances; the switch is pinned only so the expectation can name
+    // the whole column set.
     it('appears, between Net OAS and Total Spend, when there is one', () => {
         expect(PENSION_SINGLE_RESULTS.some(r => r.netPensionIncome > 1)).toBe(true);
+        setAccountDetail(false);
         render(<YearlyBreakdownTable data={PENSION_SINGLE_RESULTS} />);
         const labels = headerLabels();
-        expect(labels).toEqual(expectedLabels({ pension: true }));
+        expect(labels).toEqual(expectedLabels({ detail: false, pension: true }));
         expect(labels.indexOf(PENSION_COL)).toBe(labels.indexOf('Net OAS') + 1);
     });
 
     it('appears when only the SPOUSE has the pension — the figure is a household one', () => {
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={SPOUSE_PENSION_RESULTS} hasSpouse />);
-        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, pension: true }));
+        expect(headerLabels()).toEqual(expectedLabels({ spouse: true, detail: true, pension: true }));
     });
 
     it('renders the household figure, and a You/Spouse split on hover for a couple', async () => {
@@ -395,7 +467,7 @@ describe('YearlyBreakdownTable — header and body stay aligned', () => {
     for (const set of SETS) {
         for (const detail of [true, false]) {
             it(`${set.name}, account detail ${detail ? 'on' : 'off'}`, () => {
-                window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, JSON.stringify(detail));
+                setAccountDetail(detail);
                 render(<YearlyBreakdownTable data={set.data} hasSpouse={set.spouse} />);
 
                 const labels = headerLabels();
@@ -484,6 +556,59 @@ describe('YearlyBreakdownTable — column detail', () => {
         expect(screen.getByRole('tooltip').textContent).toContain(`Effective rate: ${shown} of taxable income`);
     });
 
+    it('Marginal Rate shows your figure, with the spouse\'s on hover', async () => {
+        const user = userEvent.setup();
+        const idx = COUPLE_RESULTS.findIndex(
+            r => r.personMarginalRate !== undefined && r.spouseMarginalRate !== undefined
+        );
+        expect(idx).toBeGreaterThanOrEqual(0);
+        const row = COUPLE_RESULTS[idx];
+        const shown = formatPercent1(row.personMarginalRate!);
+
+        render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
+        const labels = headerLabels();
+        const cell = within(bodyRows()[idx]).getAllByRole('cell')[labels.indexOf('Marginal Rate')];
+        // The cell itself is the PRIMARY person's rate — the spouse's is on hover,
+        // the same treatment Net CPP / Net OAS / Net Pension get.
+        expect(cell.textContent).toBe(shown);
+
+        await user.hover(within(cell).getByText(shown));
+        const tip = screen.getByRole('tooltip').textContent ?? '';
+        expect(tip).toContain(`You: ${shown}`);
+        expect(tip).toContain(`Spouse: ${formatPercent1(row.spouseMarginalRate!)}`);
+    });
+
+    it('the Marginal Rate header states the $1,000 basis and what it includes', async () => {
+        const user = userEvent.setup();
+        render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
+        const th = screen.getByRole('columnheader', { name: 'Marginal Rate' });
+        await user.hover(within(th).getByText('Marginal Rate'));
+        const tip = screen.getByRole('tooltip').textContent ?? '';
+        expect(tip).toContain('$1,000');
+        expect(tip).toMatch(/RRSP\/RRIF withdrawal/);
+        expect(tip).toMatch(/OAS clawback/i);
+        // It must not read as a bracket lookup, and it must warn that other kinds
+        // of income are taxed differently.
+        expect(tip).toMatch(/not just the bracket/i);
+        expect(tip).toMatch(/gains and dividends/i);
+        // Kept to roughly the length of its neighbours — this table's headers were
+        // deliberately cut back and this one must not undo that.
+        expect(tip.length).toBeLessThanOrEqual(170);
+    });
+
+    it('shows a dash, not 0%, for a person who has died', () => {
+        const dead = WIDOWED_SPOUSE_RESULTS.findIndex(r => r.personMarginalRate === undefined);
+        expect(dead, 'fixture should outlive the primary person').toBeGreaterThan(0);
+        // Genuinely absent rather than a zero the engine happened to compute
+        expect(WIDOWED_SPOUSE_RESULTS[dead].personMarginalRate).not.toBe(0);
+
+        render(<YearlyBreakdownTable data={WIDOWED_SPOUSE_RESULTS} hasSpouse />);
+        const labels = headerLabels();
+        const cell = within(bodyRows()[dead]).getAllByRole('cell')[labels.indexOf('Marginal Rate')];
+        expect(cell.textContent).toBe('—');
+        expect(cell.textContent).not.toContain('0.0%');
+    });
+
     it('renders a dash rather than a rate when there is no taxable income', () => {
         // A pure-TFSA household never has taxable income, so the guard fires every year.
         const noTax = NO_ESTATE_TAX_RESULTS;
@@ -501,19 +626,28 @@ describe('YearlyBreakdownTable — estate tax footer', () => {
         expect(screen.queryByRole('columnheader', { name: 'Estate Tax' })).toBeNull();
     });
 
-    it('totals the terminal tax and names the year it lands in', () => {
+    it('totals the terminal tax, and names the year in the tooltip rather than the label', async () => {
+        const user = userEvent.setup();
         const charged = terminalRows(SINGLE_RESULTS);
         expect(charged).toHaveLength(1);
 
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
         const foot = footerRow()!;
         expect(foot).not.toBeNull();
-        expect(within(foot).getByRole('rowheader').textContent)
-            .toBe(`Estate tax at death (${charged[0].year})`);
+        const head = within(foot).getByRole('rowheader');
+        // The label has to fit the frozen anchor region on one line, so it carries
+        // no year at all — not even the single-year case.
+        expect(head.textContent).toBe('Estate tax');
+        expect(head.textContent).not.toMatch(/\d{4}/);
         expect(foot.textContent).toContain(formatCurrencyCAD(estateTotal(SINGLE_RESULTS)));
+
+        // The year the reader lost from the label is in the tooltip instead.
+        await user.hover(within(head).getByText('Estate tax'));
+        expect(screen.getByRole('tooltip').textContent).toContain(String(charged[0].year));
     });
 
-    it('for a couple, names the SECOND death — the first rolls over tax-free', () => {
+    it('for a couple, names the SECOND death — the first rolls over tax-free', async () => {
+        const user = userEvent.setup();
         // The engine only assesses a deemed disposition when nobody survives, so the
         // first death produces a rollover and a zero, and the whole bill surfaces later.
         const firstDeath = COUPLE_RESULTS.findIndex(r => r.isDeathYear);
@@ -526,21 +660,23 @@ describe('YearlyBreakdownTable — estate tax footer', () => {
         expect(charged[0].year).toBeGreaterThan(COUPLE_RESULTS[firstDeath].year);
 
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
-        expect(within(footerRow()!).getByRole('rowheader').textContent)
-            .toBe(`Estate tax at death (${charged[0].year})`);
+        const head = within(footerRow()!).getByRole('rowheader');
+        expect(head.textContent).toBe('Estate tax');
+        await user.hover(within(head).getByText('Estate tax'));
+        expect(screen.getByRole('tooltip').textContent).toContain(String(charged[0].year));
     });
 
     it('is absent entirely when no year carries a material terminal tax', () => {
         expect(terminalRows(NO_ESTATE_TAX_RESULTS)).toHaveLength(0);
         render(<YearlyBreakdownTable data={NO_ESTATE_TAX_RESULTS} />);
         expect(footerRow()).toBeNull();
-        expect(screen.queryByText(/Estate tax at death/)).toBeNull();
+        expect(screen.queryByText(/Estate tax/)).toBeNull();
     });
 
     it('keeps the terminal-tax explanation, on the footer label', async () => {
         const user = userEvent.setup();
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        await user.hover(within(footerRow()!).getByText(/Estate tax at death/));
+        await user.hover(within(footerRow()!).getByText('Estate tax'));
         const tip = screen.getByRole('tooltip').textContent ?? '';
         expect(tip).toContain('deemed disposition of RRSP/RRIF');
         expect(tip).toContain('unrealized capital gains');
@@ -550,12 +686,12 @@ describe('YearlyBreakdownTable — estate tax footer', () => {
     it('explains the spousal rollover only when there is a spouse', async () => {
         const user = userEvent.setup();
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
-        await user.hover(within(footerRow()!).getByText(/Estate tax at death/));
+        await user.hover(within(footerRow()!).getByText('Estate tax'));
         expect(screen.getByRole('tooltip').textContent).toMatch(/second death/);
 
         cleanup();
         render(<YearlyBreakdownTable data={SINGLE_RESULTS} />);
-        await user.hover(within(footerRow()!).getByText(/Estate tax at death/));
+        await user.hover(within(footerRow()!).getByText('Estate tax'));
         expect(screen.getByRole('tooltip').textContent).not.toMatch(/second death/);
     });
 
@@ -596,60 +732,84 @@ describe('YearlyBreakdownTable — estate tax footer', () => {
     for (const set of FOOTER_SETS) {
         for (const detail of [true, false]) {
             it(`puts the amount under Tax Paid — ${set.name}, account detail ${detail ? 'on' : 'off'}`, () => {
-                window.localStorage.setItem(ACCOUNT_DETAIL_STORAGE_KEY, JSON.stringify(detail));
+                setAccountDetail(detail);
                 render(<YearlyBreakdownTable data={set.data} hasSpouse={set.spouse} />);
 
                 const labels = headerLabels();
                 const frozen = set.spouse ? 3 : 2;
                 const taxPaidIdx = labels.indexOf('Tax Paid');
+                // Tax Paid never sits inside the frozen anchor region, so the label's
+                // span and the amount can never collide however the columns filter.
                 expect(taxPaidIdx).toBeGreaterThanOrEqual(frozen);
 
                 const foot = footerRow()!;
-                // The label occupies the frozen anchors via colSpan; every remaining
-                // column gets its own cell, so cell N is column N + frozen.
+                // The label spans EXACTLY the frozen anchors, the amount sits in Tax
+                // Paid's own column, and every other column gets an empty cell.
                 const head = within(foot).getByRole('rowheader') as HTMLTableCellElement;
                 expect(head).toHaveAttribute('colspan', String(frozen));
+                expect(head.textContent).toBe('Estate tax');
+                // Confined to the anchors, it can be frozen like every other cell
+                // there: pinned, opaque against the cells scrolling under it, and
+                // carrying the frozen region's edge rule.
+                expect(head.className).toContain('sticky');
+                expect(head.className).toContain('left-0');
+                expect(head.className).toContain('bg-slate-50');
+                expect(head.className).toContain('shadow-[1px_0_0_0_rgb(226_232_240)]');
 
                 const cells = within(foot).getAllByRole('cell');
                 expect(cells).toHaveLength(labels.length - frozen);
 
-                const amount = formatCurrencyCAD(estateTotal(set.data));
-                expect(cells[taxPaidIdx - frozen].textContent).toBe(amount);
-                // ...and nothing anywhere else in the row.
-                cells.forEach((cell, i) => {
-                    if (i !== taxPaidIdx - frozen) expect(cell.textContent).toBe('');
-                });
+                // The amount is at Tax Paid's index, by construction rather than count.
+                const amountCell = cells[taxPaidIdx - frozen];
+                expect(amountCell).toHaveAttribute('data-column', 'taxPaid');
+                expect(amountCell.textContent).toBe(formatCurrencyCAD(estateTotal(set.data)));
+                // ...and nothing anywhere else in the row, before it or after it.
+                for (const cell of cells) {
+                    if (cell !== amountCell) expect(cell.textContent).toBe('');
+                }
+
                 // Total cells rendered must still span the table exactly.
                 expect(head.colSpan + cells.length).toBe(labels.length);
             });
         }
     }
 
-    it('is an ordinary last row — it scrolls with the table rather than pinning to the box', () => {
+    it('scrolls with the table vertically, but freezes its label sideways', () => {
+        setAccountDetail(true);
         render(<YearlyBreakdownTable data={COUPLE_RESULTS} hasSpouse />);
         const foot = footerRow()!;
         const head = within(foot).getByRole('rowheader');
         const cells = within(foot).getAllByRole('cell');
 
-        // Nothing pins the row to the bottom of the scroll box any more, and with the
-        // vertical sticky gone there is no z-layering left to justify.
         for (const el of [head, ...cells]) {
+            // Nothing pins the row to the bottom of the scroll box — it is an
+            // ordinary last row vertically...
             expect(el.className).not.toContain('bottom-0');
-            expect(el.className).not.toMatch(/\bz-\d/);
-            // A normal row can carry an ordinary top border — the sticky-cell shadow
-            // workaround is gone.
+            // ...which is what lets it carry an ordinary top border rather than the
+            // shadow a sticky row would need.
             expect(el.className).toContain('border-t');
             expect(el.className).not.toContain('shadow-[0_-1px');
         }
 
-        // The HORIZONTAL freeze survives: the label stays in the frozen region, opaque
-        // (cells scroll under it) and carrying the frozen region's edge rule, and it is
-        // the only positioned cell in the row so it paints above them without a z-index.
+        // Sideways the label is frozen exactly like the body's anchor cells: pinned
+        // at left-0, opaque so the cells scrolling under it cannot show through,
+        // layered above them, and carrying the frozen region's edge rule.
         expect(head.className).toContain('sticky');
         expect(head.className).toContain('left-0');
         expect(head.className).toContain('bg-slate-50');
+        expect(head.className).toMatch(/\bz-10\b/);
         expect(head.className).toContain('shadow-[1px_0_0_0_rgb(226_232_240)]');
-        for (const cell of cells) expect(cell.className).not.toContain('sticky');
+        // "Estate tax" fits the frozen region on one line — that is what pays for
+        // the freeze, so the label must not be allowed to wrap.
+        expect(head.className).toContain('whitespace-nowrap');
+
+        // Everything to its right scrolls, or the freeze would be pointless.
+        for (const cell of cells) {
+            expect(cell.className).not.toContain('sticky');
+            expect(cell.className).not.toContain('left-');
+            expect(cell.className).not.toContain('shadow-[1px_0_0_0_rgb(226_232_240)]');
+            expect(cell.className).not.toMatch(/\bz-\d/);
+        }
     });
 
     it('is not counted as a data row', () => {

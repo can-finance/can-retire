@@ -107,10 +107,10 @@ interface ColumnDef {
     key: string;
     label: string;
     tooltip: string;
-    align: 'left' | 'right';
+    align: 'left' | 'right' | 'center';
     /*
      * A single account's BALANCE (yours or your spouse's), as opposed to a
-     * household summary figure. These are what the "Account detail" toggle
+     * household summary figure. These are what the "Account details" toggle
      * switches off, leaving Total Assets and RRSP Drawn behind — see the note
      * in yearlyBreakdownColumns.ts. Marked here, on the column, so the filter
      * never carries a hand-maintained key list.
@@ -162,14 +162,14 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
             className: 'text-slate-700', cell: row => row.year
         },
         {
-            key: 'age', label: 'Age', tooltip: 'Your age at the start of this year', align: 'left',
+            key: 'age', label: 'Age', tooltip: 'Your age at the start of this year', align: 'center',
             className: 'text-slate-700', cell: row => row.age
         },
     ];
 
     if (hasSpouse) {
         columns.push({
-            key: 'spouseAge', label: 'Sp Age', tooltip: "Spouse's age at the start of this year", align: 'left',
+            key: 'spouseAge', label: 'Sp Age', tooltip: "Spouse's age at the start of this year", align: 'center',
             className: 'text-slate-700', cell: row => row.spouseAge ?? '-'
         });
     }
@@ -297,12 +297,46 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
             cell: (row, adj) => row.oasClawbackPaid > 1 ? money(adj(row.oasClawbackPaid)) : DASH
         },
         {
-            key: 'avgTaxRate', label: 'Avg Tax Rate', align: 'right',
+            key: 'avgTaxRate', label: 'Avg Tax Rate', align: 'center',
             className: row => averageTaxRate(row) !== null ? 'text-red-500' : 'text-slate-300',
             tooltip: 'Tax Paid divided by Taxable Income — the average rate across this year\'s income, not the top bracket you touch.',
             cell: row => {
                 const rate = averageTaxRate(row);
                 return rate === null ? DASH : formatPercent1(rate);
+            }
+        },
+        {
+            /*
+             * Sits beside Avg Tax Rate rather than replacing it: the two answer
+             * different questions. The average is what this year's whole income
+             * cost; this is what the NEXT dollar would cost, which is the number
+             * that decides whether to draw more from the RRSP now or later.
+             *
+             * The engine differences the real tax function over a $1,000 probe
+             * (see marginalTaxRate in projection.ts), so the figure carries the
+             * OAS clawback and the age-amount phase-out, not just the bracket —
+             * that is exactly why it is worth ~100px on an already-wide table.
+             *
+             * Undefined, and so a dash, for a person who is not alive that year
+             * and for every year of a Monte Carlo run.
+             */
+            key: 'marginalRate', label: 'Marginal Rate', align: 'center',
+            className: row => row.personMarginalRate !== undefined ? 'text-red-500' : 'text-slate-300',
+            tooltip: 'Rate on the next $1,000 of ordinary income (an RRSP/RRIF withdrawal) — includes OAS clawback and credit phase-outs, not just the bracket. Gains and dividends differ.',
+            cell: row => {
+                const own = row.personMarginalRate;
+                const spouse = row.spouseMarginalRate;
+                const shown = own === undefined ? DASH : formatPercent1(own);
+                // A dead person has no rate, not a 0% one — hence the dash on
+                // either side. The hover still runs while EITHER is alive, so a
+                // widowed year keeps saying whose figure is missing and why.
+                if (!hasSpouse || (own === undefined && spouse === undefined)) return shown;
+                const line = (v: number | undefined) => v === undefined ? DASH : formatPercent1(v);
+                return (
+                    <TipValue tip={`You: ${line(own)}\nSpouse: ${line(spouse)}`} border="border-red-200">
+                        {shown}
+                    </TipValue>
+                );
             }
         },
         // NOTE: terminal ("estate") tax deliberately has no column — it is non-zero
@@ -332,19 +366,25 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
  *
  * "In practice" is not "by construction", though, and a footer that silently
  * showed one of two figures would be worse than no footer — hence the collection
- * below totals every material row and names every year it found, and the label
- * only says "(2066)" when 2066 really is the only one.
+ * below totals every material row and keeps every year it found, and the tooltip
+ * only says "2066" when 2066 really is the only one.
+ *
+ * The YEARS live in the tooltip rather than the label. The label is a frozen,
+ * `sticky left-0` cell spanning just the anchor region (see the <tfoot> below), so
+ * it gets ~112px of usable width — enough for "Estate tax" on one line and not for
+ * "Estate tax at death (2064, 2066 and 2068)".
  */
 interface EstateTaxFooter {
     /** Household terminal tax, in the reader's chosen dollars. */
     amount: number;
-    /** e.g. "Estate tax at death (2066)". */
-    label: string;
+    /** Every year that carried a material terminal tax, in projection order. */
+    years: number[];
 }
 
+/** "2066", or "2064, 2066 and 2068" when more than one year is charged. */
 function joinYears(years: number[]): string {
     if (years.length === 1) return String(years[0]);
-    return `${years.slice(0, -1).join(', ')} and ${years[years.length - 1]}, combined`;
+    return `${years.slice(0, -1).join(', ')} and ${years[years.length - 1]}`;
 }
 
 /**
@@ -364,14 +404,20 @@ function estateTaxFooter(data: SimulationResult[], inflationAdjusted: boolean): 
         (sum, row) => sum + makeAdjust(row, inflationAdjusted)(row.totalTerminalTax!),
         0
     );
-    return { amount, label: `Estate tax at death (${joinYears(rows.map(r => r.year))})` };
+    return { amount, years: rows.map(r => r.year) };
 }
 
-function estateTaxTooltip(hasSpouse: boolean): string {
+/** The label is just "Estate tax" — every word of context lives here instead. */
+function estateTaxTooltip(hasSpouse: boolean, years: number[]): string {
     const base = 'Terminal tax at death: deemed disposition of RRSP/RRIF plus unrealized capital gains. Already deducted from the account balances shown for that year.';
-    return hasSpouse
-        ? `${base}\n\nThe first death rolls everything over to the survivor tax-free, so the bill lands in the year of the second death.`
-        : base;
+    const timing = years.length === 1
+        ? `Falls in ${joinYears(years)}.`
+        : `Falls in ${joinYears(years)} — the figure shown is those years combined.`;
+    const parts = [base, timing];
+    if (hasSpouse) {
+        parts.push('The first death rolls everything over to the survivor tax-free, so the bill lands in the year of the second death.');
+    }
+    return parts.join('\n\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -415,7 +461,15 @@ function frozenClasses(i: number, last: boolean, z: string) {
     return `sticky ${FROZEN_LEFT[i]} ${FROZEN_WIDTH[i]} ${z} ${last ? FROZEN_EDGE : ''}`;
 }
 
-function HeaderCell({ label, tooltip, align, sticky, wrap = false }: { label: string; tooltip: string; align: string; sticky: string; wrap?: boolean }) {
+// Ages and rates read better centred in their narrow columns; currency stays
+// right-aligned so digits line up down the column.
+const ALIGN_CLASS: Record<ColumnDef['align'], string> = {
+    left: 'text-left',
+    right: 'text-right',
+    center: 'text-center',
+};
+
+function HeaderCell({ label, tooltip, align, sticky, wrap = false }: { label: string; tooltip: string; align: ColumnDef['align']; sticky: string; wrap?: boolean }) {
     return (
         <th
             // `sticky top-0` lives on the cells rather than on <thead>/<tr>: cell-level
@@ -430,7 +484,7 @@ function HeaderCell({ label, tooltip, align, sticky, wrap = false }: { label: st
             // does not clip it. Alignment and wrapping still belong to the <th>: the
             // tooltip's wrapper is an inline-block, so `text-right`/`text-left` place it
             // and `whitespace-nowrap` inherits into it.
-            className={`sticky top-0 bg-slate-50 px-3 py-2 font-semibold text-slate-600 ${wrap ? '' : 'whitespace-nowrap'} ${align === 'right' ? 'text-right' : 'text-left'} ${sticky}`}
+            className={`sticky top-0 bg-slate-50 px-3 py-2 font-semibold text-slate-600 ${wrap ? '' : 'whitespace-nowrap'} ${ALIGN_CLASS[align]} ${sticky}`}
         >
             <HelpTooltip text={tooltip}>
                 <span className="cursor-help border-b border-dashed border-slate-400">{label}</span>
@@ -518,22 +572,31 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
     const footer = useMemo(() => estateTaxFooter(data, inflationAdjusted), [data, inflationAdjusted]);
 
     /*
-     * The footer's amount belongs under Tax Paid. Its position is DERIVED from
-     * the rendered array, never hardcoded: the column set is dynamic (the
+     * The footer's amount belongs under Tax Paid, and its position is DERIVED
+     * from the rendered array, never hardcoded: the column set is dynamic (the
      * account-detail toggle, the pension column's `relevant` predicate), so a
      * literal index would silently drift under a neighbouring heading the next
      * time a column drops in or out.
      *
-     * `footerCells` is the run of columns AFTER the frozen anchors — the anchors
-     * are covered by the label's colSpan — so the amount's index within it is
-     * offset by frozenCount. Tax Paid is unconditional today, so the fallback is
-     * defensive only: if it ever stopped being rendered the amount lands in the
-     * last column (still right-aligned, still legible) rather than throwing or
-     * appearing under an unrelated heading.
+     * That index is the whole shape of the footer row: the label spans the
+     * frozen anchor region and nothing else, `spacerColumns` cover the gap
+     * between it and the amount, the amount sits in Tax Paid's own column, and
+     * `trailingColumns` get one empty cell each. frozenCount + spacers + 1 +
+     * trailing therefore always equals columns.length, so the row cannot come
+     * out of step with the header.
+     *
+     * Tax Paid is unconditional today, so the fallback is defensive only: with
+     * no Tax Paid column the amount lands in the LAST column (still
+     * right-aligned, still legible, no trailing cells) rather than throwing or
+     * appearing under an unrelated heading. Either way `amountIndex >=
+     * frozenCount` — the anchors are unconditional and lead, and Tax Paid is
+     * never among them — so the spacer slice is never negative and the amount
+     * never collides with the label's span.
      */
-    const footerCells = columns.slice(frozenCount);
     const taxPaidIndex = columns.findIndex(c => c.key === 'taxPaid');
-    const amountIndex = taxPaidIndex >= frozenCount ? taxPaidIndex - frozenCount : footerCells.length - 1;
+    const amountIndex = taxPaidIndex >= 0 ? taxPaidIndex : columns.length - 1;
+    const spacerColumns = columns.slice(frozenCount, amountIndex);
+    const trailingColumns = columns.slice(amountIndex + 1);
 
     /*
      * `isolate` on the card below (CSS isolation: isolate) is LOAD-BEARING — do
@@ -564,7 +627,7 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-slate-600 mr-1">Columns:</span>
                     <ColumnToggle
-                        label="Account detail"
+                        label="Account details"
                         hint="Show each RRSP, TFSA and non-registered balance separately. Off leaves Total Assets and RRSP Drawn, and makes the table narrower."
                         active={accountDetail}
                         onToggle={toggleAccountDetail}
@@ -646,7 +709,7 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                                     return (
                                         <td
                                             key={col.key}
-                                            className={`px-3 py-2 ${col.align === 'right' ? 'text-right' : ''} ${colClass} ${frozen ? `${frozenClasses(i, i === frozenCount - 1, 'z-10')} ${frozenBg}` : ''}`}
+                                            className={`px-3 py-2 ${ALIGN_CLASS[col.align]} ${colClass} ${frozen ? `${frozenClasses(i, i === frozenCount - 1, 'z-10')} ${frozenBg}` : ''}`}
                                         >
                                             {col.cell(row, adj)}
                                         </td>
@@ -657,46 +720,63 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                         })}
                     </tbody>
                     {/*
-                      * A real <tfoot>, but an ordinary last row: it scrolls with the
-                      * content rather than pinning itself to the bottom of the box.
+                      * A real <tfoot>, and an ordinary last row VERTICALLY: it scrolls with
+                      * the content rather than pinning itself to the bottom of the box.
+                      * Horizontally its label behaves like every other frozen cell —
+                      * `sticky left-0`, opaque, carrying the frozen region's edge rule — so
+                      * the total stays labelled when the table is scrolled sideways.
                       *
-                      * Only the horizontal freeze survives. The label still sits in the
-                      * frozen region (sticky left-0, opaque, carrying the frozen region's
-                      * edge rule) so it behaves like every other frozen cell when the
-                      * table is scrolled sideways; the scrolling cells are plain <td>s and
-                      * the sticky label paints over them without needing a z-index, being
-                      * the only positioned cell in the row.
+                      * That works only because the label is SHORT. A cell pinned at left:0
+                      * paints where it is pinned, so one spanning most of the table's width
+                      * would sit on top of every scrolling column; confining the span to the
+                      * anchor region is what buys the freeze back.
                       */}
                     {footer && (
                         <tfoot>
                             <tr className="bg-slate-50">
                                 {/*
-                                  * The label must stay WRAPPABLE. A spanning cell contributes
-                                  * its min-content width to the columns it covers, so a
-                                  * `whitespace-nowrap` label here would widen Year/Age past
-                                  * the FROZEN_WIDTH pins — and the FROZEN_LEFT offsets those
-                                  * pins are derived from would then line the frozen columns up
-                                  * wrongly for every row in the table. Allowed to wrap it
-                                  * costs the layout nothing: measured in-browser, Year and Age
-                                  * stay at exactly 72px and 64px with this row present.
+                                  * Spans exactly the frozen anchors — 136px for a single
+                                  * person, 224px with a spouse, less the `px-3` padding either
+                                  * side, so ~112px of usable width at its narrowest. "Estate
+                                  * tax" measures 76px at the table's 16px, which is why the
+                                  * label can be `whitespace-nowrap` and why the year moved into
+                                  * the tooltip. A spanning cell contributes its min-content
+                                  * width to the columns it covers and only the EXCESS over
+                                  * their own minimums is distributed — there is none here, so
+                                  * this cannot push Year/Age past the FROZEN_WIDTH pins the
+                                  * FROZEN_LEFT offsets are derived from.
+                                  *
+                                  * z-10 matches the frozen body cells: above the scrolling
+                                  * cells it crosses, below the sticky headers.
                                   */}
                                 <th
                                     scope="row"
                                     colSpan={frozenCount}
-                                    className={`sticky left-0 border-t border-slate-300 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700 ${FROZEN_EDGE}`}
+                                    className={`sticky left-0 z-10 whitespace-nowrap border-t border-slate-300 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700 ${FROZEN_EDGE}`}
                                 >
-                                    <HelpTooltip text={estateTaxTooltip(hasSpouse)}>
-                                        <span className="cursor-help border-b border-dashed border-slate-400">{footer.label}</span>
+                                    <HelpTooltip text={estateTaxTooltip(hasSpouse, footer.years)}>
+                                        <span className="cursor-help border-b border-dashed border-slate-400">Estate tax</span>
                                     </HelpTooltip>
                                 </th>
-                                {footerCells.map((col, i) => (
+                                {spacerColumns.map(col => (
                                     <td
                                         key={col.key}
                                         data-column={col.key}
-                                        className={`border-t border-slate-300 px-3 py-2 text-right ${i === amountIndex ? 'font-bold text-red-600' : ''}`}
-                                    >
-                                        {i === amountIndex ? money(footer.amount) : null}
-                                    </td>
+                                        className="border-t border-slate-300 px-3 py-2 text-right"
+                                    />
+                                ))}
+                                <td
+                                    data-column={columns[amountIndex].key}
+                                    className="border-t border-slate-300 px-3 py-2 text-right font-bold text-red-600"
+                                >
+                                    {money(footer.amount)}
+                                </td>
+                                {trailingColumns.map(col => (
+                                    <td
+                                        key={col.key}
+                                        data-column={col.key}
+                                        className="border-t border-slate-300 px-3 py-2 text-right"
+                                    />
                                 ))}
                             </tr>
                         </tfoot>
