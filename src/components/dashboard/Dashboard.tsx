@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
+import { useHistoryOverlay } from '../../hooks/useHistoryOverlay';
 import { usePlans, uniquePlanName, DEFAULT_PLAN_NAME, PLANS_STORAGE_KEY, ACTIVE_PLAN_STORAGE_KEY } from '../../hooks/usePlans';
 import type { SavedPlan } from '../../hooks/usePlans';
 import { FinancialInput } from '../inputs/FinancialInput';
@@ -112,9 +113,31 @@ export function Dashboard() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    // Back closes an overlay instead of leaving the site. Declared AFTER the
+    // two mount-time `replaceState` calls above (the `?optimize=1` strip in the
+    // isOptimizing initializer runs during render; the `#start=` strip runs in
+    // the effect above) so both have finished rewriting the CURRENT entry before
+    // useHistoryOverlay pushes a new one on top of it. The pushed entry carries
+    // no URL of its own, so whatever those two settled on is what Back returns
+    // to. Every close path — the views' Exit buttons, the drawer's Escape and
+    // scrim click — flows through the same `is…` state these read, so they all
+    // consume the pushed entry without needing to know the hook exists.
+    useHistoryOverlay(isComparing, () => setIsComparing(false), 'compare');
+    useHistoryOverlay(isOptimizing, () => setIsOptimizing(false), 'optimizer');
+
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
     }, [inputs]);
+
+    // The drawer's index, or null when it should not be showing at all: an input
+    // edit while it is open re-runs the simulation and can shrink the array out
+    // from under a stale `selectedYearIndex`. The render below and the history
+    // entry above are both driven by THIS value rather than by the raw state, so
+    // a borrowed history entry can never outlive the visible panel.
+    const auditIndex = selectedYearIndex !== null && selectedYearIndex < simulationResults.length
+        ? selectedYearIndex
+        : null;
+    useHistoryOverlay(auditIndex !== null, () => setSelectedYearIndex(null), 'year-audit');
 
     // The table/chart click handlers report a YEAR (not a row position — chart
     // payloads and table rows don't share an indexing guarantee), so this maps it
@@ -568,7 +591,7 @@ export function Dashboard() {
                             link. The outer flex-1 box still absorbs the slack (and
                             collapses to zero when there is none, clipping this away). */}
                         <span className="absolute inset-x-0 top-0 flex items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 px-4 py-5 text-slate-500 transition-colors group-hover:border-brand-300 group-hover:bg-brand-50/40 group-hover:text-brand-700">
-                            <span className="text-lg font-semibold">Year-by-year table</span>
+                            <span className="text-lg font-semibold">Year-by-Year Breakdown</span>
                             <svg
                                 className="h-7 w-7 flex-shrink-0 transition-transform group-hover:translate-y-1"
                                 fill="none"
@@ -615,11 +638,11 @@ export function Dashboard() {
             {/* Year Audit drawer — an overlay, not a content swap, so edits behind it
                 keep working. Guarded against a stale index: an input edit while the
                 drawer is open re-runs the simulation and can shrink the array. */}
-            {selectedYearIndex !== null && selectedYearIndex < simulationResults.length && (
+            {auditIndex !== null && (
                 <YearAuditDrawer
                     inputs={inputs}
                     results={simulationResults}
-                    index={selectedYearIndex}
+                    index={auditIndex}
                     inflationAdjusted={isInflationAdjusted}
                     hasSpouse={hasSpouse}
                     onClose={() => setSelectedYearIndex(null)}

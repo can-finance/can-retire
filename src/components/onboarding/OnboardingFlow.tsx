@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Person, SimulationInputs } from '../../engine/types';
+import { useHistoryOverlay } from '../../hooks/useHistoryOverlay';
 import { BrandLockup } from '../layout/AppLayout';
 import { SectionCard } from '../ui/SectionCard';
 import { Dialog, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
@@ -183,6 +184,38 @@ export function OnboardingFlow({ seed, onDone, onOpenPrivacy }: OnboardingFlowPr
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [screen, confirmDiscard, requestSkip]);
+
+    // Browser Back, mirroring Escape. Without this the wizard is the one
+    // dismiss path that isn't guarded: Back would leave the site outright and
+    // silently drop everything typed, since nothing commits until Save.
+    //
+    // While the confirmation is up it owns the gesture, exactly as it owns
+    // Escape (Dialog closes itself on Escape and the handler above stands
+    // down) — otherwise Back there would be inert, which reads as a broken
+    // button. Everywhere else this is `requestSkip`, so the confirm-before-
+    // discard rule is the same one Escape and the Skip control already obey.
+    // On the closing screen requestSkip is unguarded (`hasCommitted`), so Back
+    // simply leaves for the dashboard with the saved plan — Escape does nothing
+    // there only because its own button is hidden, and an inert Back would
+    // strand the user.
+    const backOut = useCallback(() => {
+        if (confirmDiscard) {
+            setConfirmDiscard(false);
+            return;
+        }
+        requestSkip();
+    }, [confirmDiscard, requestSkip]);
+
+    // OnboardingFlow is mounted only while the wizard is up (App renders it
+    // behind `active &&`), so its own mounted-ness IS the "open" signal — hence
+    // the constant `true`. The borrowed entry is pushed from a microtask after
+    // this commit's effects, which is strictly later than every mount-time
+    // `replaceState` that rewrites the CURRENT entry: App's `?setup=1` strip
+    // runs during render (a useState initializer, before this component renders
+    // at all), and Dashboard's `?optimize=1` / `#start=` strips run in the
+    // sibling subtree that React renders and commits ahead of this one. So the
+    // entry Back returns to always carries the finished URL.
+    useHistoryOverlay(true, backOut, 'onboarding');
 
     // --- navigation ----------------------------------------------------------
 

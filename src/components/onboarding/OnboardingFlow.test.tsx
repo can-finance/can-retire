@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { useState } from 'react';
+import { act, cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { OnboardingFlow } from './OnboardingFlow';
@@ -58,6 +59,56 @@ async function setFinancialInput(
 
 function freshSeed(overrides: Partial<SimulationInputs> = {}): SimulationInputs {
     return JSON.parse(JSON.stringify({ ...INITIAL_INPUTS, ...overrides }));
+}
+
+/**
+ * jsdom implements pushState/go/popstate, but a traversal is a QUEUED task --
+ * history.back() returns long before the popstate fires, and measurably later
+ * than a single setTimeout(0) turn. Drain several macrotask turns (inside act,
+ * so the popstate-driven setState is covered) before asserting.
+ */
+async function settle(): Promise<void> {
+    await act(async () => {
+        for (let i = 0; i < 8; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 2));
+        }
+    });
+}
+
+/** Presses the browser's Back button and waits for the resulting popstate to be handled. */
+async function pressBack(): Promise<void> {
+    await act(async () => {
+        window.history.back();
+    });
+    await settle();
+}
+
+/** The marker useHistoryOverlay writes onto entries it owns, or null on the base entry. */
+function currentOverlay(): string | null {
+    const state = window.history.state as { __overlay?: string } | null;
+    return state?.__overlay ?? null;
+}
+
+/**
+ * Mirrors App's `{active && <OnboardingFlow ... />}`: the wizard is UNMOUNTED
+ * when it reports done, and that unmount is what hands its borrowed history
+ * entry back. Rendering OnboardingFlow bare would leave it mounted after
+ * onDone and make every "is the history clean afterwards" assertion vacuous.
+ */
+function WizardHost({ onDone }: { onDone: (committed: boolean) => void }) {
+    const [seed] = useState(() => freshSeed());
+    const [open, setOpen] = useState(true);
+    if (!open) return <div data-testid="wizard-closed" />;
+    return (
+        <OnboardingFlow
+            seed={seed}
+            onDone={(committed) => {
+                onDone(committed);
+                setOpen(false);
+            }}
+            onOpenPrivacy={vi.fn()}
+        />
+    );
 }
 
 describe('OnboardingFlow', () => {
@@ -287,7 +338,7 @@ describe('OnboardingFlow', () => {
             expect(screen.getByText(/Fix the items? above to continue/)).toBeInTheDocument();
 
             // The field is right here, so the user can actually get unstuck.
-            await setFinancialInput(user, fieldFor('Melt start age'), '71');
+            await setFinancialInput(user, fieldFor('RRSP melt start age'), '71');
             await user.click(screen.getByRole('button', { name: 'Next' }));
             expect(await screen.findByRole('heading', { name: 'Household spending' })).toBeInTheDocument();
         });
@@ -373,6 +424,116 @@ describe('OnboardingFlow', () => {
 
             expect(screen.queryByRole('heading', { name: 'Discard your setup?' })).not.toBeInTheDocument();
             expect(onDone).toHaveBeenCalledWith(false);
+        });
+    });
+
+    // Browser Back used to be the one dismiss path that bypassed the discard
+    // guard entirely: it left the site and silently threw away everything typed,
+    // since nothing commits until Save. It now routes through the same
+    // requestSkip that Escape and the Skip control use.
+    describe('browser Back', () => {
+        beforeEach(async () => {
+            // Drain any traversal a previous test left in flight, then park on a
+            // fresh, marker-free entry. It has to be a push, not a replace:
+            // jsdom keeps forward entries until something pushes over them, so a
+            // test that ended rewound would make the length assertions below
+            // meaningless.
+            await settle();
+            window.history.pushState(null, '', '/');
+            await settle();
+        });
+
+        it('asks before discarding an edited wizard, and keeps it open', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            render(<WizardHost onDone={onDone} />);
+            await settle();
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '41');
+
+            await pressBack();
+
+            expect(await screen.findByRole('heading', { name: 'Discard your setup?' })).toBeInTheDocument();
+            expect(screen.getByRole('dialog', { name: 'Guided Setup' })).toBeInTheDocument();
+            expect(onDone).not.toHaveBeenCalled();
+            expect(window.localStorage.getItem(SIM_KEY)).toBeNull();
+            expect((fieldFor('Current age') as HTMLInputElement).value).toBe('41');
+        });
+
+        // The case most likely to be subtly wrong: popstate has already spent the
+        // pushed entry by the time the confirmation appears, so staying open means
+        // the hook must borrow another one -- or the NEXT Back leaves the site with
+        // the draft still unsaved.
+        it('Keep editing leaves the wizard open, and Back still works afterwards', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            const base = window.history.length;
+            render(<WizardHost onDone={onDone} />);
+            await settle();
+            expect(window.history.length).toBe(base + 1);
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '41');
+
+            await pressBack();
+            await user.click(await screen.findByRole('button', { name: 'Keep editing' }));
+            await settle();
+
+            expect(screen.queryByRole('heading', { name: 'Discard your setup?' })).not.toBeInTheDocument();
+            expect((fieldFor('Current age') as HTMLInputElement).value).toBe('41');
+            // Re-armed rather than stacked -- one borrowed entry, still exactly one.
+            expect(currentOverlay()).toBe('onboarding');
+            expect(window.history.length).toBe(base + 1);
+
+            await pressBack();
+
+            expect(await screen.findByRole('heading', { name: 'Discard your setup?' })).toBeInTheDocument();
+            expect(onDone).not.toHaveBeenCalled();
+            expect(window.localStorage.getItem(SIM_KEY)).toBeNull();
+        });
+
+        it('Discard closes the wizard and leaves the history clean', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            const base = window.history.length;
+            render(<WizardHost onDone={onDone} />);
+            await settle();
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await setFinancialInput(user, fieldFor('Current age'), '41');
+            await pressBack();
+            await user.click(await screen.findByRole('button', { name: 'Discard' }));
+            await settle();
+
+            expect(onDone).toHaveBeenCalledWith(false);
+            expect(screen.getByTestId('wizard-closed')).toBeInTheDocument();
+            expect(window.localStorage.getItem(SIM_KEY)).toBeNull();
+            expect(window.localStorage.getItem(ONBOARDING_KEY)).toBe('1');
+            // Parked back on the base entry: no stranded entry, so the next Back
+            // press leaves the site instead of looking inert.
+            expect(currentOverlay()).toBeNull();
+            expect(window.history.length).toBeLessThanOrEqual(base + 1);
+        });
+
+        it('an untouched wizard closes instantly -- nothing to protect', async () => {
+            const user = userEvent.setup();
+            const onDone = vi.fn();
+            const base = window.history.length;
+            render(<WizardHost onDone={onDone} />);
+            await settle();
+
+            await user.click(screen.getByRole('button', { name: /Quick start/ }));
+            await settle();
+
+            await pressBack();
+
+            expect(screen.queryByRole('heading', { name: 'Discard your setup?' })).not.toBeInTheDocument();
+            expect(onDone).toHaveBeenCalledWith(false);
+            expect(screen.getByTestId('wizard-closed')).toBeInTheDocument();
+            // Back consumed the borrowed entry itself -- nothing left to unwind.
+            expect(currentOverlay()).toBeNull();
+            expect(window.history.length).toBeLessThanOrEqual(base + 1);
         });
     });
 

@@ -57,19 +57,42 @@ function navigateHash(hash: string) {
     });
 }
 
+/**
+ * The overlay borrows a history entry (useHistoryOverlay), and both the push
+ * and the matching unwind are deferred -- the push to a microtask, the unwind
+ * to a queued traversal that outlives a single setTimeout(0) turn. Drain
+ * several macrotask turns, inside act, before asserting on history.
+ */
+async function settle(): Promise<void> {
+    await act(async () => {
+        for (let i = 0; i < 8; i++) {
+            await new Promise((resolve) => setTimeout(resolve, 2));
+        }
+    });
+}
+
 describe('App activation state machine', () => {
     beforeEach(() => {
         window.localStorage.clear();
         // Reset the full URL (not just the hash) so a `?setup=1` set by one test
         // can't leak into the next — App strips it on mount, but resetting here
         // keeps each test's starting URL independent of run order regardless.
+        // replaceState alone, deliberately: `location.hash = ''` is a real
+        // same-document NAVIGATION in jsdom, and jsdom queues a popstate for it
+        // (browsers fire only hashchange). That stray popstate would land after
+        // the overlay had borrowed its history entry and read as a Back press,
+        // closing the wizard mid-test. replaceState clears the hash without
+        // navigating anywhere.
         window.history.replaceState(null, '', '/');
-        setHash('');
         mountState.count = 0;
     });
 
-    afterEach(() => {
+    afterEach(async () => {
         cleanup();
+        // Unmounting the overlay hands its borrowed history entry back, and that
+        // traversal is a queued task -- drain it here so it can't land in the
+        // middle of the next test.
+        await settle();
         vi.restoreAllMocks();
     });
 
@@ -166,20 +189,45 @@ describe('App activation state machine', () => {
         expect(screen.queryByRole('dialog')).toBeNull();
     });
 
-    it('history guard: clicking Guided Setup just opens the overlay in place, touching no history', async () => {
+    it('history: opening Guided Setup borrows exactly one same-URL entry', async () => {
         window.localStorage.setItem(SIM_KEY, JSON.stringify(INITIAL_INPUTS));
         window.localStorage.setItem(ONBOARDING_KEY, '1');
         const user = userEvent.setup();
         renderApp();
         expect(screen.queryByRole('dialog')).toBeNull();
 
-        // Onboarding is a pure in-place overlay now — no navigation, so nothing
-        // should push onto the history stack when it opens.
+        // Onboarding is still a pure in-place overlay — it does not navigate.
+        // It does borrow one history entry so Back can close it (rather than
+        // leaving the site and dropping the draft), and that entry must carry
+        // no URL of its own: pushState is called WITHOUT a url argument, so the
+        // path, search and hash the user is on survive verbatim.
+        const before = window.location.href;
         const pushStateSpy = vi.spyOn(window.history, 'pushState');
         await user.click(screen.getByRole('button', { name: EDIT_PLAN_LABEL }));
-
-        expect(pushStateSpy).not.toHaveBeenCalled();
         expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        await settle();
+
+        // Exactly one, despite StrictMode double-invoking the mount effect.
+        expect(pushStateSpy).toHaveBeenCalledTimes(1);
+        expect(pushStateSpy.mock.calls[0][2]).toBeUndefined();
+        expect(window.location.href).toBe(before);
+    });
+
+    // The #start= handler closes the wizard through its own path
+    // (markOnboardingDone + closeOnboarding(true)), bypassing requestSkip. It
+    // must still give the borrowed entry back, or the user would be left with a
+    // dead entry that swallows a Back press.
+    it('#start= mid-wizard still hands the overlay\'s borrowed history entry back', async () => {
+        renderApp();
+        expect(await screen.findByRole('dialog')).toBeInTheDocument();
+        await settle();
+
+        const goSpy = vi.spyOn(window.history, 'go');
+        navigateHash('#start=xyz');
+        await settle();
+
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(goSpy).toHaveBeenCalledWith(-1);
     });
 });
 
