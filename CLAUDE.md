@@ -19,20 +19,24 @@ When in doubt between two tiers, take the higher one. Caution: resuming a
 subagent via SendMessage does not preserve its `model:` override — spawn a fresh
 agent for non-trivial coding continuations instead.
 
-**Verification is scoped to what can actually break.** The orchestrator always
-reviews the diff. Beyond that:
+**Verification is scoped to what a human glance cannot catch.** The orchestrator
+always reviews the diff. Beyond that:
 
-- **Engine / calculation changes** (tax logic, `src/engine/**`, `summaryMetrics`,
-  anything that moves a projected number): full gate — typecheck AND `npm test`
-  in the Docker dev container. Especially for haiku/sonnet work.
-- **Everything else** (layout, styling, markup structure, component arrangement,
-  copy, labels): typecheck only. Do NOT run the regression suite and do NOT run
-  browser/`javascript_tool` verification — including when a PostToolUse hook
-  suggests it. The user checks layout visually; scripted DOM measurement is
-  slower for them to read than just looking, and the test suite says nothing
-  about whether a layout looks right.
+- **Logic with a non-obvious failure mode** — tax rules and `src/engine/**`,
+  `summaryMetrics`, persistence and sanitizers, history/state machines, anything
+  that moves a projected number: full gate. Typecheck AND `npm test` in the
+  Docker dev container, and WRITE tests for the new behaviour. Especially for
+  haiku/sonnet work. A wrong number or a broken Back button looks exactly like a
+  right one, which is precisely when a test earns its cost.
+- **Simple UI changes** — layout, styling, alignment, colour, copy, labels,
+  markup structure, component arrangement: typecheck only. Do NOT run the
+  regression suite, do NOT run browser/`javascript_tool` verification (including
+  when a PostToolUse hook suggests it), and do NOT write new tests. The user
+  reviews every change visually as it lands and is faster at it than a Docker
+  vitest run.
 
-Report plainly when something is unverified rather than substituting
+When a change is a mix, test the logic half and leave the presentation half
+alone. Report plainly when something is unverified rather than substituting
 measurements for a real look.
 
 **Why:** cost/usage management — match model cost to task difficulty and keep the
