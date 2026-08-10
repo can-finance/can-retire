@@ -10,10 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.12.0] - 2026-08-09
 
 ### Added
-- **The dashboard now leads with whether your plan holds** — "Fully funded", or
-  "Runs short at 87" with the shortfall — alongside lifetime spending funded, which
-  was never shown before. Monte Carlo success sits with that verdict instead of
-  appearing and disappearing as its own card.
 - **Four new columns in the year-by-year table:** RRSP Drawn (hover for the split
   between the mandatory RRIF minimum, any voluntary meltdown, and extra draws taken
   to cover spending), Taxable Income, Avg Tax Rate, and OAS Clawback. The clawback
@@ -28,11 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Your first-year withdrawal rate**, under Household Spending, with the widely
   cited 4% guideline marked alongside it for comparison. Hover the label for what
   goes into the calculation.
-- **An "Account details" switch** above the year-by-year table. It starts **off**, so
-  the table now opens showing household totals rather than every account separately
-  — three columns fewer for a single person, six for a couple, and far less scrolling
-  sideways. Switch it on for the per-account RRSP, TFSA and non-registered balances;
-  your choice is remembered between visits.
 
 ### Changed
 - **The Meltdown Optimizer now searches the withdrawal order when maximizing your
@@ -47,10 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   along with the melt amount and CPP/OAS ages. The suggested order is shown in a
   "Withdrawal order" row on the results, and your annual spending is still left
   untouched.
-- **New plans now default to drawing RRSPs last** ("Fund spending from RRSP first"
-  starts off) rather than first. In 11 of our 13 test plans that left the larger
-  estate. Saved plans keep whatever order they were saved with; only new plans and
-  the sample numbers are affected.
 - **Text is larger and muted greys are darker throughout**, for readability. No
   projection figures change.
 - Estate tax and Net Pension no longer each take a column in the year-by-year table.
