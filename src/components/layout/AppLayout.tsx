@@ -13,7 +13,7 @@ const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
     { id: 'dashboard', label: 'Dashboard', href: '/' },
     { id: 'cpp-calculator', label: 'CPP Calculator', href: '/cpp-calculator/' },
     { id: 'rrsp-withdrawal-strategy', label: 'RRSP Withdrawal Strategy', href: '/rrsp-withdrawal-strategy/' },
-    { id: 'how-it-works', label: 'How it works', href: '/how-it-works/' },
+    { id: 'how-it-works', label: 'How It Works', href: '/how-it-works/' },
 ];
 
 // Single source for the "re-run setup" button's label, shared with the copy

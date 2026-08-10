@@ -9,6 +9,7 @@ import { PLAN_COLORS } from '../../constants/chartColors';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { Toggle } from '../ui/Toggle';
 import { Dialog } from '../ui/Dialog';
+import { HelpTooltip } from '../ui/HelpTooltip';
 import { ComparisonChart } from '../charts/ComparisonChart';
 import { ComparisonSummaryCards } from '../comparison/ComparisonSummaryCards';
 import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
@@ -157,20 +158,11 @@ export function MeltdownOptimizerView({
                         leaving more for your estate.
                     </p>
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-                        This tool searches hundreds of strategy combinations and can
-                        optimize for different goals:
+                        It tries a range of RRSP melt amounts, CPP and OAS start ages, and
+                        withdrawal orders (RRSP first or last). The melt itself always starts
+                        at retirement and runs to 71. It can optimize that search for either
+                        of two goals, which you pick below.
                     </p>
-                    <ul className="mt-2 text-sm text-slate-600 leading-relaxed list-disc pl-5 space-y-1">
-                        <li>
-                            <span className="font-medium text-slate-700">Leave the largest estate</span> — the
-                            withdrawal schedule that passes the most to your heirs after tax, without
-                            running you short.
-                        </li>
-                        <li>
-                            <span className="font-medium text-slate-700">Spend the most in retirement</span> — the
-                            highest annual spending your savings can sustain at a confidence level you choose.
-                        </li>
-                    </ul>
                     <p className="mt-3 text-sm">
                         <a
                             href="/rrsp-withdrawal-strategy/"
@@ -180,12 +172,19 @@ export function MeltdownOptimizerView({
                         </a>
                     </p>
 
+                    {/* Which plan is about to be rewritten. In a slate box with the name
+                        as one more bolded word, this read as chrome — and Apply overwrites
+                        the plan named here. The brand tint and the name on its own line at
+                        the size the dashboard's plan field uses make it the thing you see.
+                        Deliberately NOT styled as a field: it is not editable here, and the
+                        line beneath says where it is. */}
                     {hasRealPlan && (
-                        <div className="mt-6 rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
-                            <p className="text-sm text-slate-600">
-                                Optimizing plan: <span className="font-semibold text-slate-900">{activePlanName}</span>
+                        <div className="mt-6 rounded-lg bg-brand-50 border border-brand-200 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-brand-700">
+                                Optimizing plan
                             </p>
-                            <p className="mt-0.5 text-xs text-slate-500">
+                            <p className="mt-1 text-lg font-semibold text-slate-900">{activePlanName}</p>
+                            <p className="mt-1 text-xs text-slate-500">
                                 To optimize a different plan, select it in the plan list on the dashboard first.
                             </p>
                         </div>
@@ -240,17 +239,35 @@ export function MeltdownOptimizerView({
                         </div>
                     )}
 
-                    <div className="mt-6 max-w-md">
-                        <Toggle
-                            checked={considerCppOas}
-                            onChange={setConsiderCppOas}
-                            label="Optimize CPP/OAS timing (recommended)"
-                            tooltip="Lets the optimizer test different CPP (60–70) and OAS (65–70) start ages alongside the melt. Delaying usually raises the guaranteed lifetime benefit and pairs well with a meltdown, but earlier starts are tested too. Turn off to keep your current start ages fixed."
-                        />
+                    <div className="mt-6">
+                        {/* max-w-md belongs to the TOGGLE, not the block: it stops the switch
+                            drifting to the far right of a 2xl card. The line beneath is plain
+                            text with nothing to align, so it takes the card's full width and
+                            stays on one line. */}
+                        <div className="max-w-md">
+                            <Toggle
+                                checked={considerCppOas}
+                                onChange={setConsiderCppOas}
+                                label="Optimize CPP/OAS timing (recommended)"
+                                tooltip="Lets the optimizer test different CPP (60–70) and OAS (65–70) start ages alongside the melt. Delaying usually raises the guaranteed lifetime benefit and pairs well with a meltdown, but earlier starts are tested too. Turn off to keep your current start ages fixed."
+                            />
+                        </div>
+                        {/* One template string broke wherever it ran out of room, splitting
+                            "OAS at 70" across two lines. Each age phrase is its own nowrap
+                            atom now, so a break lands on a comma or the separator instead. */}
                         <p className="mt-1 text-xs text-slate-500">
-                            {liveInputs.spouse
-                                ? `Currently — You: CPP at ${liveInputs.person.cppStartAge}, OAS at ${liveInputs.person.oasStartAge} · Spouse: CPP at ${liveInputs.spouse.cppStartAge}, OAS at ${liveInputs.spouse.oasStartAge}`
-                                : `Currently CPP at ${liveInputs.person.cppStartAge}, OAS at ${liveInputs.person.oasStartAge}`}
+                            Currently{liveInputs.spouse ? ' — ' : ' '}
+                            <span className="whitespace-nowrap">
+                                {liveInputs.spouse ? 'You: ' : ''}CPP at {liveInputs.person.cppStartAge}
+                            </span>,{' '}
+                            <span className="whitespace-nowrap">OAS at {liveInputs.person.oasStartAge}</span>
+                            {liveInputs.spouse && (
+                                <>
+                                    {' · '}
+                                    <span className="whitespace-nowrap">Spouse: CPP at {liveInputs.spouse.cppStartAge}</span>,{' '}
+                                    <span className="whitespace-nowrap">OAS at {liveInputs.spouse.oasStartAge}</span>
+                                </>
+                            )}
                         </p>
                     </div>
 
@@ -277,7 +294,7 @@ export function MeltdownOptimizerView({
                     <div className="mt-6 flex flex-wrap items-center gap-3">
                         <button onClick={runSearch} className={hasRealPlan ? primaryBtn : secondaryBtn}>
                             {hasRealPlan
-                                ? (objective === 'max-spend' ? 'Find my max spending' : 'Find my best meltdown')
+                                ? (objective === 'max-spend' ? 'Find my highest spending' : 'Find my largest estate')
                                 : 'Continue with sample numbers'}
                         </button>
                         <button onClick={onExit} className={secondaryBtn}>
@@ -679,7 +696,7 @@ function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDec
     const currentMeltStart = meltStartCell(d.originalMeltAmount, d.originalMeltStartAge);
     const suggestedMeltStart = meltStartCell(d.meltAmount, d.meltStartAge);
 
-    const rows: { label: string; current: string; suggested: string; changed: boolean }[] = [
+    const rows: { label: string; current: string; suggested: string; changed: boolean; tooltip?: string }[] = [
         {
             label: 'RRSP melt amount',
             current: meltCell(d.originalMeltAmount),
@@ -688,6 +705,7 @@ function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDec
         },
         {
             label: 'RRSP melt start age',
+            tooltip: 'Not searched — the melt always begins at your retirement age and runs to 71. Change your retirement age to move it.',
             current: currentMeltStart,
             suggested: suggestedMeltStart,
             changed: currentMeltStart !== suggestedMeltStart,
@@ -748,7 +766,7 @@ function ObjectiveCard({
 // Generic current-vs-suggested table (household spending/strategy rows).
 function SimpleChangeTable({
     title, rows,
-}: { title?: string; rows: { label: string; current: string; suggested: string; changed: boolean }[] }) {
+}: { title?: string; rows: { label: string; current: string; suggested: string; changed: boolean; tooltip?: string }[] }) {
     return (
         <div>
             <div className="overflow-x-auto">
@@ -774,7 +792,13 @@ function SimpleChangeTable({
                     <tbody>
                         {rows.map(row => (
                             <tr key={row.label} className="border-b border-slate-100 last:border-0">
-                                <td className="text-left text-slate-500 py-1.5 pr-4">{row.label}</td>
+                                <td className="text-left text-slate-500 py-1.5 pr-4">
+                                    {row.tooltip ? (
+                                        <HelpTooltip text={row.tooltip}>
+                                            <span className="cursor-help border-b border-dashed border-slate-400">{row.label}</span>
+                                        </HelpTooltip>
+                                    ) : row.label}
+                                </td>
                                 <td className="text-right py-1.5 pl-4 tabular-nums whitespace-nowrap text-slate-700">
                                     {row.current}
                                 </td>

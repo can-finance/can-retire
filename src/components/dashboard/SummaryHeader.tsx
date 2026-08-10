@@ -88,12 +88,16 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                         those bases blended, so 11.4% and 0.0% giving 8.0% is correct but
                         not additive. Do not add a "+" or "=" to the Rate column. */}
                     <div className="summary-card summary-card--red-400 col-span-2 lg:col-span-3">
-                        <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Tax</p>
-                        <table className="w-full mt-1 text-xs">
+                        {/* The card's title sits in the header row's otherwise-empty first
+                            cell rather than on a line of its own, which keeps this card the
+                            same height as its neighbours despite carrying three rows. The
+                            sr-only word keeps the column's accessible name honest: what is
+                            actually below it is a stage, not a tax. */}
+                        <table className="w-full text-xs">
                             <thead>
                                 <tr className="text-slate-500">
-                                    <th scope="col" className="text-left font-medium">
-                                        <span className="sr-only">Stage</span>
+                                    <th scope="col" className="text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                                        Tax<span className="sr-only"> stage</span>
                                     </th>
                                     <th scope="col" className="text-right font-medium pl-2">Amount</th>
                                     <th scope="col" className="text-right font-medium pl-2">Rate</th>

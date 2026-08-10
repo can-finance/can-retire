@@ -125,10 +125,17 @@ export function PlanManager({
         setPendingDelete(null);
     };
 
-    // The section heading is now the standard text-xl bold used by every other
-    // input section, so the plan NAME steps down a level rather than competing
-    // with it — it's content inside the section, not a second heading.
-    const titleClass = 'text-lg font-semibold text-slate-800 line-clamp-1';
+    // A step below the section heading (which is the standard text-xl bold every
+    // input section uses) — this is content inside the section, not a second
+    // heading. And it is editable: as bare text it read as a label, and nobody
+    // clicks a label. Both states wear a field's box; only the border and colour
+    // change between "click me" and "editing".
+    const titleClass = 'text-lg font-semibold rounded-md border px-2 py-1 min-w-0';
+    const titleIdleClass =
+        `${titleClass} w-full text-left line-clamp-1 border-slate-300 bg-white text-brand-700 ` +
+        'hover:border-brand-400 hover:bg-brand-50/50 transition-colors';
+    const titleEditClass =
+        `${titleClass} w-full border-brand-500 bg-white text-slate-900 outline-none ring-1 ring-brand-500`;
 
     return (
         <CollapsibleSection
@@ -153,14 +160,14 @@ export function PlanManager({
                                     if (e.key === 'Enter') { skipBlur.current = true; commitEdit(); }
                                     else if (e.key === 'Escape') { skipBlur.current = true; setEditing(false); }
                                 }}
-                                className={`${titleClass} bg-transparent outline-none border-b border-brand-400 min-w-0`}
+                                className={titleEditClass}
                             />
                         ) : (
                             <HelpTooltip text="Click to rename this plan.">
                                 <button
                                     onClick={startEdit}
                                     aria-label="Rename plan"
-                                    className={`${titleClass} text-left hover:text-brand-600 transition-colors`}
+                                    className={titleIdleClass}
                                 >
                                     {activePlanName}
                                 </button>
