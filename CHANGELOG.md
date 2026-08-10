@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-09
+
 ### Added
 - **The dashboard now leads with whether your plan holds** — "Fully funded", or
   "Runs short at 87" with the shortfall — alongside lifetime spending funded, which
@@ -26,9 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Your first-year withdrawal rate**, under Household Spending, with the widely
   cited 4% guideline marked alongside it for comparison. Hover the label for what
   goes into the calculation.
-- **An "Account detail" switch** above the year-by-year table hides the individual
-  RRSP, TFSA and non-registered columns and keeps the household totals — three
-  columns fewer for a single person, six for a couple. Remembered between visits.
+- **An "Account details" switch** above the year-by-year table. It starts **off**, so
+  the table now opens showing household totals rather than every account separately
+  — three columns fewer for a single person, six for a couple, and far less scrolling
+  sideways. Switch it on for the per-account RRSP, TFSA and non-registered balances;
+  your choice is remembered between visits.
 
 ### Changed
 - **The Meltdown Optimizer now searches the withdrawal order when maximizing your
