@@ -338,4 +338,58 @@ describe('sanitizeSimulationInputs', () => {
         expect(result.oneTimeExpenses![1].type).toBe('inflow');
         expect(result.oneTimeExpenses![1].id).toBeTruthy();
     });
+
+    it('rounds fractional ages to whole years (person, spouse, pension, events)', () => {
+        const ages = {
+            age: 48.5, retirementAge: 59.6, lifeExpectancy: 89.4,
+            cppStartAge: 64.7, oasStartAge: 65.2, rrspMeltStartAge: 60.5,
+            pension: { annualAmount: 20_000, startAge: 61.4, indexedToInflation: true, bridgeAmount: 5_000, bridgeEndAge: 64.6 }
+        };
+        const result = sanitizeSimulationInputs({
+            person: ages,
+            spouse: { ...ages, age: 45.4 },
+            oneTimeExpenses: [{ id: 'e', name: 'Roof', amount: 30_000, age: 70.5, type: 'expense' }]
+        })!;
+        for (const p of [result.person, result.spouse!]) {
+            expect(p).toMatchObject({
+                retirementAge: 60, lifeExpectancy: 89,
+                cppStartAge: 65, oasStartAge: 65, rrspMeltStartAge: 61
+            });
+            expect(p.pension).toEqual({
+                annualAmount: 20_000, startAge: 61, indexedToInflation: true, bridgeAmount: 5_000, bridgeEndAge: 65
+            });
+        }
+        expect(result.person.age).toBe(49);
+        expect(result.spouse!.age).toBe(45);
+        expect(result.oneTimeExpenses![0].age).toBe(71);
+    });
+
+    it('rounded pension ages stay inside their clamps', () => {
+        const result = sanitizeSimulationInputs({
+            person: { pension: { annualAmount: 10_000, startAge: 80.4, bridgeAmount: 1_000, bridgeEndAge: 54.6 } }
+        })!;
+        expect(result.person.pension!.startAge).toBe(80);
+        expect(result.person.pension!.bridgeEndAge).toBe(55);
+    });
+
+    it('keeps an absent rrspMeltStartAge absent-equivalent and integer payloads byte-identical', () => {
+        const once = sanitizeSimulationInputs({
+            ...INITIAL_INPUTS,
+            spouse: createDefaultPerson(true),
+            person: {
+                ...INITIAL_INPUTS.person,
+                pension: { annualAmount: 20_000, startAge: 61, indexedToInflation: true, bridgeAmount: 5_000, bridgeEndAge: 65 }
+            },
+            oneTimeExpenses: [{ id: 'e', name: 'Roof', amount: 30_000, age: 70, type: 'expense' }]
+        })!;
+        const twice = sanitizeSimulationInputs(JSON.parse(JSON.stringify(once)))!;
+        expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+        expect(once.person.pension).toEqual({
+            annualAmount: 20_000, startAge: 61, indexedToInflation: true, bridgeAmount: 5_000, bridgeEndAge: 65
+        });
+        expect(once.oneTimeExpenses![0].age).toBe(70);
+
+        const noMelt = sanitizeSimulationInputs({ person: { rrspMeltStartAge: 'x' } })!;
+        expect(noMelt.person.rrspMeltStartAge).toBe(createDefaultPerson().rrspMeltStartAge);
+    });
 });

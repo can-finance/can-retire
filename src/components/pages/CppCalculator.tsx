@@ -375,7 +375,7 @@ export function CppCalculator() {
                             min={18} max={70}
                             className="mb-4 max-w-[180px]"
                             tooltip="Used to work out which calendar years count, starting from the year you turned 18."
-                            onChange={(e) => update({ currentAge: Number(e.target.value) })}
+                            onChange={(e) => update({ currentAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                         />
 
                         <div className="flex items-stretch gap-1 bg-slate-100/70 p-1 rounded-xl mb-5">
@@ -394,13 +394,13 @@ export function CppCalculator() {
                                     <FinancialInput
                                         label="Starting Working Age" prefix="" value={state.simple.workStartAge}
                                         min={18} max={70}
-                                        onChange={(e) => update({ simple: { ...state.simple, workStartAge: Number(e.target.value) } })}
+                                        onChange={(e) => update({ simple: { ...state.simple, workStartAge: Math.round(Number(e.target.value)) } })} maxFractionDigits={0} inputMode="numeric"
                                     />
                                     <FinancialInput
                                         label="Ending Working Age" prefix="" value={state.simple.workEndAge}
                                         min={18} max={70}
                                         tooltip="Last age with employment earnings. Retiring years before starting CPP adds zero-earning years that can drag your average down."
-                                        onChange={(e) => update({ simple: { ...state.simple, workEndAge: Number(e.target.value) } })}
+                                        onChange={(e) => update({ simple: { ...state.simple, workEndAge: Math.round(Number(e.target.value)) } })} maxFractionDigits={0} inputMode="numeric"
                                     />
                                 </div>
                                 <FinancialInput

@@ -40,13 +40,13 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
                         label="Current age"
                         prefix=""
                         value={answers.age}
-                        onChange={(e) => onChange({ age: Number(e.target.value) })}
+                        onChange={(e) => onChange({ age: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                     />
                     <FinancialInput
                         label="Retirement age"
                         prefix=""
                         value={answers.retirementAge}
-                        onChange={(e) => onChange({ retirementAge: Number(e.target.value) })}
+                        onChange={(e) => onChange({ retirementAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                     />
                 </div>
 
@@ -82,7 +82,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
                             label="Spouse's age"
                             prefix=""
                             value={answers.spouseAge}
-                            onChange={(e) => onChange({ spouseAge: Number(e.target.value) })}
+                            onChange={(e) => onChange({ spouseAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                         />
                         <FinancialInput
                             label="Spouse's income"

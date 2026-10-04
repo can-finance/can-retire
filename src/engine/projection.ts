@@ -416,7 +416,42 @@ function simulatePersonBaseYear(
     };
 }
 
-export function runSimulation(inputs: SimulationInputs, stochastic: boolean = false): SimulationResult[] {
+// The engine steps one whole year at a time and matches ages with === (death
+// year, one-time events, summary lookups), so a fractional age would silently
+// never match. The sanitizer rounds at the UI/storage boundary; this repeats it
+// for callers that bypass it (optimizer, Monte Carlo, tests). Pure: returns
+// copies, never mutates `inputs`. Integer ages pass through unchanged.
+const roundOptAge = (v: number | undefined): number | undefined =>
+    v === undefined ? undefined : Math.round(v);
+
+function roundPersonAges(person: Person): Person {
+    return {
+        ...person,
+        age: Math.round(person.age),
+        retirementAge: Math.round(person.retirementAge),
+        lifeExpectancy: Math.round(person.lifeExpectancy),
+        cppStartAge: Math.round(person.cppStartAge),
+        oasStartAge: Math.round(person.oasStartAge),
+        rrspMeltStartAge: roundOptAge(person.rrspMeltStartAge),
+        pension: person.pension ? {
+            ...person.pension,
+            startAge: Math.round(person.pension.startAge),
+            bridgeEndAge: roundOptAge(person.pension.bridgeEndAge)
+        } : person.pension
+    };
+}
+
+export function normalizeInputAges(inputs: SimulationInputs): SimulationInputs {
+    return {
+        ...inputs,
+        person: roundPersonAges(inputs.person),
+        spouse: inputs.spouse ? roundPersonAges(inputs.spouse) : inputs.spouse,
+        oneTimeExpenses: inputs.oneTimeExpenses?.map(e => ({ ...e, age: Math.round(e.age) }))
+    };
+}
+
+export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean = false): SimulationResult[] {
+    const inputs = normalizeInputAges(rawInputs);
     const results: SimulationResult[] = [];
     const { person, spouse, province, inflationRate, returnRates, preRetirementSpend, postRetirementSpend, withdrawalStrategy } = inputs;
 

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Ages with decimals are now rounded to whole years.** The plan works one year
+  at a time, so an age like 48.5 could quietly break it: one-time expenses and
+  inflows were dropped, and the tax owed on what's left at the end of the plan was
+  never worked out. Age fields now take whole numbers only. **Projections change
+  for plans saved with a decimal age**, since they now include those expenses and
+  that final tax.
+
 ## [0.12.0] - 2026-08-09
 
 ### Added

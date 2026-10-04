@@ -37,11 +37,11 @@ export function AboutFields({
     return (
         <div className={gridClassName}>
             <FinancialInput label={labels.age} prefix="" value={person.age}
-                onChange={(e) => onPatch({ age: Number(e.target.value) })} />
+                onChange={(e) => onPatch({ age: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
             <FinancialInput label={labels.retirementAge} prefix="" value={person.retirementAge}
-                onChange={(e) => onPatch({ retirementAge: Number(e.target.value) })} />
+                onChange={(e) => onPatch({ retirementAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
             <FinancialInput label={labels.lifeExpectancy} prefix="" value={person.lifeExpectancy}
-                onChange={(e) => onPatch({ lifeExpectancy: Number(e.target.value) })}
+                onChange={(e) => onPatch({ lifeExpectancy: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                 tooltip="The age the plan runs to. Assets are projected until this age, then estate/terminal tax is calculated." />
         </div>
     );
@@ -69,7 +69,7 @@ export function BenefitsFields({
     return (
         <div className="grid grid-cols-3 gap-3">
             <FinancialInput label={labels.cppStartAge} prefix="" value={person.cppStartAge}
-                onChange={(e) => onPatch({ cppStartAge: Number(e.target.value) })}
+                onChange={(e) => onPatch({ cppStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                 tooltip="Between 60 and 70. Starting later increases the monthly amount." />
             <FinancialInput label={labels.yearsContributed} prefix="" value={person.cppContributedYears ?? 35}
                 onChange={(e) => onPatch({ cppContributedYears: Number(e.target.value) })}
@@ -78,7 +78,7 @@ export function BenefitsFields({
                     ? "Not used while a CPP Calculator estimate is applied."
                     : "Years you paid into CPP — your working years between 18 and 65, up to 47. The plan estimates your CPP as that count ÷ 40 of the maximum, assuming those years were at or near CPP's maximum earnings. Earned less? The CPP Calculator works from your actual earnings."} />
             <FinancialInput label={labels.oasStartAge} prefix="" value={person.oasStartAge}
-                onChange={(e) => onPatch({ oasStartAge: Number(e.target.value) })}
+                onChange={(e) => onPatch({ oasStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                 tooltip="Between 65 and 70. Starting later increases the monthly amount." />
         </div>
     );
@@ -138,7 +138,7 @@ export function MeltdownFields({
         <div className="grid grid-cols-2 gap-4">
             <FinancialInput label={labels.meltStartAge} prefix="" accentColor={rrspColor}
                 value={person.rrspMeltStartAge || person.retirementAge}
-                onChange={(e) => onPatch({ rrspMeltStartAge: Number(e.target.value) })}
+                onChange={(e) => onPatch({ rrspMeltStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                 tooltip="Age to begin deliberate early RRSP withdrawals. The melt runs to age 71 — the year your RRSP must convert to a RRIF. Mandatory minimum withdrawals start the year after, at 72." />
             <FinancialInput label={labels.meltAmount} accentColor={rrspColor}
                 value={person.rrspMeltAmount || 0}
@@ -208,7 +208,7 @@ export function PensionFields({
                     onChange={(e) => patchPension({ annualAmount: Number(e.target.value) })}
                     tooltip="Gross annual defined-benefit pension from a former employer, in today's dollars. Indexed pensions keep pace with inflation; non-indexed pensions pay a fixed dollar amount that loses purchasing power over time." />
                 <FinancialInput label={labels.startAge} prefix="" value={pension?.startAge ?? person.retirementAge}
-                    onChange={(e) => patchPension({ startAge: Number(e.target.value) })} />
+                    onChange={(e) => patchPension({ startAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
             </div>
 
             <Toggle
@@ -222,7 +222,7 @@ export function PensionFields({
                     onChange={(e) => patchPension({ bridgeAmount: Number(e.target.value) })}
                     tooltip="Extra annual amount on top of the pension, paid from the start age until the bridge end age. Many DB plans stop this at 65, when CPP/OAS eligibility begins." />
                 <FinancialInput label={labels.bridgeEndAge} prefix="" value={pension?.bridgeEndAge ?? 65}
-                    onChange={(e) => patchPension({ bridgeEndAge: Number(e.target.value) })}
+                    onChange={(e) => patchPension({ bridgeEndAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                     disabled={!hasBridge} />
             </div>
         </>

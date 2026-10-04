@@ -175,4 +175,13 @@ describe('computeSummaryMetrics', () => {
             expect(real.rrspBalanceAt71).toBeCloseTo(nominal.rrspBalanceAt71! / row71.inflationFactor, 6);
         });
     });
+
+    it('finds the age-71 row when the plan was entered with a fractional age', () => {
+        const inputs = { ...INITIAL_INPUTS, person: { ...INITIAL_INPUTS.person, age: 48.5 } };
+        const res = runSimulation(inputs);
+        const m = computeSummaryMetrics(res, inputs, false);
+        expect(m.rrspBalanceAt71).not.toBeNull();
+        const row71 = res.find(r => r.age === 71)!;
+        expect(m.rrspBalanceAt71).toBeCloseTo(row71.accounts.rrsp, 6);
+    });
 });

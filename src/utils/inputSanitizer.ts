@@ -89,6 +89,17 @@ const num = (v: unknown, fallback: number): number =>
 const optNum = (v: unknown, fallback: number | undefined): number | undefined =>
     typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 
+// Ages are whole years everywhere: the engine steps one year at a time and
+// compares ages with ===, so a fractional age (48.5) never matches a life
+// expectancy or a one-time event's age. Integers pass through unchanged, so
+// old payloads stay byte-identical.
+const age = (v: unknown, fallback: number): number => Math.round(num(v, fallback));
+
+const optAge = (v: unknown, fallback: number | undefined): number | undefined => {
+    const n = optNum(v, fallback);
+    return n === undefined ? undefined : Math.round(n);
+};
+
 const isObject = (v: unknown): v is Record<string, unknown> =>
     typeof v === 'object' && v !== null;
 
@@ -188,7 +199,7 @@ function sanitizePension(raw: unknown, resolvedRetirementAge: number): DBPension
     const annualAmount = Math.min(1_000_000, Math.max(0, num(raw.annualAmount, 0)));
     if (annualAmount <= 0) return undefined;
 
-    const startAge = Math.min(80, Math.max(40, num(raw.startAge, resolvedRetirementAge)));
+    const startAge = Math.min(80, Math.max(40, age(raw.startAge, resolvedRetirementAge)));
     const indexedToInflation = typeof raw.indexedToInflation === 'boolean' ? raw.indexedToInflation : true;
     // Bridge is only meaningful alongside a nonzero amount — omit both bridge
     // fields (not just default them) when the amount clamps to 0
@@ -200,7 +211,7 @@ function sanitizePension(raw: unknown, resolvedRetirementAge: number): DBPension
         indexedToInflation,
         ...(bridgeAmount > 0 ? {
             bridgeAmount,
-            bridgeEndAge: Math.min(75, Math.max(55, num(raw.bridgeEndAge, 65)))
+            bridgeEndAge: Math.min(75, Math.max(55, age(raw.bridgeEndAge, 65)))
         } : {})
     };
 }
@@ -209,18 +220,18 @@ function sanitizePerson(raw: unknown, defaults: Person, legacyRebalance?: boolea
     const r = isObject(raw) ? raw : {};
     const rrsp = isObject(r.rrsp) ? r.rrsp : {};
     const tfsa = isObject(r.tfsa) ? r.tfsa : {};
-    const retirementAge = num(r.retirementAge, defaults.retirementAge);
+    const retirementAge = age(r.retirementAge, defaults.retirementAge);
 
     return {
-        age: num(r.age, defaults.age),
+        age: age(r.age, defaults.age),
         retirementAge,
-        lifeExpectancy: num(r.lifeExpectancy, defaults.lifeExpectancy),
+        lifeExpectancy: age(r.lifeExpectancy, defaults.lifeExpectancy),
         currentIncome: num(r.currentIncome, defaults.currentIncome),
-        cppStartAge: num(r.cppStartAge, defaults.cppStartAge),
+        cppStartAge: age(r.cppStartAge, defaults.cppStartAge),
         cppContributedYears: num(r.cppContributedYears, defaults.cppContributedYears),
         cppAnnualOverride: optNum(r.cppAnnualOverride, undefined),
-        oasStartAge: num(r.oasStartAge, defaults.oasStartAge),
-        rrspMeltStartAge: optNum(r.rrspMeltStartAge, defaults.rrspMeltStartAge),
+        oasStartAge: age(r.oasStartAge, defaults.oasStartAge),
+        rrspMeltStartAge: optAge(r.rrspMeltStartAge, defaults.rrspMeltStartAge),
         rrspMeltAmount: optNum(r.rrspMeltAmount, defaults.rrspMeltAmount),
         pension: sanitizePension(r.pension, retirementAge),
         rrsp: { type: AccountTypeVals.RRSP, balance: num(rrsp.balance, defaults.rrsp.balance) },
@@ -239,7 +250,7 @@ function sanitizeOneTimeEvents(raw: unknown): OneTimeEvent[] {
             id: typeof e.id === 'string' ? e.id : crypto.randomUUID(),
             name: typeof e.name === 'string' ? e.name : 'Event',
             amount: e.amount as number,
-            age: e.age as number,
+            age: Math.round(e.age as number),
             type: e.type === 'inflow' ? 'inflow' as const : 'expense' as const
         }));
 }

@@ -1525,3 +1525,75 @@ describe('marginal tax rate', () => {
         expect(split.spouseMarginalRate!).toBeGreaterThan(noSplit.spouseMarginalRate!);
     });
 });
+
+// The engine steps whole years and matches ages with ===, so fractional ages
+// used to make the death year and one-time events silently never match.
+// runSimulation rounds ages itself for callers that bypass the sanitizer.
+describe('fractional ages are rounded to whole years', () => {
+    const fractional = () => inputs({
+        person: person({
+            age: 48.5, retirementAge: 60.2, lifeExpectancy: 70.4,
+            rrsp: { type: 'RRSP', balance: 500_000 },
+            tfsa: { type: 'TFSA', balance: 1_000_000 }
+        }),
+        postRetirementSpend: 50_000,
+        preRetirementSpend: 50_000,
+        oneTimeExpenses: [{ id: 'roof', name: 'Roof', amount: 30_000, age: 65, type: 'expense' }]
+    });
+
+    it('rows run on whole ages from the rounded start age', () => {
+        const res = runSimulation(fractional());
+        expect(res.length).toBeGreaterThan(0);
+        expect(res[0].age).toBe(49); // Math.round(48.5)
+        expect(res.every(r => Number.isInteger(r.age))).toBe(true);
+        expect(res[res.length - 1].age).toBe(70);
+    });
+
+    it('a one-time expense at a whole age is still applied', () => {
+        const res = runSimulation(fractional());
+        const at65 = res.find(r => r.age === 65)!;
+        const at64 = res.find(r => r.age === 64)!;
+        expect(at65.spending).toBeCloseTo(50_000 + 30_000, 6);
+        expect(at64.spending).toBeCloseTo(50_000, 6);
+    });
+
+    it('a fractional event age rounds to the matching year', () => {
+        const base = fractional();
+        const res = runSimulation({
+            ...base,
+            oneTimeExpenses: [{ id: 'roof', name: 'Roof', amount: 30_000, age: 64.6, type: 'expense' }]
+        });
+        expect(res.find(r => r.age === 65)!.spending).toBeCloseTo(80_000, 6);
+    });
+
+    it('the death year and terminal tax still run', () => {
+        const res = runSimulation(fractional());
+        const last = res[res.length - 1];
+        expect(last.personDeathThisYear).toBe(true);
+        expect(last.totalTerminalTax!).toBeGreaterThan(0);
+        expect(last.netEstateValue).toBeCloseTo(last.grossEstateValue! - last.totalTerminalTax!, 0);
+    });
+
+    it('matches the same plan entered with whole ages, and does not mutate inputs', () => {
+        const frac = fractional();
+        const snapshot = JSON.stringify(frac);
+        const whole = inputs({
+            ...frac,
+            person: { ...frac.person, age: 49, retirementAge: 60, lifeExpectancy: 70 }
+        });
+        expect(runSimulation(frac)).toEqual(runSimulation(whole));
+        expect(JSON.stringify(frac)).toBe(snapshot);
+    });
+
+    it('a fractional spouse age gap does not skew the end of the plan', () => {
+        const res = runSimulation(inputs({
+            person: person({ age: 65, lifeExpectancy: 85 }),
+            spouse: person({ age: 59.6, lifeExpectancy: 90.2, tfsa: { type: 'TFSA', balance: 2_000_000 } }),
+            postRetirementSpend: 20_000
+        }));
+        const last = res[res.length - 1];
+        expect(last.spouseAge).toBe(90);
+        expect(last.spouseDeathThisYear).toBe(true);
+        expect(last.age).toBe(95); // primary's scale: 65 + (90 - 60)
+    });
+});

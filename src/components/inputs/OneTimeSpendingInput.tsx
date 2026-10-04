@@ -95,7 +95,8 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         type="number"
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
                         value={newAge}
-                        onChange={(e) => setNewAge(Number(e.target.value))}
+                        onChange={(e) => setNewAge(Math.round(Number(e.target.value)))}
+                        step={1}
                     />
                 </div>
                 <div className="col-span-2">
