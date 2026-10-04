@@ -209,7 +209,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
         { kind: 'group', label: 'Outcomes' },
         {
             kind: 'data',
-            label: 'Money runs out (baseline plan, not Monte Carlo)',
+            label: 'Money runs out (average returns, not Monte Carlo)',
             cell: run => outOfMoneyCell(run),
             // Later depletion is better; "Never" (null age) has no numeric delta → "—".
             delta: { kind: 'age', dir: 'higher', value: r => r.metrics.outOfMoneyAge },
@@ -311,7 +311,7 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             // Shown GROSS — the tax on these deemed gains is already inside Estate tax.
             // No universal direction (depends on the estate/tax trade-off).
             kind: 'data',
-            label: 'Gains deemed realized at death',
+            label: 'Capital gains taxed at death',
             cell: run => formatCurrencyCAD(run.metrics.deemedGainsAtDeath),
             delta: { kind: 'currency', dir: 'neutral', value: r => r.metrics.deemedGainsAtDeath },
         },

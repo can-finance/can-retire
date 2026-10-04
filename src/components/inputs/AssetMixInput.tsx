@@ -91,7 +91,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                 <span className={total !== 100 ? "text-amber-600 font-medium" : "text-green-600 font-medium"}>
                     Total: {Math.round(total)}%
                 </span>
-                <HelpTooltip text="Cdn Dividends get the eligible dividend gross-up and tax credit. Foreign Dividends (e.g. US ETFs) are fully taxed as regular income with no credit.">
+                <HelpTooltip text="Canadian dividends get the dividend tax credit, so they're taxed less. Foreign dividends (e.g. from US ETFs) are taxed as regular income, with no credit.">
                     <span className="text-slate-500 cursor-help border-b border-dashed border-slate-300">Affects tax efficiency</span>
                 </HelpTooltip>
             </div>
@@ -105,7 +105,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                         min={0}
                         max={100}
                     />
-                    <HelpTooltip text="Share of unrealized gains realized each year — ~2–3% for index ETFs, ~10–30% for active funds. Taxed as capital gains and reinvested, raising the cost base.">
+                    <HelpTooltip text="The portion of a fund's gains it sells off each year, which you pay capital gains tax on. Roughly 2–3% for index ETFs and 10–30% for actively managed funds. The gains are reinvested, which raises your cost base.">
                         <span className="text-xs text-slate-500 cursor-help border-b border-dashed border-slate-300 pb-1 inline-block">What is this?</span>
                     </HelpTooltip>
                 </div>
@@ -114,7 +114,7 @@ export function AssetMixInput({ mix, turnoverRate = 0, rebalanceAnnually, onChan
                 label="Rebalance Annually"
                 checked={rebalanceAnnually}
                 onChange={onRebalanceChange}
-                tooltip={'ON = the account is rebalanced to these weights each year, so every slice grows with the account.\nOFF = each slice compounds at its own price growth — Equity fastest, the dividend slices slower, bonds and cash not at all — so the equity share drifts up.'}
+                tooltip={"ON = the account is reset to these percentages every year.\nOFF = each part grows at its own rate (equity fastest, dividend stocks slower, bonds and cash not at all), so the equity share drifts up over time."}
             />
         </div>
     );

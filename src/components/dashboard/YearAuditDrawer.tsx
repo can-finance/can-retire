@@ -313,7 +313,7 @@ export function YearAuditDrawer({
                         )}
                         {inflationAdjusted && (
                             <p className="text-xs text-slate-500 mt-2">
-                                Shown in today's dollars — every amount below is divided by {row.inflationFactor.toFixed(2)}× cumulative inflation. The reconciliation checks still balance because every line is scaled the same way.
+                                Shown in today's dollars: every amount below is divided by {row.inflationFactor.toFixed(2)}× (the inflation between now and this year). The totals still add up because every line is scaled the same way.
                             </p>
                         )}
                     </div>

@@ -96,6 +96,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
                         value={newAge}
                         onChange={(e) => setNewAge(Math.round(Number(e.target.value)))}
+                        onKeyDown={(e) => { if (e.key === '.' || e.key === ',') e.preventDefault(); }}
                         step={1}
                     />
                 </div>

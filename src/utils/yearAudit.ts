@@ -216,7 +216,7 @@ function incomeSourcesSection(
             person: personNet,
             spouse: spouseNet,
             kind: 'info',
-            note: 'Net of tax, per person — not a split of the gross line above. Tax is assessed pro-rata across every income source (see Taxes), not per benefit.'
+            note: "After tax, for each person. This isn't a breakdown of the gross amount above: tax is spread proportionally across all income sources (see Taxes)."
         });
     };
 
@@ -228,7 +228,7 @@ function incomeSourcesSection(
     add('Workplace (DB) pension (gross)', r.pensionIncome);
     addNetSplit('Net DB pension received — You / Spouse', r.personNetPension, r.spouseNetPension, r.pensionIncome);
     add('Investment income received', r.investmentIncome,
-        'Interest and dividends paid out by non-registered accounts only — RRSP and TFSA earnings stay inside those accounts. Capital growth stays in the account too.');
+        'Interest and dividends paid out by non-registered accounts. RRSP and TFSA earnings, and price growth in any account, stay inside the account.');
     add('RRSP/RRIF withdrawals (gross)', r.totalRRSPWithdrawal);
 
     // These three partition the gross withdrawal exactly (see SimulationResult),
@@ -251,8 +251,8 @@ function incomeSourcesSection(
                 amount: rrifMin,
                 kind: 'info',
                 note: forcedOverdraw
-                    ? 'Required by law from the year you turn 72, drawn regardless of what the household needs to spend. This year the minimum exceeded that need, so the excess was taxed as income and reinvested rather than spent — drawing the RRSP down earlier, in lower-income years, is the trade-off the RRSP meltdown optimizer explores.'
-                    : 'Required by law from the year you turn 72, drawn regardless of what the household needs to spend.'
+                    ? 'Required by law from the year you turn 72, whether or not you need the money. This year it was more than you needed, so the extra was taxed and reinvested. Withdrawing more from your RRSP in earlier, lower-income years can reduce this; the RRSP Meltdown Optimizer can test that for you.'
+                    : 'Required by law from the year you turn 72, whether or not you need the money.'
             });
         }
         if (melt > EPS) {
@@ -260,7 +260,7 @@ function incomeSourcesSection(
                 label: 'Voluntary meltdown',
                 amount: melt,
                 kind: 'info',
-                note: 'The RRSP meltdown amount configured in this plan.'
+                note: 'The RRSP Melt Amount set in this plan.'
             });
         }
         if (topUp > EPS) {
@@ -268,13 +268,13 @@ function incomeSourcesSection(
                 label: 'Extra draw to fund spending',
                 amount: topUp,
                 kind: 'info',
-                note: 'Additional RRSP withdrawn on top of the above to reach this year\'s spending target.'
+                note: 'Extra RRSP withdrawn to cover the rest of this year\'s spending.'
             });
         }
     }
 
     add('TFSA withdrawals', r.totalTFSAWithdrawal);
-    add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Grossed up so the sale funds its own tax');
+    add('Non-registered sale proceeds (gross)', r.totalNonRegWithdrawal, 'Includes enough extra to pay the tax on the sale.');
     add('One-time inflows', oneTimeInflows, 'Household cash — not attributed to either person');
 
     // Name each inflow event as its own `info` line under the summed addend
@@ -342,11 +342,11 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     part('Tax on RRSP/RRIF withdrawals', r.totalRRSPWithdrawal - r.netRRSPWithdrawal);
     // TFSA withdrawals are tax-free, so they carry no slice at all.
     part('Less: enhanced CPP/QPP deduction', -r.taxReliefFromPayrollDeduction,
-        'The enhanced portion of CPP/QPP contributions (and CPP2) is deducted from taxable income — this is the tax that deduction saves');
+        'The enhanced part of CPP/QPP contributions (and CPP2) is deducted from taxable income. This is the tax that deduction saves.');
     part('Less: RRSP contribution deduction', -r.taxReliefFromRRSPDeduction,
         "Contributions made out of this year's surplus");
     part('Less: pension income splitting', -(r.taxSavingsFromSplit ?? 0),
-        'Splitting re-prices the whole bill after the per-source slices are struck');
+        'The tax saved by pension income splitting, worked out after the tax on each income source above.');
 
     // The partition sums to r.taxPaid by construction of the engine's pro-rata
     // fields (see the comment above the slices) — there is no independent
@@ -366,7 +366,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
         ...(hasSpouse ? { person: r.personTaxPaid, spouse: r.spouseTaxPaid } : {}),
         kind: 'result',
         note: r.grossIncome > 0
-            ? `Effective rate ${effectiveRate.toFixed(1)}% of ${NOTE_AMOUNT_TOKEN} taxable income — not the same figure as 'Total cash in (pre-tax)' above, since taxable income includes the 38% dividend gross-up and only half of realized capital gains`
+            ? `Average rate ${effectiveRate.toFixed(1)}% of ${NOTE_AMOUNT_TOKEN} taxable income. Taxable income differs from 'Total cash in (pre-tax)' above because it includes the 38% dividend gross-up and only 50% of realized capital gains.`
             : undefined,
         noteAmount: r.grossIncome > 0 ? r.grossIncome : undefined
     });
@@ -393,7 +393,7 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
             label: 'Includes OAS recovery tax (clawback)',
             amount: r.oasClawbackPaid,
             kind: 'info',
-            note: 'Household total, before any pension split — spread across the lines above, not carried by one'
+            note: "Household total, before any pension split. It's spread across the tax lines above rather than counted in just one of them."
         });
     }
 
@@ -493,7 +493,7 @@ function cashFlowSection(
             label: 'Unfunded shortfall',
             amount: -r.shortfall,
             kind: 'info',
-            note: 'Target spending the household could not fund after draining every account'
+            note: "Spending that couldn't be paid because every account was empty."
         });
     }
 
@@ -512,7 +512,7 @@ function cashFlowSection(
             // is not the tax the year is finally assessed at (different credit
             // arguments and a $1 binary-search tolerance), so a small residual is
             // inherent to the engine rather than to this reconciliation.
-            note: 'Any residual is the gap between the tax the withdrawal solver assumed and the tax finally assessed.'
+            note: 'Any small difference comes from the tax estimated when withdrawals were sized, versus the final tax calculated for the year.'
         }
     };
 }
@@ -567,7 +567,7 @@ function accountSection(
         label: 'Investment growth',
         amount: growth,
         note: implausible
-            ? 'Unusually large for the balance it grew on — the flows above may not fully explain this year'
+            ? 'Unusually large for this balance. The amounts above may not fully explain this year.'
             : undefined
     });
 
@@ -608,9 +608,7 @@ function estateSection(r: SimulationResult): AuditSection {
             label: 'RRSP/RRIF rolled over to the surviving spouse',
             amount: r.rrspRolledToSpouse!,
             kind: 'info',
-            note: 'Tax-free rollover — no deemed disposition, so no terminal tax on it. TFSA and non-registered ' +
-                'balances transfer to the survivor the same way (also tax-free) but have no rollover amount of ' +
-                'their own to report — the household totals in the account sections above simply continue unbroken.'
+            note: "Passes to the surviving spouse tax-free, so no tax is due on it at death. TFSA and non-registered balances also pass to the survivor tax-free. They don't get their own line here because the household totals above simply carry on."
         });
     }
     // Capital gains deemed realized at death are reported once, in the
@@ -627,7 +625,7 @@ function estateSection(r: SimulationResult): AuditSection {
         amount: gross,
         kind: 'reference',
         note: totalTerminal > EPS
-            ? 'Reconstructed by adding the terminal tax below back onto the post-tax balances the account sections above already report'
+            ? 'The account balances above already have this tax taken off. This line adds it back to show the value before tax.'
             : undefined
     });
     if (terminalRRSP > EPS) lines.push({ label: 'Terminal tax on RRSP/RRIF', amount: -terminalRRSP });
@@ -644,7 +642,7 @@ function estateSection(r: SimulationResult): AuditSection {
         amount: net,
         kind: 'result',
         note: totalTerminal > EPS
-            ? 'Matches the post-tax closing balances in the account sections above — the terminal tax was deducted there, not in this section'
+            ? 'Matches the closing balances above, which already have the tax taken off.'
             : undefined
     });
 

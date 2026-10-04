@@ -66,7 +66,7 @@ function withdrawalBreakdown(row: SimulationResult, adj: Adjust): string {
     if (row.rrifMinimumWithdrawal > 1) lines.push(`  Mandatory RRIF minimum: ${formatCurrencyCAD(adj(row.rrifMinimumWithdrawal))}`);
     if (row.voluntaryMeltWithdrawal > 1) lines.push(`  Voluntary meltdown: ${formatCurrencyCAD(adj(row.voluntaryMeltWithdrawal))}`);
     if (row.topUpWithdrawal > 1) lines.push(`  Extra draw to fund spending: ${formatCurrencyCAD(adj(row.topUpWithdrawal))}`);
-    const head = 'Gross RRSP/RRIF withdrawn this year (household, before tax).';
+    const head = 'Total RRSP/RRIF withdrawals this year for the household, before tax.';
     return lines.length > 0 ? `${head}\nMade up of:\n${lines.join('\n')}` : head;
 }
 
@@ -188,7 +188,7 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
         },
         {
             key: 'nonReg', label: 'Non-Reg', accountDetail: true, align: 'right', className: 'text-amber-600',
-            tooltip: 'Your Non-registered balance. Only 50% of the gain above your adjusted cost base (ACB) is taxable.',
+            tooltip: 'Your non-registered balance. When you sell, 50% of any gain above what you paid (your ACB) is taxed.',
             cell: (row, adj) => showMixDrift && row.nonRegMix && row.accounts.nonRegistered > 1
                 ? <TipValue tip={mixTooltip(row.nonRegMix)} border="border-amber-200">{money(adj(row.accounts.nonRegistered))}</TipValue>
                 : money(adj(row.accounts.nonRegistered))
@@ -226,7 +226,7 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
         {
             key: 'rrspWithdrawn', label: 'RRSP Drawn', align: 'right',
             className: row => row.totalRRSPWithdrawal > 1 ? 'text-sky-700' : 'text-slate-300',
-            tooltip: 'Gross RRSP/RRIF withdrawn this year (household, before tax). Hover a figure for the split.',
+            tooltip: 'Total RRSP/RRIF withdrawals this year for the household, before tax. Hover a figure to see the breakdown.',
             cell: (row, adj) => row.totalRRSPWithdrawal > 1
                 ? <TipValue tip={withdrawalBreakdown(row, adj)} border="border-sky-200">{money(adj(row.totalRRSPWithdrawal))}</TipValue>
                 : DASH
@@ -235,21 +235,21 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
         // --- Income ---------------------------------------------------------
         {
             key: 'netCPP', label: 'Net CPP', align: 'right', className: 'text-blue-600',
-            tooltip: 'Combined Canada Pension Plan benefits (Net of Tax).',
+            tooltip: 'Household Canada Pension Plan (CPP) benefits, after tax.',
             cell: (row, adj) => hasSpouse && row.netCPPIncome > 1
                 ? <TipValue tip={`You: ${money(adj(row.personNetCPP))}\nSpouse: ${money(adj(row.spouseNetCPP))}`} border="border-blue-200">{money(adj(row.netCPPIncome))}</TipValue>
                 : money(adj(row.netCPPIncome))
         },
         {
             key: 'netOAS', label: 'Net OAS', align: 'right', className: 'text-blue-600',
-            tooltip: 'Combined Old Age Security benefits (Net of Tax).',
+            tooltip: 'Household Old Age Security (OAS) benefits, after tax.',
             cell: (row, adj) => hasSpouse && row.netOASIncome > 1
                 ? <TipValue tip={`You: ${money(adj(row.personNetOAS))}\nSpouse: ${money(adj(row.spouseNetOAS))}`} border="border-blue-200">{money(adj(row.netOASIncome))}</TipValue>
                 : money(adj(row.netOASIncome))
         },
         {
             key: 'netPension', label: 'Net Pension', align: 'right', className: 'text-blue-600',
-            tooltip: 'Combined workplace defined-benefit pension income, including any bridge benefit (Net of Tax).',
+            tooltip: 'Household workplace pension income after tax, including any bridge benefit.',
             // Most households have no DB pension, and a column of zeroes stretching
             // the table sideways is worse than no column. netPensionIncome is the
             // combined household figure (bridge benefit included), so one pass over
@@ -266,7 +266,7 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
         },
         {
             key: 'surplusShortfall', label: 'Surplus / Shortfall', align: 'right', wrapHeader: true,
-            tooltip: 'Green (+): income beat the spending target and the excess was reinvested. Red (−): spending that could not be funded after every account ran dry.',
+            tooltip: "Green (+): income was more than your spending, and the extra was invested. Red (−): spending that couldn't be paid because every account was empty.",
             className: row => row.shortfall > 1 ? 'font-bold text-red-600' : reinvestedTotal(row) > 1 ? 'text-emerald-600' : 'text-slate-300',
             cell: (row, adj) => {
                 if (row.shortfall > 1) return `−${money(adj(row.shortfall))}`;
@@ -278,12 +278,12 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
         // --- Tax ------------------------------------------------------------
         {
             key: 'taxableIncome', label: 'Taxable Income', align: 'right', className: 'text-slate-700',
-            tooltip: 'Household taxable income for the year, after deductions — the figure the tax brackets are applied to.',
+            tooltip: 'The household income that tax is calculated on this year, after deductions.',
             cell: (row, adj) => money(adj(row.grossIncome))
         },
         {
             key: 'taxPaid', label: 'Tax Paid', align: 'right', className: 'text-red-500',
-            tooltip: 'Combined household taxes = Federal + Provincial + OAS Clawback',
+            tooltip: 'Household federal and provincial tax, plus any OAS clawback.',
             cell: (row, adj) => row.taxPaid > 1
                 ? <TipValue tip={taxBreakdown(row, hasSpouse, adj)} border="border-red-200">{money(adj(row.taxPaid))}</TipValue>
                 : money(adj(row.taxPaid))
@@ -293,13 +293,13 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
             // Deliberately a lighter red than Tax Paid: this is a slice OF that
             // number, not another charge sitting beside it.
             className: row => row.oasClawbackPaid > 1 ? 'text-red-400' : 'text-slate-300',
-            tooltip: 'The OAS recovery tax. Already included in Tax Paid — shown separately, not added on top.',
+            tooltip: "OAS paid back because income was over the threshold. It's already included in Tax Paid; shown here for additional details, not added on top.",
             cell: (row, adj) => row.oasClawbackPaid > 1 ? money(adj(row.oasClawbackPaid)) : DASH
         },
         {
             key: 'avgTaxRate', label: 'Avg Tax Rate', align: 'center',
             className: row => averageTaxRate(row) !== null ? 'text-red-500' : 'text-slate-300',
-            tooltip: 'Tax Paid divided by Taxable Income — the average rate across this year\'s income, not the top bracket you touch.',
+            tooltip: "Tax Paid divided by Taxable Income: the average rate on all of this year's income, not your top tax bracket.",
             cell: row => {
                 const rate = averageTaxRate(row);
                 return rate === null ? DASH : formatPercent1(rate);
@@ -322,7 +322,7 @@ function buildColumns(hasSpouse: boolean, showMixDrift: boolean): ColumnDef[] {
              */
             key: 'marginalRate', label: 'Marginal Rate', align: 'center',
             className: row => row.personMarginalRate !== undefined ? 'text-red-500' : 'text-slate-300',
-            tooltip: 'Rate on the next $1,000 of ordinary income (an RRSP/RRIF withdrawal) — includes OAS clawback and credit phase-outs, not just the bracket. Gains and dividends differ.',
+            tooltip: 'Tax rate on the next $1,000 of regular income, such as an RRSP/RRIF withdrawal. It includes the OAS clawback and tax credits that shrink as income rises, not just your bracket. Capital gains and dividends are taxed at different rates.',
             cell: row => {
                 const own = row.personMarginalRate;
                 const spouse = row.spouseMarginalRate;
@@ -628,7 +628,7 @@ export const YearlyBreakdownTable = React.memo(function YearlyBreakdownTable({ d
                     <span className="text-sm font-semibold text-slate-600 mr-1">Columns:</span>
                     <ColumnToggle
                         label="Account details"
-                        hint="Show each RRSP, TFSA and non-registered balance separately. Off leaves Total Assets and RRSP Drawn, and makes the table narrower."
+                        hint="Show each RRSP, TFSA and non-registered balance in its own column. Turn this off for a narrower table that shows only Total Assets and RRSP Drawn."
                         active={accountDetail}
                         onToggle={toggleAccountDetail}
                     />

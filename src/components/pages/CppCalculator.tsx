@@ -374,7 +374,7 @@ export function CppCalculator() {
                             label="Current Age" prefix="" value={state.currentAge}
                             min={18} max={70}
                             className="mb-4 max-w-[180px]"
-                            tooltip="Used to work out which calendar years count, starting from the year you turned 18."
+                            tooltip="Used to work out which calendar years count, starting from the year you turned 18. Whole numbers only."
                             onChange={(e) => update({ currentAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                         />
 
@@ -399,7 +399,7 @@ export function CppCalculator() {
                                     <FinancialInput
                                         label="Ending Working Age" prefix="" value={state.simple.workEndAge}
                                         min={18} max={70}
-                                        tooltip="Last age with employment earnings. Retiring years before starting CPP adds zero-earning years that can drag your average down."
+                                        tooltip="Last age with employment earnings. Retiring years before starting CPP adds zero-earning years that can drag your average down. Whole numbers only."
                                         onChange={(e) => update({ simple: { ...state.simple, workEndAge: Math.round(Number(e.target.value)) } })} maxFractionDigits={0} inputMode="numeric"
                                     />
                                 </div>

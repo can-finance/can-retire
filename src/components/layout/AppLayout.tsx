@@ -156,7 +156,7 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                             opens the overlay in place; the standalone MPA pages have no
                             overlay of their own, so they link to /?setup=1, which navigates
                             to the dashboard and opens the overlay there. */}
-                        <HelpTooltip text="Re-run the Guided Setup. Your current numbers are pre-filled — nothing changes until you save the plan.">
+                        <HelpTooltip text="Run Guided Setup again, starting from your current numbers. Nothing changes until you save.">
                             {onLaunchOnboarding ? (
                                 <button
                                     onClick={onLaunchOnboarding}
@@ -273,8 +273,8 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                 }
             >
                 <p>
-                    This permanently deletes every saved plan and all entered figures from this browser, and
-                    returns the app to the Guided Setup. This can't be undone.
+                    This deletes all your saved plans and numbers from this browser and takes you back to
+                    Guided Setup. It can't be undone.
                 </p>
             </Dialog>
         </div>

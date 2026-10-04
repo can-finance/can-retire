@@ -52,7 +52,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
 
                 <FinancialInput
                     label="Annual income (before tax)"
-                    tooltip="Gross employment income in today's dollars, like your household spending. It is indexed at the plan's inflation rate for each year you keep working, so your pay holds its purchasing power rather than shrinking against rising costs."
+                    tooltip="Your yearly pay before tax, in today's dollars. It rises with inflation each year until you retire."
                     value={answers.currentIncome}
                     onChange={(e) => onChange({ currentIncome: Number(e.target.value) })}
                 />
@@ -108,7 +108,7 @@ export function SimplePathStep({ step, answers, onChange }: SimplePathStepProps)
             <div className="space-y-3">
                 <div className="flex items-center gap-1.5">
                     <h3 className="text-sm font-semibold text-slate-700">Your accounts</h3>
-                    <HelpTooltip text="For non-registered savings we assume half of the balance is your original investment (cost base). You can fine-tune this on the dashboard afterwards.">
+                    <HelpTooltip text="For non-registered savings, we assume half the balance is what you originally invested (your cost base) and half is growth. You can change this on the dashboard.">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-slate-300 hover:text-slate-500 cursor-help" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>

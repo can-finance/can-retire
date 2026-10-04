@@ -42,7 +42,7 @@ export function AboutFields({
                 onChange={(e) => onPatch({ retirementAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
             <FinancialInput label={labels.lifeExpectancy} prefix="" value={person.lifeExpectancy}
                 onChange={(e) => onPatch({ lifeExpectancy: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                tooltip="The age the plan runs to. Assets are projected until this age, then estate/terminal tax is calculated." />
+                tooltip="The plan runs to this age, then works out the tax owed on what's left. Whole numbers only." />
         </div>
     );
 }
@@ -70,16 +70,16 @@ export function BenefitsFields({
         <div className="grid grid-cols-3 gap-3">
             <FinancialInput label={labels.cppStartAge} prefix="" value={person.cppStartAge}
                 onChange={(e) => onPatch({ cppStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                tooltip="Between 60 and 70. Starting later increases the monthly amount." />
+                tooltip="Between 60 and 70. Starting later increases the monthly amount. Whole numbers only." />
             <FinancialInput label={labels.yearsContributed} prefix="" value={person.cppContributedYears ?? 35}
                 onChange={(e) => onPatch({ cppContributedYears: Number(e.target.value) })}
                 disabled={cppOverrideApplied}
                 tooltip={cppOverrideApplied
                     ? "Not used while a CPP Calculator estimate is applied."
-                    : "Years you paid into CPP — your working years between 18 and 65, up to 47. The plan estimates your CPP as that count ÷ 40 of the maximum, assuming those years were at or near CPP's maximum earnings. Earned less? The CPP Calculator works from your actual earnings."} />
+                    : "Years you worked and paid into CPP between 18 and 65 (up to 47). The plan assumes you earned near CPP's maximum in those years: 40 or more years gets the full pension, and fewer years get a share (20 years = half). If you earned less, use the CPP Calculator."} />
             <FinancialInput label={labels.oasStartAge} prefix="" value={person.oasStartAge}
                 onChange={(e) => onPatch({ oasStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                tooltip="Between 65 and 70. Starting later increases the monthly amount." />
+                tooltip="Between 65 and 70. Starting later increases the monthly amount. Whole numbers only." />
         </div>
     );
 }
@@ -139,7 +139,7 @@ export function MeltdownFields({
             <FinancialInput label={labels.meltStartAge} prefix="" accentColor={rrspColor}
                 value={person.rrspMeltStartAge || person.retirementAge}
                 onChange={(e) => onPatch({ rrspMeltStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                tooltip="Age to begin deliberate early RRSP withdrawals. The melt runs to age 71 — the year your RRSP must convert to a RRIF. Mandatory minimum withdrawals start the year after, at 72." />
+                tooltip="Age to start the yearly RRSP withdrawals. They continue until 71, when the RRSP must become a RRIF. Required minimum withdrawals start at 72. Whole numbers only." />
             <FinancialInput label={labels.meltAmount} accentColor={rrspColor}
                 value={person.rrspMeltAmount || 0}
                 onChange={(e) => onPatch({ rrspMeltAmount: Number(e.target.value) })}
@@ -220,7 +220,7 @@ export function PensionFields({
             <div className="grid grid-cols-2 gap-3">
                 <FinancialInput label={labels.bridgeAmount} value={pension?.bridgeAmount ?? 0}
                     onChange={(e) => patchPension({ bridgeAmount: Number(e.target.value) })}
-                    tooltip="Extra annual amount on top of the pension, paid from the start age until the bridge end age. Many DB plans stop this at 65, when CPP/OAS eligibility begins." />
+                    tooltip="Extra yearly amount on top of the pension, paid from the pension start age until the bridge end age. Many plans end it at 65, when CPP and OAS normally start." />
                 <FinancialInput label={labels.bridgeEndAge} prefix="" value={pension?.bridgeEndAge ?? 65}
                     onChange={(e) => patchPension({ bridgeEndAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                     disabled={!hasBridge} />

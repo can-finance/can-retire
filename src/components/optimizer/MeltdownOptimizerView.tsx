@@ -150,18 +150,17 @@ export function MeltdownOptimizerView({
                 <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
                     <h3 className="text-lg font-bold text-slate-900">What is an RRSP meltdown?</h3>
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-                        An RRSP "meltdown" means voluntarily drawing down your RRSP in your
-                        lower-income early-retirement years — before age 72, when mandatory
-                        RRIF minimum withdrawals begin and stack on top of CPP, OAS and any
-                        other income. Withdrawing at today's lower tax rates can shrink the
-                        large tax bill that would otherwise land on your RRSP at death,
-                        leaving more for your estate.
+                        An RRSP meltdown means withdrawing from your RRSP in your early
+                        retirement years, while your income is lower. From 72, required RRIF
+                        withdrawals start and add to your CPP, OAS and other income.
+                        Withdrawing earlier, at lower tax rates, can shrink the large tax
+                        bill your RRSP would otherwise face at death, leaving more for your
+                        estate.
                     </p>
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
-                        It tries a range of RRSP melt amounts, CPP and OAS start ages, and
-                        withdrawal orders (RRSP first or last). The melt itself always starts
-                        at retirement and runs to 71. It can optimize that search for either
-                        of two goals, which you pick below.
+                        The optimizer tries a range of RRSP melt amounts, CPP and OAS start
+                        ages, and withdrawal orders (RRSP first or last). The melt always
+                        starts at retirement and runs to 71. Pick your goal below.
                     </p>
                     <p className="mt-3 text-sm">
                         <a
@@ -197,15 +196,15 @@ export function MeltdownOptimizerView({
                                 selected={objective === 'estate'}
                                 onSelect={() => setObjective('estate')}
                                 title="Leave the largest estate"
-                                sub="Shrinks the terminal tax bill so more passes to your heirs."
-                                detail="Adjusts RRSP melt, CPP/OAS timing and withdrawal order — your spending stays as planned."
+                                sub="Cuts the tax owed at death so more goes to your heirs."
+                                detail="Changes your RRSP melt, CPP/OAS start ages and withdrawal order. Your spending stays the same."
                             />
                             <ObjectiveCard
                                 selected={objective === 'max-spend'}
                                 onSelect={() => setObjective('max-spend')}
                                 title="Spend the most in retirement"
-                                sub="Finds the highest annual spending your savings can sustain."
-                                detail="Adjusts RRSP melt, CPP/OAS timing and withdrawal order — and solves for your spending."
+                                sub="Finds the most you can spend each year without running out."
+                                detail="Changes the same settings, plus your yearly spending."
                             />
                         </div>
                     </div>
@@ -214,8 +213,7 @@ export function MeltdownOptimizerView({
                         <div className="mt-5">
                             <p className="text-sm font-semibold text-slate-800">How safe should that spending be?</p>
                             <p className="mt-1 text-xs text-slate-500">
-                                The Monte Carlo success rate the sustainable spending must clear — the
-                                portion of simulations in which you don't run out of money.
+                                The portion of simulated market scenarios in which your money must last to the end of the plan.
                             </p>
                             <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                                 {SUCCESS_TARGETS.map(t => (
@@ -249,7 +247,7 @@ export function MeltdownOptimizerView({
                                 checked={considerCppOas}
                                 onChange={setConsiderCppOas}
                                 label="Optimize CPP/OAS timing (recommended)"
-                                tooltip="Lets the optimizer test different CPP (60–70) and OAS (65–70) start ages alongside the melt. Delaying usually raises the guaranteed lifetime benefit and pairs well with a meltdown, but earlier starts are tested too. Turn off to keep your current start ages fixed."
+                                tooltip="Also tests CPP start ages from 60 to 70 and OAS from 65 to 70. Starting later raises your benefits for life and often pairs well with a meltdown. Turn this off to keep your current start ages."
                             />
                         </div>
                         {/* One template string broke wherever it ran out of room, splitting
@@ -279,10 +277,9 @@ export function MeltdownOptimizerView({
                             <div>
                                 <p className="text-sm font-bold text-amber-900">These are sample numbers</p>
                                 <p className="mt-1 text-xs text-amber-800 leading-relaxed">
-                                    You haven't set up your own plan yet, so the optimizer would run
-                                    on the sample data you see on the dashboard. For a recommendation
-                                    about your retirement, run the Guided Setup first — it takes a few
-                                    minutes and asks for your ages, balances, and spending.
+                                    You haven't set up your own plan yet, so the optimizer would use
+                                    the dashboard's sample numbers. To see results for your own
+                                    retirement, run Guided Setup first. It takes a few minutes.
                                 </p>
                                 <a href="/?setup=1" className={`${primaryBtn} mt-3 inline-block`}>
                                     Run Guided Setup
@@ -314,8 +311,8 @@ export function MeltdownOptimizerView({
                 <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
                     <p className="text-sm font-medium text-slate-700">
                         {objective === 'max-spend'
-                            ? 'Searching for your highest sustainable spending…'
-                            : 'Searching for your best meltdown…'}
+                            ? 'Searching for your highest spending…'
+                            : 'Searching for your largest estate…'}
                     </p>
                     <div className="mt-4 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
                         <div
@@ -465,8 +462,8 @@ function ResultsView({
             {result.improved && (
                 <p className="text-xs text-slate-500">
                     {result.objective === 'max-spend'
-                        ? 'Applying overwrites your annual spending, RRSP melt amount, CPP/OAS start ages and withdrawal order on the plan you’re currently editing — everything else (balances, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'
-                        : 'Applying overwrites the RRSP melt amount, CPP/OAS start ages and withdrawal order on the plan you’re currently editing — everything else (balances, spending, other edits) is left as-is. Prefer to keep both versions? Save this as a new plan instead.'}
+                        ? 'Applying changes your annual spending, RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'
+                        : 'Applying changes the RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'}
                 </p>
             )}
 
@@ -521,10 +518,10 @@ function ResultsView({
                     <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
                         <p className="text-base font-bold text-emerald-900">Your planned spending is about right</p>
                         <p className="mt-1.5 text-sm text-emerald-800">
-                            Your current spending is about the most your savings can sustainably
-                            support at the {result.maxSpend?.mcSuccessTarget}% success level — we
-                            couldn't find a meaningfully higher figure without pushing the plan past
-                            that bar. The comparison below shows the numbers.
+                            Your current spending is about the most your savings can support at
+                            the {result.maxSpend?.mcSuccessTarget}% target. Spending meaningfully
+                            more would push the plan below it. The comparison below has the
+                            details.
                         </p>
                     </div>
                 )
@@ -534,9 +531,10 @@ function ResultsView({
                 <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
                     <p className="text-base font-bold text-emerald-900">Your current plan already looks good</p>
                     <p className="mt-1.5 text-sm text-emerald-800">
-                        We couldn't find a meltdown schedule that meaningfully beats what you've
-                        already got — your RRSP drawdown, CPP and OAS timing are close to optimal
-                        for leaving the largest estate. The comparison below shows the numbers.
+                        We couldn't find changes that meaningfully increase your estate. Your
+                        RRSP withdrawals, withdrawal order and CPP/OAS start ages are already
+                        close to the best for leaving the largest estate. The comparison below
+                        has the details.
                     </p>
                 </div>
             )}
@@ -660,9 +658,9 @@ function RecommendationCard({ result }: { result: MeltdownResult }) {
                         <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                     </svg>
                     <p className="text-xs text-amber-800">
-                        This meltdown leaves a larger estate but has a somewhat lower Monte Carlo
-                        success rate than your current plan — it leans on markets behaving. Review
-                        the success rates below before saving.
+                        This plan leaves a larger estate, but it runs out of money in more market
+                        scenarios than your current plan. Check the success rates below before
+                        you apply or save it.
                     </p>
                 </div>
             )}
@@ -856,17 +854,17 @@ function MaxSpendCard({ result, actions }: { result: MeltdownResult; actions?: R
             >
                 <p className={`text-base font-bold ${good ? 'text-emerald-900' : 'text-amber-900'}`}>
                     {!metTarget
-                        ? `We couldn’t confirm a spending level that clears your ${ms.mcSuccessTarget}% success bar`
+                        ? `We couldn’t find a spending level that meets your ${ms.mcSuccessTarget}% target`
                         : good
-                            ? `You could sustainably spend ${sustainable}/yr — ${deltaAbs}/yr more than planned`
-                            : `Your plan supports about ${sustainable}/yr — ${deltaAbs}/yr less than you’ve planned`}
+                            ? `You could spend ${sustainable}/yr — ${deltaAbs}/yr more than planned`
+                            : `Your plan supports about ${sustainable}/yr — ${deltaAbs}/yr less than planned`}
                 </p>
                 <p className={`mt-1.5 text-sm ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
                     {!metTarget
-                        ? `The lowest spending our search tested, ${sustainable}/yr, only reached ${ms.achievedSuccessRate.toFixed(0)}% Monte Carlo success. Treat it as an optimistic upper bound — the spending that truly clears ${ms.mcSuccessTarget}% is lower. Rerunning with a lower success bar can give a confirmed answer.`
+                        ? `Even the lowest spending we tested, ${sustainable}/yr, only lasted in ${ms.achievedSuccessRate.toFixed(0)}% of market scenarios. The spending that meets ${ms.mcSuccessTarget}% is lower than that. Run it again with a lower target to get a firm answer.`
                         : good
-                            ? `That’s the highest flat annual spending your savings can support while still clearing a ${ms.mcSuccessTarget}% Monte Carlo success rate.`
-                            : `At the ${ms.mcSuccessTarget}% Monte Carlo success bar, your savings can’t sustain what you’ve planned to spend. Applying lowers your plan’s spending to the sustainable level.`}
+                            ? `That’s the most you can spend each year (the same amount, adjusted for inflation) while your money lasts in at least ${ms.mcSuccessTarget}% of market scenarios.`
+                            : `With a ${ms.mcSuccessTarget}% target, your savings can’t support your planned spending. Applying lowers your plan’s spending to the level they can support.`}
                 </p>
                 <p className={`mt-2 text-sm font-medium ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
                     Monte Carlo success at this spending: {ms.achievedSuccessRate.toFixed(0)}%{' '}
@@ -894,9 +892,9 @@ function MaxSpendCard({ result, actions }: { result: MeltdownResult; actions?: R
                 </p>
 
                 <p className="mt-4 text-xs text-slate-500 leading-relaxed">
-                    This model assumes the same inflation-adjusted spending every year. Real
-                    retirement spending is usually front-loaded — higher in the early “go-go” years —
-                    so a flat sustainable figure tends to be conservative early on and generous later.
+                    This assumes you spend the same amount every year, adjusted for inflation.
+                    Most retirees spend more in their early, active years and less later, so
+                    this figure may be low for early retirement and high for later years.
                 </p>
             </div>
         </div>

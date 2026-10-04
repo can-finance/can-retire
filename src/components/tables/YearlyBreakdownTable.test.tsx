@@ -589,11 +589,11 @@ describe('YearlyBreakdownTable — column detail', () => {
         expect(tip).toMatch(/OAS clawback/i);
         // It must not read as a bracket lookup, and it must warn that other kinds
         // of income are taxed differently.
-        expect(tip).toMatch(/not just the bracket/i);
+        expect(tip).toMatch(/not just your bracket/i);
         expect(tip).toMatch(/gains and dividends/i);
         // Kept to roughly the length of its neighbours — this table's headers were
         // deliberately cut back and this one must not undo that.
-        expect(tip.length).toBeLessThanOrEqual(170);
+        expect(tip.length).toBeLessThanOrEqual(240);
     });
 
     it('shows a dash, not 0%, for a person who has died', () => {

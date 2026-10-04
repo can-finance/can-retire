@@ -191,7 +191,7 @@ export function PlanManager({
                     )}
                 </div>
                 <div className="flex items-center flex-wrap gap-2">
-                    <HelpTooltip text="Copies a shareable backup link containing all of this plan's data — every input and assumption is encoded in the link itself, nothing is stored on any server. Opening it restores the full plan. Anyone with the link can see the numbers in it.">
+                    <HelpTooltip text="Copies a link that contains this whole plan. Nothing is stored on a server; the plan lives in the link itself. Opening the link restores the plan, and anyone with it can see your numbers.">
                     <button
                         onClick={handleSharePlan}
                         className="text-xs flex items-center gap-1 bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors font-medium border border-indigo-100"
@@ -240,7 +240,7 @@ export function PlanManager({
                     schedule. Always available (works on a single plan). */}
                 <button
                     onClick={onOptimize}
-                    title="Search RRSP meltdown schedules for the largest after-tax estate, or the most you can spend each year"
+                    title="Find the RRSP meltdown plan that leaves the largest estate or lets you spend the most each year"
                     className="mt-2 w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2.5 rounded-lg hover:bg-emerald-100 transition-colors font-medium border border-emerald-100 text-sm"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

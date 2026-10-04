@@ -119,7 +119,7 @@ export function NonRegAccountsInput({ accounts, onChange, accentColor, driftSumm
                                     onCommit={(name) => patch(account.id, { name })}
                                 />
                                 {accounts.length > 1 && (
-                                    <HelpTooltip text="Surplus cash left over each year (after TFSA/RRSP contributions) is invested into this account.">
+                                    <HelpTooltip text="Money left over each year, after TFSA and RRSP contributions, is invested in this account.">
                                         <label className="flex items-center gap-1 text-xs font-medium text-slate-500 cursor-pointer whitespace-nowrap">
                                             <input
                                                 type="radio"
@@ -150,7 +150,7 @@ export function NonRegAccountsInput({ accounts, onChange, accentColor, driftSumm
                                     onChange={(e) => patch(account.id, { balance: Number(e.target.value) })} />
                                 <FinancialInput label="ACB" value={account.adjustedCostBase} accentColor={accentColor}
                                     onChange={(e) => patch(account.id, { adjustedCostBase: Number(e.target.value) })}
-                                    tooltip="Adjusted cost base — the total amount originally invested (book value). Gains above this are taxed when realized." />
+                                    tooltip="Adjusted cost base: the total amount you originally invested (book value). Gains above this are taxed when you sell." />
                             </div>
 
                             <button

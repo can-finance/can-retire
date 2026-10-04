@@ -1204,7 +1204,7 @@ describe('RRSP/RRIF withdrawal breakdown (incomeSources)', () => {
         expect(line).toBeDefined();
         expect(line.kind).toBe('info');
         expect(line.amount).toBeCloseTo(r.rrifMinimumWithdrawal, 6);
-        expect(line.note).toMatch(/RRSP meltdown optimizer/);
+        expect(line.note).toMatch(/RRSP Meltdown Optimizer/);
 
         // Melt and top-up are exactly zero, so neither sub-line appears.
         expect(income.lines.some(l => l.label === 'Voluntary meltdown')).toBe(false);
@@ -1296,7 +1296,7 @@ describe('RRSP/RRIF withdrawal breakdown (incomeSources)', () => {
         expect(topUp.amount).toBeCloseTo(r.topUpWithdrawal, 6);
         // The household was short, not sitting on an unwanted surplus — the nudge
         // sentence must be absent from the mandatory line's note.
-        expect(min.note).not.toMatch(/RRSP meltdown optimizer/);
+        expect(min.note).not.toMatch(/RRSP Meltdown Optimizer/);
 
         const addendsOnly = income.lines
             .filter(l => l.kind === undefined || l.kind === 'normal')

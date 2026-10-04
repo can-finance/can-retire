@@ -31,8 +31,8 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                         <span className="text-xs font-medium text-slate-500">~2 min</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
-                        A handful of questions. We'll use sensible defaults for everything else — you
-                        can edit any value later.
+                        A few quick questions. We'll fill in the rest with sensible defaults, and you can change
+                        anything later.
                     </p>
                     <span className="inline-block mt-4 text-sm font-medium text-brand-600 group-hover:text-brand-700">
                         Start →
@@ -48,7 +48,7 @@ export function OnboardingIntro({ isRelaunch, onSimple, onDetailed, onSkip }: On
                         <span className="text-xs font-medium text-slate-500">~10 min</span>
                     </div>
                     <p className="text-sm text-slate-500 mt-2">
-                        Step through every option. Sensible defaults are pre-filled — change what you like.
+                        Go through every option. Each one starts with a sensible default you can change.
                     </p>
                     <span className="inline-block mt-4 text-sm font-medium text-brand-600 group-hover:text-brand-700">
                         Start →

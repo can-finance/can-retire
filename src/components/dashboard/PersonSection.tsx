@@ -117,7 +117,7 @@ export function PersonSection({
                 <BenefitsFields person={person} onPatch={onPatch} labels={BENEFITS_LABELS} />
 
                 {person.cppAnnualOverride == null && (
-                    <HelpTooltip text="The plan estimates CPP as CPP Years ÷ 40 of the maximum. The CPP Calculator estimates it from your actual yearly earnings and can feed the result back into this plan.">
+                    <HelpTooltip text="This plan estimates CPP from your number of CPP years alone. The CPP Calculator uses your actual earnings for each year and can apply the result to this plan.">
                         <a
                             href="/cpp-calculator/"
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
@@ -146,7 +146,7 @@ export function PersonSection({
                 )}
 
                 <FinancialInput label="Annual Income" value={person.currentIncome}
-                    tooltip="Gross employment income in today's dollars, like your household spending. It is indexed at the plan's inflation rate for each year you keep working, so your pay holds its purchasing power rather than shrinking against rising costs."
+                    tooltip="Your yearly pay before tax, in today's dollars. It rises with inflation each year until you retire."
                     onChange={(e) => onChange('currentIncome', Number(e.target.value))} />
 
                 <AccountsFields person={person} isSpouse={isSpouse} onPatch={onPatch}
@@ -156,13 +156,13 @@ export function PersonSection({
                     labels={MELTDOWN_LABELS} />
 
                 {onOpenOptimizer && (
-                    <HelpTooltip text="Searches annual RRSP withdrawal amounts — and optionally CPP/OAS timing — for the combination that leaves the largest after-tax estate — or the one that lets you spend the most each year — then lets you apply it to this plan.">
+                    <HelpTooltip text="Tries different RRSP withdrawal amounts, CPP/OAS start ages and withdrawal orders to find what leaves the largest estate or lets you spend the most each year. You can then apply the result to this plan.">
                         <button
                             type="button"
                             onClick={onOpenOptimizer}
                             className="text-xs text-sky-600 hover:text-sky-800 underline decoration-dotted cursor-help"
                         >
-                            Not sure how much or when to melt? Try the optimizer →
+                            Not sure how much to melt? Try the optimizer →
                             <span className="ml-1 inline-block bg-sky-100 text-sky-700 text-xs px-1.5 py-0.5 rounded font-bold align-middle">BETA</span>
                         </button>
                     </HelpTooltip>

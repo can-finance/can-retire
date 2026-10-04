@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for plans saved with a decimal age**, since they now include those expenses and
   that final tax.
 
+### Changed
+- **Plainer wording throughout.** Setup, tooltips, the optimizer, the year-by-year
+  table and the guide pages were rewritten for clarity. No calculations changed.
+
 ## [0.12.0] - 2026-08-09
 
 ### Added

@@ -68,7 +68,7 @@ export function SettingsFields({ inputs, onChange }: {
                 // is worth the extra line — the alternative is a reader who thinks
                 // they enabled a meltdown and didn't, or who set both and cannot
                 // explain why the RRSP empties so fast.
-                tooltip={'ON = RRSP first: when a year falls short, draw from the RRSP before non-registered and TFSA.\nOFF = RRSP last: non-registered, then TFSA, then RRSP. Deferring leaves more compounding tax-sheltered but a bigger bill at 72 and at death — neither order wins on every plan, so the Meltdown Optimizer tests both.\n\nThis sets the ORDER accounts are drawn from — it is not the meltdown. Any RRSP Melt Amount you set still runs on top, every year until 71, whether or not you need the cash.'}
+                tooltip={"ON = when you need money for spending, take it from the RRSP first, then non-registered, then TFSA.\nOFF = non-registered first, then TFSA, then RRSP last.\nNeither order always wins; the RRSP Meltdown Optimizer tries both.\n\nThis only sets the order. It isn't the RRSP meltdown: any RRSP Melt Amount you set is withdrawn every year until 71 either way."}
             />
         </>
     );
@@ -90,7 +90,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, rrspGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Total annual return on RRSP/RRIF balances, income and growth combined — tax-sheltered, so there is no yield/gains split to model."
+                tooltip="Total yearly return on your RRSP/RRIF, including dividends, interest and growth. No need to split it out, since nothing inside the account is taxed."
             />
             <FinancialInput
                 label="TFSA Return (total)"
@@ -102,7 +102,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, tfsaGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip="Total annual return on TFSA balances, income and growth combined — tax-free, so there is no yield/gains split to model."
+                tooltip="Total yearly return on your TFSA, including dividends, interest and growth. No need to split it out, since nothing inside the account is taxed."
             />
             <FinancialInput
                 label="Non-Reg Growth (price only)"
@@ -114,7 +114,7 @@ export function ReturnsFields({ inputs, onChange }: {
                 onChange={(e) => onChange({
                     returnRates: { ...inputs.returnRates, capitalGrowth: Number(e.target.value) / 100 }
                 })}
-                tooltip={'Price appreciation ONLY, on the Equity (Growth) share of the non-registered mix — it pays no yield, so this is also its total return. Do not add dividend or interest yield here — those are entered in the fields below and would be counted twice.\nUnlike RRSP/TFSA Return above, which is a whole-account total return, this is the capital-gains half of an equity return.\nThe dividend slices are priced off this too: each appreciates at 85% of this rate less its own yield, so its total return lands just below this figure.'}
+                tooltip={"How fast stock prices rise in your non-registered accounts, not counting dividends. For growth stocks that pay no dividends, this is their whole return.\nDon't include dividends or interest here. Those have their own fields below, and adding them here would count them twice.\nDividend stocks' prices grow at 85% of whatever this rate is above their dividend yield, so with the dividend added, their total return is a little lower than this."}
             />
             <FinancialInput
                 label="Non-Reg Bonds Total Return"

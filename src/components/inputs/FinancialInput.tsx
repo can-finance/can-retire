@@ -96,8 +96,9 @@ export function FinancialInput({
     const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
 
-        // Allow digits, one decimal point
-        if (!/^[0-9]*\.?[0-9]*$/.test(val.replace(/,/g, ''))) return;
+        // Allow digits, plus one decimal point unless the field is whole-number only
+        const allowed = maxFractionDigits === 0 ? /^[0-9]*$/ : /^[0-9]*\.?[0-9]*$/;
+        if (!allowed.test(val.replace(/,/g, ''))) return;
 
         setDisplayValue(val);
         // Note: We no longer call onChange here to avoid expensive re-simulations on every keypress

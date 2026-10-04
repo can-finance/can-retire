@@ -397,7 +397,7 @@ describe('YearAuditDrawer', () => {
         // The note must not still contain the raw token, and must show a dollar
         // figure — proof the substitution ran rather than just leaving the label.
         expect(screen.queryByText(/\{amount\}/)).toBeNull();
-        expect(screen.getByText(/Effective rate .*% of \$[\d,]+ taxable income/)).toBeInTheDocument();
+        expect(screen.getByText(/Average rate .*% of \$[\d,]+ taxable income/)).toBeInTheDocument();
     });
 
     it('reference lines (Assets before terminal tax, Target spending) render legibly, not muted like info', () => {
@@ -460,7 +460,7 @@ describe('YearAuditDrawer', () => {
         // A specific phrase from the rollover note, not just "TFSA" or
         // "non-registered" alone — both also appear as section headings on this
         // page, which would make a bare substring match ambiguous.
-        expect(screen.getByText(/TFSA and non-registered balances transfer/i)).toBeInTheDocument();
+        expect(screen.getByText(/TFSA and non-registered balances also pass/i)).toBeInTheDocument();
         cleanup();
 
         const terminalIndex = results.length - 1;
@@ -509,7 +509,7 @@ describe('RRSP/RRIF withdrawal breakdown sub-lines', () => {
             />
         );
         expect(screen.getByText('Mandatory RRIF minimum')).toBeInTheDocument();
-        expect(screen.getByText(/RRSP meltdown optimizer explores/)).toBeInTheDocument();
+        expect(screen.getByText(/RRSP Meltdown Optimizer can test that/)).toBeInTheDocument();
         expect(screen.queryByText('Voluntary meltdown')).toBeNull();
         expect(screen.queryByText('Extra draw to fund spending')).toBeNull();
     });

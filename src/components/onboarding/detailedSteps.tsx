@@ -97,7 +97,7 @@ function AboutFields({ person, who, setDraft }: { person: Person; who: Who; setD
             <SharedAboutFields person={person} labels={WIZARD_ABOUT_LABELS}
                 onPatch={(patch) => patchPerson(setDraft, who, patch)} />
             <FinancialInput label="Annual income (before tax)" value={person.currentIncome}
-                tooltip="Gross employment income in today's dollars, like your household spending. It is indexed at the plan's inflation rate for each year you keep working, so your pay holds its purchasing power rather than shrinking against rising costs."
+                tooltip="Your yearly pay before tax, in today's dollars. It rises with inflation each year until you retire."
                 onChange={(e) => patchPerson(setDraft, who, { currentIncome: Number(e.target.value) })} />
         </div>
     );
@@ -109,7 +109,7 @@ function BenefitsFields({ person, who, setDraft }: { person: Person; who: Who; s
             <SharedBenefitsFields person={person} labels={WIZARD_BENEFITS_LABELS}
                 onPatch={(patch) => patchPerson(setDraft, who, patch)} />
             <p className="text-xs text-slate-500">
-                These are rough estimates. You can refine your CPP later with the CPP Calculator and feed the result back into your plan.
+                For a more accurate CPP estimate, use the CPP Calculator later and apply the result to your plan.
             </p>
         </div>
     );
@@ -145,7 +145,7 @@ function SpouseToggleField({ draft, onToggleSpouse }: { draft: SimulationInputs;
             />
             <p className="text-sm text-slate-500">
                 {draft.spouse
-                    ? "We've added a few extra steps later for your spouse's details. Turn this off to remove them."
+                    ? "This adds a few steps later for your spouse's details."
                     : 'Leave this off to plan for just yourself.'}
             </p>
         </div>
@@ -156,8 +156,9 @@ function MeltdownFields({ person, who, setDraft }: { person: Person; who: Who; s
     return (
         <div className="space-y-4">
             <p className="text-sm text-slate-500">
-                An RRSP "meltdown" means deliberately withdrawing from your RRSP early — often between retirement and age 71 — to
-                smooth out taxable income and avoid a large forced RRIF withdrawal later. Leave the amount at 0 to skip it.
+                An RRSP meltdown means withdrawing a set amount from your RRSP each year before 71, while your income is
+                lower, so the forced RRIF withdrawals later are smaller. Leave the amount at 0 to skip it. Not sure how
+                much to withdraw? The RRSP Meltdown Optimizer on the dashboard can work it out for you.
             </p>
             <SharedMeltdownFields person={person} isSpouse={who === 'spouse'} labels={WIZARD_MELTDOWN_LABELS}
                 onPatch={(patch) => patchPerson(setDraft, who, patch)} />
@@ -212,7 +213,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
         {
             id: 'meltdown-you',
             title: 'Early RRSP withdrawals (optional)',
-            blurb: 'Optionally draw down your RRSP early to smooth taxes.',
+            blurb: 'Withdraw from your RRSP before 71 to lower taxes later.',
             errors: personErrors('person', 'meltdown'),
             render: (d, setDraft) => <MeltdownFields person={d.person} who="person" setDraft={setDraft} />,
         },
@@ -255,7 +256,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
             {
                 id: 'meltdown-spouse',
                 title: "Spouse's early RRSP withdrawals (optional)",
-                blurb: "Optionally draw down your spouse's RRSP early.",
+                blurb: "Withdraw from your spouse's RRSP before 71 to lower taxes later.",
                 errors: personErrors('spouse', 'meltdown'),
                 render: (d, setDraft) =>
                     d.spouse ? <MeltdownFields person={d.spouse} who="spouse" setDraft={setDraft} /> : null,
@@ -289,7 +290,7 @@ export function buildDetailedSteps(draft: SimulationInputs, onToggleSpouse: Togg
         {
             id: 'assumptions',
             title: 'Assumptions',
-            blurb: 'Sensible defaults — you can fine-tune them anytime.',
+            blurb: 'Your province, inflation, investment returns and how withdrawals are handled. The defaults are reasonable starting points; you can change them anytime.',
             errors: noErrors,
             render: (d, setDraft) => (
                 <div className="space-y-4">

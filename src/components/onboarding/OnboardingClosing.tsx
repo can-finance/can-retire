@@ -25,16 +25,16 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Next steps</p>
                     <h2 className="text-sm font-bold text-slate-900">Review your plan on the dashboard</h2>
                     <p className="text-sm text-slate-600">
-                        Make changes and the projection updates instantly — your plan saves automatically.
+                        Any change updates the projection right away and saves automatically.
                     </p>
                 </div>
 
                 <div className="space-y-1.5">
                     <h2 className="text-sm font-bold text-slate-900">Try a second plan and compare</h2>
                     <p className="text-sm text-slate-600">
-                        In the Plan Manager panel, <span className="font-semibold">Duplicate Plan</span> copies your current
-                        plan so you can change one assumption — retire earlier, spend more, start CPP later. Then use{' '}
-                        <span className="font-semibold">Compare Plans</span> to see the plans side by side.
+                        In the Plan Manager panel, <span className="font-semibold">Duplicate Plan</span> makes a copy you can
+                        change: retire earlier, spend more, start CPP later.{' '}
+                        <span className="font-semibold">Compare Plans</span> then shows them side by side.
                     </p>
                 </div>
 
@@ -42,16 +42,16 @@ export function OnboardingClosing({ onFinish, onPrivacy }: OnboardingClosingProp
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Good to know</p>
                     <h2 className="text-sm font-bold text-slate-900">Your plan is saved on this device</h2>
                     <p className="text-sm text-slate-600">
-                        Your numbers are saved in this browser's local storage, on this device only — nothing is sent to
-                        any server. They'll be here next time you visit.
+                        Your numbers are saved in this browser on this device, and never sent to a server. They'll be
+                        here next time you visit.
                     </p>
                 </div>
 
                 <div className="space-y-1.5">
                     <h2 className="text-sm font-bold text-slate-900">Sharing your plan</h2>
                     <p className="text-sm text-slate-600">
-                        The <span className="font-semibold">Share</span> button (in the Plan Manager panel) packs your whole
-                        plan into the link itself — anyone you send it to can see your numbers.
+                        The <span className="font-semibold">Share</span> button in the Plan Manager panel puts your whole
+                        plan into a link. Anyone with the link can see your numbers.
                     </p>
                 </div>
 

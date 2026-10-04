@@ -494,7 +494,7 @@ export function Dashboard() {
                                             ...inputs,
                                             returnRates: { ...inputs.returnRates, volatility: Number(e.target.value) / 100 }
                                         })}
-                                        tooltip="How much returns swing from year to year (standard deviation) — roughly 15% for all-stock portfolios, 10% for a balanced 60/40 mix, 5% for bond-heavy."
+                                        tooltip="How much returns swing from year to year (standard deviation). Roughly 15% for all stocks, 10% for a 60/40 stock/bond mix, and 5% for mostly bonds."
                                     />
                                 </div>
                             )}
@@ -518,8 +518,8 @@ export function Dashboard() {
                             <div className="min-w-0">
                                 <p className="text-sm font-bold text-red-900">Projected Shortfall at Age {metrics.outOfMoneyAge}</p>
                                 <p className="text-sm text-red-700 mt-0.5">
-                                    Spending can no longer be funded from income and accounts — {formatCurrencyCAD(metrics.totalShortfall)} of planned spending
-                                    goes unfunded over the plan. Consider reducing post-retirement spending or increasing savings.
+                                    From this age, your income and accounts can't cover your planned spending. {formatCurrencyCAD(metrics.totalShortfall)} of spending
+                                    goes unpaid over the rest of the plan. Try lowering your retirement spending or saving more.
                                 </p>
                             </div>
                         </div>
