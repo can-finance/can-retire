@@ -19,7 +19,7 @@ export const RRSP_STRATEGY_FAQ_ITEMS: FaqItem[] = [
     {
         question: 'What is an RRSP meltdown?',
         answer:
-            'An RRSP meltdown is a decumulation strategy that deliberately draws money out of your RRSP during your lower-income years — typically after you stop working but before CPP, OAS, and mandatory RRIF withdrawals all start stacking up. By withdrawing at low marginal tax rates instead of leaving the RRSP to grow, you can shrink the large tax bill that would otherwise land on the account later in retirement or at death, often leaving more for your estate.',
+            'An RRSP meltdown means withdrawing from your RRSP on purpose during your lower-income years — typically after you stop working but before CPP, OAS and mandatory RRIF withdrawals all start. Withdrawing at low tax rates instead of letting the RRSP keep growing can shrink the large tax bill the account would otherwise face later in retirement or at death, often leaving more for your estate.',
     },
     {
         question: 'When do I have to convert my RRSP to a RRIF?',

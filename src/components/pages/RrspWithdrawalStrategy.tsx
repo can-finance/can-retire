@@ -13,10 +13,9 @@ export function RrspWithdrawalStrategy() {
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
                 <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">RRSP Withdrawal Strategy Calculator</h1>
                 <p className="max-w-2xl mx-auto text-lg text-slate-600 leading-relaxed">
-                    Find the RRSP withdrawal schedule — the decumulation plan — that fits your goal: the
-                    most you can safely spend each year, or the largest after-tax estate you can leave.
-                    This free calculator models the RRSP meltdown strategy year by year to help you decide
-                    when to withdraw from your RRSP, and how much.
+                    Find the RRSP withdrawal plan that fits your goal: the most you can spend each year, or
+                    the biggest after-tax estate you can leave. This free calculator models the RRSP meltdown
+                    strategy year by year to show when to withdraw from your RRSP, and how much.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                     <a
@@ -31,7 +30,7 @@ export function RrspWithdrawalStrategy() {
                     </a>
                 </div>
                 <p className="text-sm text-slate-500">
-                    Free · No account · Runs entirely in your browser — your data never leaves your device
+                    Free · No account/login needed · Runs entirely in your browser
                 </p>
             </section>
 
@@ -40,22 +39,20 @@ export function RrspWithdrawalStrategy() {
                 <h2 className="text-2xl font-bold text-slate-900">Why "withdraw as late as possible" often backfires</h2>
                 <div className="max-w-none text-base text-slate-600 leading-relaxed space-y-4">
                     <p>
-                        The instinct with an RRSP is to defer tax for as long as possible — leave it untouched, let
-                        it grow, and worry about withdrawals later. That instinct can be expensive. Deferral is not
-                        free: the longer you wait, the bigger the account grows, and the bigger the eventual tax
-                        bill on the way out.
+                        The usual instinct is to leave your RRSP alone for as long as possible so the tax is
+                        deferred. But the longer it grows, the bigger the tax bill when the money finally comes out.
                     </p>
                     <p>
                         You must convert your RRSP to a RRIF by the end of the year you turn 71, and, starting the
                         year you turn 72, a rising minimum percentage must be withdrawn and taxed as income every
                         year — whether you need the money or not. Those <strong>RRIF minimum withdrawals</strong> land
-                        on top of CPP and OAS, which by then are usually flowing too. Three income streams stacking
-                        at once can push a retiree into a higher tax bracket than they ever paid while working.
+                        on top of CPP and OAS, which by then are usually flowing too. With all three arriving
+                        at once, some retirees end up in a higher tax bracket than they had while working.
                     </p>
                     <p>
                         Large forced withdrawals can also trigger the OAS clawback. Once individual net income passes roughly $95,300 (2026),
-                        OAS is reduced by a 15% recovery tax — so a large forced RRIF withdrawal can quietly claw
-                        back a chunk of a benefit you would otherwise keep.
+                        you repay 15¢ of OAS for every dollar above it, so a large RRIF withdrawal can cost you
+                        part of your OAS.
                     </p>
                     <p>
                         The final bill comes at death. Whatever remains in the RRSP or RRIF is treated as income on
@@ -82,11 +79,10 @@ export function RrspWithdrawalStrategy() {
                         so the forced withdrawals after 72 are smaller and less likely to trigger the OAS clawback.
                     </p>
                     <p>
-                        The strategy often pairs with delaying CPP and OAS to age 70. Delaying helps twice over:
-                        it permanently raises the guaranteed, inflation-indexed benefit you receive for life,
-                        and it widens the low-income window — giving you more years to melt down the RRSP at low tax
-                        rates before government benefits start. The goal is not to pay the least tax in any single
-                        year, but the least tax across your whole retirement, so more is left over at the end.
+                        The strategy often pairs with delaying CPP and OAS to 70. Delaying raises benefits that
+                        are indexed to inflation and paid for life, and it gives you more low-income years to draw
+                        down the RRSP before those benefits start. The goal isn't the lowest tax in any single
+                        year, but the lowest tax across your whole retirement, so more is left at the end.
                     </p>
                 </div>
             </section>
@@ -132,14 +128,14 @@ export function RrspWithdrawalStrategy() {
                 <h2 className="text-2xl font-bold text-slate-900">How the optimizer works</h2>
                 <div className="max-w-none text-base text-slate-600 leading-relaxed space-y-4">
                     <p>
-                        The calculator does not guess. It runs a full <strong>year-by-year simulation</strong> of
-                        your retirement using real Canadian tax rules, then searches for the schedule that best
-                        delivers the goal you choose. Under the hood it:
+                        It runs a full <strong>year-by-year simulation</strong> of
+                        your retirement using real Canadian tax rules, then searches for the withdrawal plan that best
+                        meets the goal you choose. Under the hood it:
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li>Simulates each year from now to life expectancy, applying federal and provincial income tax brackets for all provinces and territories, the OAS clawback, and mandatory RRIF minimums.</li>
                         <li>Searches across many annual RRSP withdrawal amounts — and, if you let it, across CPP and OAS start ages from 60 to 70 — to see which combination performs best.</li>
-                        <li>Optimizes for the goal you choose: the largest <strong>net estate</strong> — the after-tax value left at the end, after the final return's terminal tax on any remaining registered assets — or the highest annual spending your plan can sustain.</li>
+                        <li>Optimizes for the goal you choose: the largest <strong>net estate</strong> (what's left after the final tax bill at death) or the highest annual spending your plan can sustain.</li>
                         <li>Never proposes a plan that runs you out of money — schedules that leave you short are discarded, not recommended.</li>
                         <li>Validates the winner against Monte Carlo market scenarios, so you can see whether a plan that looks great on average still holds up when markets misbehave.</li>
                     </ul>
@@ -155,25 +151,20 @@ export function RrspWithdrawalStrategy() {
                 <h2 className="text-2xl font-bold text-slate-900">How accurate is this calculation?</h2>
                 <div className="max-w-none text-base text-slate-600 leading-relaxed space-y-4">
                     <p>
-                        Exactly as accurate as its inputs — which are a mix of things you know and things nobody
-                        knows. Your ages, current account balances, and today's tax rules are known precisely, and
-                        the arithmetic built on them — brackets, OAS clawback, RRIF minimums — is exact. Future
-                        investment returns are the opposite: they vary widely from year to year and will almost
-                        certainly not follow the smooth path any simulation assumes. Spending, tax rules, and
-                        government benefits drift over the decades too.
+                        Only as accurate as its inputs. Some are known precisely — your ages, account balances and
+                        today's tax rules — and the tax math built on them follows those rules closely. Others
+                        nobody knows: future returns will swing from year to year and won't follow the smooth path
+                        the simulation assumes, and spending, tax rules and government benefits will change over the
+                        decades.
                     </p>
                     <p>
-                        That is why the results are best read as a <strong>comparison between strategies</strong>,
-                        not a forecast of your actual balance decades from now. The direction of the recommendation —
-                        melting down beats deferring, and by roughly this much — is far more durable than any single
-                        dollar figure attached to it.
+                        That's why the results are best read as a <strong>comparison between strategies</strong>,
+                        not a forecast of your balance decades from now. Trust which strategy wins, and by roughly
+                        how much, more than any specific dollar figure.
                     </p>
                     <p>
-                        A plan is a snapshot, so keep it fresh: <strong>revisit your retirement plan every year or
-                        two</strong> — update balances, spending, and start-age decisions as real returns and real
-                        life diverge from the projection, and re-run the optimizer on the new numbers. The advice
-                        that matters is always the one computed from your current situation, not the one from three
-                        years ago.
+                        <strong>Revisit your plan every year or two</strong>: update balances, spending and start
+                        ages, and re-run the optimizer on the new numbers.
                     </p>
                 </div>
             </section>
@@ -195,9 +186,8 @@ export function RrspWithdrawalStrategy() {
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 text-center space-y-4">
                 <h2 className="text-2xl font-bold text-indigo-900">See your own numbers</h2>
                 <p className="max-w-2xl mx-auto text-base text-indigo-900/80 leading-relaxed">
-                    Every situation is different. Run the optimizer on your own balances, income, and province to
-                    see whether an RRSP meltdown could cut your lifetime tax bill and leave more behind — all
-                    calculated privately in your browser.
+                    Every situation is different. Run the optimizer on your own balances, income and province to
+                    see whether an RRSP meltdown could cut your lifetime tax bill and leave more behind.
                 </p>
                 <div className="flex justify-center">
                     <a

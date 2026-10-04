@@ -332,9 +332,8 @@ export function CppCalculator() {
             <div className="text-center space-y-2 py-2">
                 <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">CPP Retirement Pension Calculator</h1>
                 <p className="text-sm text-slate-500 max-w-2xl mx-auto">
-                    Estimate your Canada Pension Plan retirement benefit using the real Service Canada method —
-                    year-by-year earnings ratios, the general drop-out, and the child-rearing provision.
-                    Start simple and add detail as you have it.
+                    Estimate your Canada Pension Plan (CPP) retirement pension using the same method Service Canada uses.
+                    Start with an average salary and add detail when you have it.
                 </p>
                 <button
                     onClick={copyShareLink}
@@ -367,16 +366,15 @@ export function CppCalculator() {
                     <SectionCard accent="sky">
                         <h2 className="text-xl font-bold text-slate-900 mb-1">Earnings history</h2>
                         <p className="text-sm text-slate-500 mb-4">
-                            The more detail you provide, the more accurate the estimate. All three levels use the same
-                            calculation underneath — each mode uses only its own entries. Your start age defaults to 65;
-                            change it by clicking a bar on the chart.
+                            More detail gives a better estimate. Each tab keeps its own numbers, and the estimate uses
+                            the tab that's open. Your start age defaults to 65; click a bar in the chart to change it.
                         </p>
 
                         <FinancialInput
                             label="Current Age" prefix="" value={state.currentAge}
                             min={18} max={70}
                             className="mb-4 max-w-[180px]"
-                            tooltip="Anchors your earnings history to calendar years — the contributory period runs from the year you turned 18."
+                            tooltip="Used to work out which calendar years count, starting from the year you turned 18."
                             onChange={(e) => update({ currentAge: Number(e.target.value) })}
                         />
 
@@ -631,8 +629,8 @@ export function CppCalculator() {
                     <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
                         <h3 className="text-xl font-bold text-slate-900">Benefit by start age</h3>
                         <p className="text-sm text-slate-500 mb-4">
-                            Click a bar to change your start age. Ignoring investment returns and taxes, total payments to age 85
-                            are highest if you start at <strong>{bestByEightyFive.startAge}</strong>.
+                            Click a bar to change your start age. If you live to 85, starting at <strong>{bestByEightyFive.startAge}</strong> pays
+                            the most in total (before tax and investment returns).
                         </p>
                         <div className="h-[280px]">
                             <ResponsiveContainer width="100%" height="100%">
@@ -706,7 +704,7 @@ export function CppCalculator() {
                                     Every year from age 18 until your pension starts counts — for you,{' '}
                                     <strong className="text-slate-800">{firstContribYear}–{lastContribYear}</strong> ({result.contributoryYears} years).
                                     You entered earnings in <strong className="text-slate-800">{nonZeroEarningYears}</strong> of them;
-                                    the rest count as zeros until step 3.
+                                    blank years count as zero, and the lowest years are dropped in step 3.
                                     {startAge > 65 && (
                                         <> Years after 65 aren't added to the window — they can only replace lower years.</>
                                     )}
@@ -718,8 +716,8 @@ export function CppCalculator() {
                                     <strong className="text-slate-800">Score each year against its YMPE.</strong>{' '}
                                     Each year's score = your earnings ÷ that year's YMPE (the earnings ceiling CPP covers,
                                     currently {formatCurrencyCAD(ympeFor(LATEST_DATA_YEAR))}), capped at 100%. Income above the
-                                    ceiling adds nothing. Because the ceiling rises with national wages, each year is judged
-                                    against its own era.
+                                    ceiling adds nothing. The ceiling rises with wages, so a 1995 salary is compared
+                                    with the 1995 ceiling, not today's.
                                 </span>
                             </li>
                             <li className="flex gap-3">

@@ -13,10 +13,10 @@ export function HowItWorks() {
             <section className="bg-indigo-50/50 rounded-3xl p-8 border border-indigo-100 space-y-6">
                 <div className="max-w-none text-base text-indigo-900/80 leading-relaxed space-y-4">
                     <p>
-                        Saving for retirement is one problem. Spending it is another — and in Canada, decisions on how to invest and withdraw in retirement can make a meaningful difference. When you take CPP/OAS, which account you drain first, which account you reinvest in — these choices can lead to tens of thousands of dollars — sometimes more — in tax savings.
+                        Saving for retirement is one problem; spending it well is another. When you start CPP and OAS, which account you draw from first, and where you reinvest leftover cash can change your lifetime tax bill by tens of thousands of dollars or more.
                     </p>
                     <p>
-                        This tool exists to show you those differences and how you can increase your retirement income, your estate, or both.
+                        This tool shows you those differences so you can increase your retirement income, your estate, or both.
                     </p>
                 </div>
 
@@ -39,7 +39,7 @@ export function HowItWorks() {
                         <div>
                             <h4 className="font-bold text-indigo-900">Withdrawal order</h4>
                             <p className="text-sm text-indigo-900/80 leading-relaxed">
-                                Compare draining RRSP/RRIF, TFSA, and non-registered accounts in different sequences — including an early "RRSP melt" to avoid large forced withdrawals (and tax bills) later.
+                                Compare drawing down RRSP/RRIF, TFSA, and non-registered accounts in different sequences — including an early RRSP meltdown to avoid large forced withdrawals (and tax bills) later.
                             </p>
                         </div>
                     </div>
@@ -87,13 +87,13 @@ export function HowItWorks() {
                 </h2>
                 <div className="max-w-none text-base text-amber-900/80 leading-relaxed space-y-3">
                     <p>
-                        Treat results as comparisons between plans, not forecasts. A small difference (even 1–2%) between assumed and actual returns, compounded over 20–30 years, will dwarf most tax optimizations. Use the tool to learn the direction and magnitude of your choices, then revisit your assumptions as your situation evolves.
+                        Treat results as comparisons between plans, not forecasts. A small difference (even 1–2%) between assumed and actual returns, compounded over 20–30 years, will dwarf most tax optimizations. Use the tool to see which way each choice moves the result, and by roughly how much.
                     </p>
                     <p>
                         The simulation also assumes today's rules stay in place. Future changes to tax rates and brackets, government programs like CPP and OAS, and other laws will affect real-world results in ways no projection can anticipate.
                     </p>
                     <p>
-                        A plan is a snapshot of one moment, so keep it fresh: revisit your retirement plan every year or two to update account balances, spending, and start-age decisions as actual returns and life events diverge from the assumptions. The comparisons stay useful precisely because you keep feeding them current facts.
+                        Revisit your plan every year or two and update your balances, spending and start ages. The comparisons are only as current as the numbers you give them.
                     </p>
                 </div>
             </section>
@@ -108,11 +108,10 @@ export function HowItWorks() {
             {/* Modelling overview */}
             <section className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
                 <p className="text-base text-slate-600 leading-relaxed">
-                    This tool attempts to model the tax impact of your choices as accurately as is practical for
-                    a planning tool. Income from each source — employment, CPP/OAS, RRIF withdrawals, interest,
-                    dividends, and capital gains — is taxed under its own rules, and government entitlements such
-                    as OAS (including the clawback) and age-based credits are applied year by year. Expand the
-                    sections below for details on each part of the model.
+                    The tool models taxes as closely as a planning tool reasonably can. Each income source
+                    — employment, CPP/OAS, RRIF withdrawals, interest, dividends and capital gains — is taxed
+                    under its own rules, and OAS (including the clawback) and age-based credits are applied
+                    each year. Expand the sections below for details on each part of the model.
                 </p>
             </section>
 
@@ -136,7 +135,7 @@ export function HowItWorks() {
                         <li><strong>Growth:</strong> applies investment returns to remaining balances.</li>
                     </ul>
                     <p>
-                        When a person dies in the simulation, assets roll over tax-free to a surviving spouse (keeping each account's cost base); with no survivor, the estate pays tax on a deemed disposition — the full remaining RRSP/RRIF is taxed as income, and unrealized capital gains are deemed realized.
+                        When one spouse dies, their accounts pass to the survivor tax-free and keep their cost base. When the last person dies, the estate is taxed as if everything were sold: the remaining RRSP/RRIF counts as income, and unrealized capital gains are taxed.
                     </p>
                 </div>
             </details>
@@ -151,16 +150,16 @@ export function HowItWorks() {
                 </summary>
                 <div className="px-8 pb-8 -mt-2 max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
-                        <strong>RRSP last (defer taxes):</strong> draws non-registered accounts first (lowest tax per dollar), then TFSA (zero tax), leaving RRSPs untouched as long as possible. Deferral cuts both ways: the RRSP keeps compounding tax-sheltered, but forced RRIF withdrawals after 72 get larger and whatever remains is fully taxed at death.
+                        <strong>RRSP last (defer taxes):</strong> spends non-registered savings first, then TFSA, and leaves the RRSP for last. The RRSP grows tax-free for longer, but that makes the forced RRIF withdrawals from 72 bigger, and whatever is left is fully taxed at death.
                     </p>
                     <p>
-                        <strong>RRSP first:</strong> draws from RRSPs before the other accounts, so the balance shrinks during your lower-income years instead of compounding into larger forced RRIF withdrawals after 72. That can lower the tax bill at 72 and at death — but it also empties the tax shelter early, leaving less growing inside it.
+                        <strong>RRSP first:</strong> spends the RRSP before the other accounts, while your income is lower. That shrinks later RRIF withdrawals and the tax at death, but the money leaves the tax shelter sooner.
                     </p>
                     <p>
-                        Neither order is generally better, and a smaller lifetime tax bill does not mean a larger estate — in our test plans the order that paid the least tax overall sometimes left the smaller estate. Which one wins depends on your own growth rates, spending and timing, so the <strong>Meltdown Optimizer</strong> tests both on your numbers rather than assuming one.
+                        Neither order always wins. Paying less tax over your lifetime doesn't guarantee a bigger estate — in our test plans, the order with the lowest total tax sometimes left less behind. The <strong>RRSP Meltdown Optimizer</strong> tries both on your own numbers.
                     </p>
                     <p>
-                        Both settings control only the <strong>order</strong> accounts are drawn from to fund spending — the <strong>Fund spending from RRSP first</strong> switch under Settings. Neither one is the RRSP meltdown: that is the separate <strong>RRSP Melt Amount</strong> set for each person, which withdraws a fixed sum every year from its start age until 71 whether or not the money is needed. A plan can run both at once — the meltdown withdraws its amount, and whatever spending is still unfunded is then drawn in the order chosen here.
+                        These two options only set which account pays for your spending first. You change it with the <strong>Fund spending from RRSP first</strong> switch in Settings. They are not the RRSP meltdown. The meltdown is the separate <strong>RRSP Melt Amount</strong> for each person: a fixed withdrawal every year from its start age to 71, whether you need the money or not. You can use both. The meltdown comes out first, and anything still needed for spending is drawn in the order you picked.
                     </p>
                 </div>
             </details>
@@ -247,20 +246,29 @@ export function HowItWorks() {
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>RRSP/TFSA:</strong> each account grows at its own whole-account return, reinvested and tax-sheltered — no yield/gains split needed.</li>
-                        <li><strong>Non-Registered:</strong> yield is paid out as cash (and taxed) each year. The Equity slice appreciates at the full Non-Reg Growth rate. Dividend-paying stocks appreciate too — paying a dividend doesn't stop a share price rising, it just splits the return between cash and price — so the Canadian- and foreign-dividend slices grow at 85% of that rate less their own yield, leaving them a slightly lower total return than pure growth equity. Bonds and cash are income-only: their principal doesn't move. Growth doesn't raise the ACB, so unrealized gains build up until realized by sales, Fund Turnover, or death.</li>
+                        <li>
+                            <strong>Non-Registered:</strong>
+                            <ul className="list-disc pl-6 space-y-1 mt-2">
+                                <li>Dividends and interest are paid out as cash and taxed each year.</li>
+                                <li>Equity grows at the full Non-Reg Growth rate.</li>
+                                <li>Dividend stocks' prices grow at 85% of whatever the Non-Reg Growth rate is above their dividend yield. Counting the dividend, their total return is a little lower than pure growth equity.</li>
+                                <li>Bonds and cash pay interest only; their value doesn't change.</li>
+                                <li>Growth doesn't raise your ACB, so gains build up until a sale, Fund Turnover or death realizes them.</li>
+                            </ul>
+                        </li>
                     </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Multiple non-registered accounts</h3>
                     <p>
                         Each person can hold several non-registered accounts (e.g. a GIC ladder, a dividend portfolio, a growth ETF account):
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
-                        <li><strong>Withdrawals minimize realized gains:</strong> sells from the account with the highest cost-base ratio first — the least realized gain per dollar raised.</li>
+                        <li><strong>Withdrawals minimize realized gains:</strong> sells first from the account with the smallest unrealized gain relative to its value, so each dollar withdrawn triggers as little taxable gain as possible.</li>
                         <li><strong>Surplus goes to one account:</strong> leftover cash each year is invested into the account marked <strong>Surplus</strong>.</li>
                         <li><strong>At death:</strong> a surviving spouse inherits each account as-is, keeping its own ACB and mix.</li>
                     </ul>
                     <h3 className="text-lg font-bold text-slate-900 mt-6">Rebalancing vs. drift</h3>
                     <p>
-                        The <strong>Rebalance Annually</strong> toggle controls each account's mix over time: <strong>on</strong> pulls it back to your chosen weights every year; <strong>off</strong> lets the equity share drift up, because the Equity slice compounds faster than the dividend slices and the bond/cash slices don't compound at all. The separate Fund Turnover input models the annual tax drag of funds that realize gains internally — it applies every year, whether or not rebalancing is on.
+                        With <strong>Rebalance Annually</strong> on, each account resets to your chosen mix every year. With it off, the mix drifts toward equity, because equity grows fastest and bonds and cash don't grow at all. <strong>Fund Turnover</strong> is separate: it models the yearly tax from funds that sell holdings internally, and it applies either way.
                     </p>
                 </div>
             </details>
@@ -272,12 +280,10 @@ export function HowItWorks() {
                 </h2>
                 <div className="max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
-                        Your privacy is built into the architecture of this tool.
-                        <strong> All calculations are performed locally within your web browser.</strong>
+                        Your data stays on your device. <strong>All calculations run locally in your web browser.</strong>
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
-                        <li><strong>No data transfer:</strong> personal financial information is never sent to a server.</li>
-                        <li><strong>Local logic:</strong> the projection engine and tax models run entirely on your own device.</li>
+                        <li><strong>Nothing sent to a server:</strong> the projection engine and tax models run entirely on your device, and your financial information never leaves it.</li>
                         <li><strong>Local storage only:</strong> saved plans are stored only in your browser's local storage.</li>
                         <li><strong>Anonymous analytics:</strong> Cloudflare Web Analytics monitors aggregate, non-identifiable traffic only.</li>
                     </ul>

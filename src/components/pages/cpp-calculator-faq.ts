@@ -24,7 +24,7 @@ export const CPP_CALCULATOR_FAQ_ITEMS: FaqItem[] = [
     {
         question: 'How much CPP will I get?',
         answer:
-            'It depends on how much you earned and for how long. The maximum base pension at 65 is about $17,300 a year — roughly $1,440 a month in 2026 — but reaching it takes close to 40 years of earning at or above the annual ceiling (the YMPE), which most people never do. Because of gaps, lower-earning years, and part-time work, many retirees receive around half the maximum or less. This calculator scores your own earnings history and shows what share of the maximum you qualify for.',
+            'It depends on how much you earned and for how long. The maximum base pension at 65 is about $17,300 a year — roughly $1,440 a month in 2026 — but reaching it takes close to 40 years of earning at or above the annual ceiling (the YMPE), which most people never do. Because of gaps, lower-earning years, and part-time work, many retirees receive around half the maximum or less. This calculator works from your own earnings history and shows what share of the maximum you qualify for.',
     },
     {
         question: 'When can I start CPP?',

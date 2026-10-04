@@ -29,7 +29,7 @@ export const FAQ_ITEMS: FaqItem[] = [
     {
         question: 'Does this work on a phone?',
         answer:
-            'It does — the layout adapts to smaller screens, so you can run a projection from your phone. That said, it is designed for a larger monitor and works best on one. The projection tables, charts and year-by-year detail have a lot of numbers in them, and they are far easier to read and compare side by side on a desktop or laptop.',
+            "Yes, the layout adapts to small screens. It's easier on a laptop or desktop, though: the tables and charts are dense and easier to compare on a bigger screen.",
     },
     {
         question: "What's with the name?",
