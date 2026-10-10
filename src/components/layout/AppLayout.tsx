@@ -1,20 +1,105 @@
-import React, { useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { Dialog, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
 import { clearAllAppData } from '../../utils/clearAllData';
 
 export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy';
 
-// Single source for the nav pill order/labels/targets. The three pages are now
-// real MPA routes, so each item is a plain <a href> to the page's path — the
-// active-page highlight is derived from AppLayout's `activePage` prop rather
-// than in-SPA routing state.
-const NAV_ITEMS: { id: PageId; label: string; href: string }[] = [
-    { id: 'dashboard', label: 'Dashboard', href: '/' },
-    { id: 'cpp-calculator', label: 'CPP Calculator', href: '/cpp-calculator/' },
-    { id: 'rrsp-withdrawal-strategy', label: 'RRSP Withdrawal Strategy', href: '/rrsp-withdrawal-strategy/' },
-    { id: 'how-it-works', label: 'How It Works', href: '/how-it-works/' },
+// Single source for the tool pages, shared by the header "Tools" menu and the
+// footer links. Adding a tool is one entry here. Order is display order.
+const TOOLS: { id: PageId; label: string; href: string; description: string }[] = [
+    { id: 'rrsp-withdrawal-strategy', label: 'RRSP withdrawal strategy', href: '/rrsp-withdrawal-strategy/', description: 'Plan when and how much to draw from your RRSP' },
+    { id: 'cpp-calculator', label: 'CPP calculator', href: '/cpp-calculator/', description: 'Estimate your CPP pension from your earnings' },
 ];
+
+// Single source for the top-level nav order/labels/targets. The pages are real
+// MPA routes, so each link is a plain <a href> — the active-page highlight is
+// derived from AppLayout's `activePage` prop rather than in-SPA routing state.
+// The 'tools' entry renders as a dropdown button listing TOOLS.
+const NAV_ITEMS: ({ kind: 'link'; id: PageId; label: string; href: string } | { kind: 'tools'; label: string })[] = [
+    { kind: 'link', id: 'dashboard', label: 'Dashboard', href: '/' },
+    { kind: 'tools', label: 'Tools' },
+    { kind: 'link', id: 'how-it-works', label: 'How It Works', href: '/how-it-works/' },
+];
+
+// Shared active/inactive look for the nav links and the Tools button.
+const navItemClass = (active: boolean) =>
+    `whitespace-nowrap text-sm font-medium transition-colors ${active
+        ? 'text-slate-900 font-semibold underline decoration-brand-500 decoration-2 underline-offset-[6px]'
+        : 'text-slate-500 hover:text-slate-900'
+    }`;
+
+// "Tools" dropdown. The panel is always rendered and only hidden with CSS so
+// its links are in the prerendered HTML for crawlers; state just toggles the
+// `hidden` class.
+function ToolsMenu({ activePage, label }: { activePage: PageId; label: string }) {
+    const [open, setOpen] = useState(false);
+    const wrapperRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const panelId = useId();
+    const toolActive = TOOLS.some((tool) => tool.id === activePage);
+
+    useEffect(() => {
+        if (!open) return;
+        const onPointerDown = (e: MouseEvent | TouchEvent) => {
+            if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+        };
+        document.addEventListener('mousedown', onPointerDown);
+        document.addEventListener('touchstart', onPointerDown);
+        return () => {
+            document.removeEventListener('mousedown', onPointerDown);
+            document.removeEventListener('touchstart', onPointerDown);
+        };
+    }, [open]);
+
+    return (
+        <div
+            ref={wrapperRef}
+            className="relative"
+            onKeyDown={(e) => {
+                if (e.key === 'Escape' && open) {
+                    setOpen(false);
+                    buttonRef.current?.focus();
+                }
+            }}
+            onBlur={(e) => {
+                // Close when focus moves somewhere outside the menu.
+                if (!wrapperRef.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+            }}
+        >
+            <button
+                ref={buttonRef}
+                type="button"
+                aria-expanded={open}
+                aria-haspopup="true"
+                aria-controls={panelId}
+                onClick={() => setOpen((o) => !o)}
+                className={`inline-flex items-center gap-1 ${navItemClass(toolActive)}`}
+            >
+                {label}
+                <svg className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+            </button>
+            <div
+                id={panelId}
+                className={`${open ? '' : 'hidden'} absolute left-1/2 top-full z-50 mt-3 w-72 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg`}
+            >
+                {TOOLS.map(({ id, label: toolLabel, href, description }) => (
+                    <a
+                        key={id}
+                        href={href}
+                        aria-current={activePage === id ? 'page' : undefined}
+                        className={`block rounded-lg px-3 py-2 hover:bg-slate-50 ${activePage === id ? 'bg-slate-50' : ''}`}
+                    >
+                        <span className="block text-sm font-medium text-slate-900">{toolLabel}</span>
+                        <span className="block text-xs text-slate-500">{description}</span>
+                    </a>
+                ))}
+            </div>
+        </div>
+    );
+}
 
 // Single source for the "re-run setup" button's label, shared with the copy
 // in OnboardingIntro/OnboardingClosing so the two never drift out of sync.
@@ -135,19 +220,20 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
 
                     <div className="flex items-center gap-2 flex-wrap justify-end">
                         <nav className="flex items-center gap-5">
-                            {NAV_ITEMS.map(({ id, label, href }) => (
-                                <a
-                                    key={id}
-                                    href={href}
-                                    aria-current={activePage === id ? 'page' : undefined}
-                                    className={`whitespace-nowrap text-sm font-medium transition-colors ${activePage === id
-                                        ? 'text-slate-900 font-semibold underline decoration-brand-500 decoration-2 underline-offset-[6px]'
-                                        : 'text-slate-500 hover:text-slate-900'
-                                        }`}
-                                >
-                                    {label}
-                                </a>
-                            ))}
+                            {NAV_ITEMS.map((item) =>
+                                item.kind === 'tools' ? (
+                                    <ToolsMenu key="tools" label={item.label} activePage={activePage} />
+                                ) : (
+                                    <a
+                                        key={item.id}
+                                        href={item.href}
+                                        aria-current={activePage === item.id ? 'page' : undefined}
+                                        className={navItemClass(activePage === item.id)}
+                                    >
+                                        {item.label}
+                                    </a>
+                                )
+                            )}
                         </nav>
                         {/* Setup is an action (opens the guided-setup overlay), not a page —
                             styled distinctly from the text nav links and never "active".
@@ -238,20 +324,17 @@ export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayou
                         >
                             Changelog
                         </a>
-                        {' '}·{' '}
-                        <a
-                            href="/cpp-calculator/"
-                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
-                        >
-                            CPP Calculator
-                        </a>
-                        {' '}·{' '}
-                        <a
-                            href="/rrsp-withdrawal-strategy/"
-                            className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
-                        >
-                            RRSP Withdrawal Strategy
-                        </a>
+                        {TOOLS.map(({ id, label, href }) => (
+                            <React.Fragment key={id}>
+                                {' '}·{' '}
+                                <a
+                                    href={href}
+                                    className="underline decoration-dotted underline-offset-2 hover:text-slate-600 transition-colors"
+                                >
+                                    {label}
+                                </a>
+                            </React.Fragment>
+                        ))}
                     </p>
                 </div>
             </footer>

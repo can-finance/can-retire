@@ -17,6 +17,7 @@ warm start can't understate the answer), with the planner logic kept pure and
 unit-tested MC-free.
 
 - **Phase 3 — "When can I retire?" (next up).** See spec below.
+- **Phase 3b — "How much do I need to retire?"** See spec below.
 - **Phase 4 — the engine phase.** See spec below.
 
 **Implementation order (decided 2026-07-22):** Phase 3, then Phase 4 (engine
@@ -44,6 +45,86 @@ v1 shifts both retirement ages together; staggered retirement is a later
 refinement. SEO note: "when can I retire calculator" is a far bigger query
 than anything meltdown-related — when this ships it deserves its own
 prerendered landing page in the /rrsp-withdrawal-strategy/ mold.
+
+Decided 2026-10-09 — inputs that don't follow a moved retirement age today:
+- **CPP follows the age.** `cppContributedYears` and `cppAnnualOverride` are
+  fixed inputs, so an earlier age would keep full CPP and understate the answer.
+  When the search moves `retirementAge` by Δ, shift `cppContributedYears` by Δ
+  too (clamped to [0, the CPP max-years cap]). When a CPP Calculator estimate
+  (`cppAnnualOverride`) is applied, hold it fixed and disclose that on the
+  result card. The adjustment is a pure helper, unit-tested.
+- **DB pension stays fixed.** `pension.annualAmount`/`startAge` don't depend on
+  `retirementAge` and the engine has no years-of-service model, so hold the
+  pension as entered and say so on the result card ("assumes your pension
+  amount doesn't change with your retirement date").
+
+Output design (decided 2026-10-09) — the age is the answer; estate, tax and
+spending are context for it. Three layers:
+1. **Headline:** earliest age, delta vs the plan's age, success rate at the
+   planned spend ("You can retire at 58 — 2 years sooner than your plan · 86%
+   success at your spending of $70k/yr"), plus one line on what the strategy
+   changed when it did (CPP start, melt) — reuse the existing decision card.
+   Add a bad-markets line from the MC percentiles ("in the worst 10% of markets,
+   money lasts to 88").
+2. **Trade-off table (the new piece):** rows for ages around the answer (e.g.
+   answer −2 … answer +4), columns: success rate (✓/✗ vs the bar), net estate
+   at end, lifetime tax, and "could spend" — the max sustainable spend at that
+   age under the same bar (spending is an input here, so this column shows the
+   other trade: "retire at 56 on $62k"). One MC run per row; "could spend" is a
+   max-spend search per row and is the costly column — if runtime is a problem,
+   compute it for the answer row and its neighbours only.
+3. **Full picture = existing dashboard.** No new estate/tax/spending charts:
+   Apply loads the plan at the solved age into the dashboard and comparison
+   view; keep the result card's compare/save/apply pattern.
+
+Landing page shows layers 1–2 and links "See the full plan →" into the app.
+
+Landing-page inputs (decided 2026-10-09) — reuse the onboarding simple path's
+fields (`SimplePathStep`): current age, income, RRSP/TFSA/non-reg balances,
+spending before and after retirement, optional spouse (age, income, balances),
+province. Changes vs the simple path: retirement age is dropped (it's the
+answer) or kept optional as "my target age, to compare against"; add an
+optional DB pension question ("Workplace pension? $___/yr from age ___"),
+since for those who have one it is the biggest single input; add the 75/85/95%
+confidence picker. Everything else (CPP years, life expectancy, returns,
+inflation) stays on defaults, editable later in the full plan.
+
+**Phase 3b — "How much do I need to retire?" mode (specced 2026-10-09).** The
+fourth dual, adding savings to the set: fix retirement age and spending, solve
+for the savings that keep the plan funded at the user's MC bar. Today the tool
+only answers this backwards (max-spend gives spending from savings; the user can
+nudge balances until the shortfall clears), so a landing page for the query
+would make visitors do the search themselves — ship the solver WITH the page.
+- **Search:** outer bisection over a scalar multiplier `k` applied to starting
+  balances; inner check reuses the same strategy search + MC bar as Phase 3
+  (any feasible strategy at this `k`). Same shape as Phase 3's outer loop, so
+  build it as a second outer variable on that loop, not a separate pipeline:
+  deterministic bisection first (cheap), then an MC step-up on `k` with the
+  bracket-and-refine pattern (MC wobble rules out bisecting on the raw rate).
+- **Key design decision — where the extra dollar sits.** $1 of RRSP, TFSA and
+  non-reg are worth different after-tax amounts, so "you need $X" depends on
+  the mix. Default: scale the current mix proportionally (RRSP, TFSA, every
+  non-reg account; non-reg ACB scales with balance so the unrealized-gain ratio
+  is unchanged), and say so in the result. A user with zero savings has no mix
+  to scale — fall back to a stated default (e.g. TFSA-then-RRSP) or require an
+  entry; decide at build time.
+- **Two framings, same solver.** Already retired / near retirement: "you need
+  $X at retirement" (scale balances at retirement — note balances are entered
+  as of today, so for someone still working scale today's balances and report
+  the projected at-retirement total too). Still working: "save $Y more per
+  year" — needs a contribution lever the engine lacks (savings are only the
+  income − tax − spend surplus sweep), so the cheap v1 lever is lowering
+  `preRetirementSpend` (bisect on it; the freed surplus is swept to accounts).
+  Ship the lump-sum framing first; the per-year framing reuses the loop.
+- **Edge cases:** already funded at `k = 1` → "you have enough" with the
+  margin (how far `k` could drop); unfundable at any sane cap (e.g. 20×) →
+  say spending exceeds what savings can fund and point at max-spend / Phase 3.
+  Guaranteed income (CPP/OAS/DB pension) alone can cover spending → need is $0.
+- **Testing:** the `k`-scaling helper and the outer bracket planner pure and
+  MC-free, unit-tested like `planStepDownProbe`; full gate (engine-adjacent).
+- **SEO:** "how much do I need to retire (canada)" is at least as large as
+  "when can I retire" — own prerendered page in the /rrsp-withdrawal-strategy/
+  mold, cross-linked with the Phase 3 page.
 
 **Phase 4 — the engine phase: melt-to-threshold + early RRIF conversion + web
 worker.** Take deliberately, as one phase, AFTER the objectives — and build the
