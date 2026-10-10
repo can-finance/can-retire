@@ -2,7 +2,7 @@
 import type { Person, NonRegisteredAccount, NonRegMix, SimulationInputs, SimulationResult, MonteCarloResult, MonteCarloPercentile } from './types';
 import { calculateTotalTax, calculatePayrollContributions, calculateOptimalSplit } from './tax';
 import type { SplitPerson } from './tax';
-import { calculateEstimatedCPP, calculateOAS } from './cpp';
+import { calculateEstimatedCPP, calculateOAS, cppOverrideAtStartAge } from './cpp';
 
 // --- Helper Types for Internal engine calculation ---
 
@@ -294,9 +294,11 @@ function simulatePersonBaseYear(
     inflationRate: number
 ): PersonAnnualBase {
     // 1. Mandatory Income Sources
+    // A CPP Calculator estimate is the amount for the start age it was worked
+    // out at; moving cppStartAge re-bases it with the early/late adjustment.
     const cppIncome = (age >= person.cppStartAge)
         ? (person.cppAnnualOverride != null
-            ? person.cppAnnualOverride * inflationFactor
+            ? cppOverrideAtStartAge(person.cppAnnualOverride, person.cppStartAge, person.cppOverrideStartAge) * inflationFactor
             : calculateEstimatedCPP(person.cppContributedYears ?? 40, person.cppStartAge, inflationFactor))
         : 0;
 
@@ -431,6 +433,7 @@ function roundPersonAges(person: Person): Person {
         retirementAge: Math.round(person.retirementAge),
         lifeExpectancy: Math.round(person.lifeExpectancy),
         cppStartAge: Math.round(person.cppStartAge),
+        cppOverrideStartAge: roundOptAge(person.cppOverrideStartAge),
         oasStartAge: Math.round(person.oasStartAge),
         rrspMeltStartAge: roundOptAge(person.rrspMeltStartAge),
         pension: person.pension ? {

@@ -89,6 +89,10 @@ export interface Person {
     cppStartAge: number;
     cppContributedYears: number; // Years contributed to CPP (Max 40)
     cppAnnualOverride?: number; // Annual CPP in today's dollars from the CPP Calculator page; replaces the simple estimate
+    // The CPP start age cppAnnualOverride was worked out for. When cppStartAge
+    // differs, the engine re-bases the amount with the early/late adjustment
+    // (see cppOverrideAtStartAge in cpp.ts). Present only alongside an override.
+    cppOverrideStartAge?: number;
     oasStartAge: number; // Usually 65
     rrspMeltStartAge?: number; // When to start voluntary RRSP meltdown (default: retirementAge)
     rrspMeltAmount?: number; // Annual voluntary withdrawal amount

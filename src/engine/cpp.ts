@@ -1,3 +1,27 @@
+import { startAgeAdjustment } from './cppDetailed';
+
+/**
+ * A CPP Calculator estimate (Person.cppAnnualOverride) re-based to the start
+ * age the plan uses now. The estimate is the annual amount, in today's dollars,
+ * for the age it was worked out at (`overrideStartAge`); starting earlier or
+ * later scales it by the calculator's own rule, startAgeAdjustment (−0.6% per
+ * month before 65, +0.7% per month after, capped at 70).
+ *
+ * An absent `overrideStartAge` means the estimate was worked out at `startAge`:
+ * no adjustment. The ratio is formed before multiplying so an unmoved start age
+ * (ratio exactly 1) returns the estimate bit-for-bit.
+ */
+export function cppOverrideAtStartAge(
+    overrideAnnual: number,
+    startAge: number,
+    overrideStartAge?: number,
+): number {
+    const ratio = startAgeAdjustment(startAge) / startAgeAdjustment(overrideStartAge ?? startAge);
+    return overrideAnnual * ratio;
+}
+
+// Same early/late rates as startAgeAdjustment, but NOT clamped to 60–70: a
+// start age outside that range keeps scaling here. The UI validates the range.
 export function calculateEstimatedCPP(
     yearsContributed: number, // Max 40
     startAge: number,

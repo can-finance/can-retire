@@ -201,7 +201,14 @@ export function Dashboard() {
     const updatePersonField = (who: 'person' | 'spouse', field: string, value: number | object | undefined) => {
         const target = who === 'person' ? inputs.person : inputs.spouse;
         if (!target) return;
-        updateInputs({ ...inputs, [who]: { ...target, [field]: value } });
+        // A CPP Calculator estimate and the start age it was worked out at go
+        // together: clearing the estimate clears its age too. (Done here, in one
+        // update — two onChange calls in a row would each start from the same
+        // stale `inputs` and the second would undo the first.)
+        const cleared = field === 'cppAnnualOverride' && value === undefined
+            ? { cppOverrideStartAge: undefined }
+            : {};
+        updateInputs({ ...inputs, [who]: { ...target, [field]: value, ...cleared } });
     };
 
     const updateNestedAccount = (who: 'person' | 'spouse', account: 'rrsp' | 'tfsa', field: string, value: number) => {

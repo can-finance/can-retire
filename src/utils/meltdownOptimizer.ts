@@ -3,13 +3,15 @@
 // The engine (projection.ts / tax.ts / cpp.ts) is treated as a pure black box:
 // this module only rewrites a handful of per-person fields (rrspMeltAmount,
 // cppStartAge, oasStartAge) plus the household withdrawalStrategy — and, in
-// max-spend mode, postRetirementSpend — on deep clones of the base inputs and
+// max-spend mode, postRetirementSpend; in earliest-age mode, retirementAge and
+// cppContributedYears — on deep clones of the base inputs and
 // re-runs runSimulation / runMonteCarlo to score each candidate. Nothing here
 // mutates the caller's inputs.
 //
-// Two objective modes share one coordinate-descent search (see the `Objective`
-// abstraction below); a future "when can I retire?" mode is the same feasibility
-// check pointed at a third variable and should slot in the same way.
+// Three objective modes share one coordinate-descent search (see the `Objective`
+// abstraction below and runStrategySearch). All three are duals of the same
+// feasibility check — fix two of {retirement age, spending, estate}, solve for
+// the third:
 //
 //  - 'estate' (default): maximize nominal netEstateValue subject to a $1k
 //    shortfall tolerance. A deterministic sweep picks a winner; a Monte Carlo
@@ -25,28 +27,58 @@
 //    spend is then stepped DOWN until Monte Carlo success clears a user-chosen
 //    threshold, because a deterministic max-spend number is dangerously
 //    optimistic for someone who will actually live on it.
+//  - 'earliest-age': fix spending and solve for the earliest retirement age.
+//    Every still-working person's retirementAge moves by one shared Δ (CPP
+//    contribution years follow it; a DB pension does not). At each age the
+//    inner check is "does ANY strategy keep the plan funded" — the same search,
+//    scored by net estate among deterministically feasible candidates. An
+//    integer bisection finds the earliest deterministically feasible age, then
+//    a Monte Carlo step-up moves later until the user's success bar clears.
+//    The pure decision helpers live in retirementAgeSearch.ts.
 
 import { runSimulation, runMonteCarlo } from '../engine/projection';
 import type { Person, SimulationInputs, SimulationResult, MonteCarloResult } from '../engine/types';
 import { computeSummaryMetrics } from './summaryMetrics';
 import type { SummaryMetrics } from './summaryMetrics';
+import {
+    planAgeShift,
+    applyRetirementShift,
+    planAgeBisection,
+    planAgeStepUp,
+    isStrategyChangeNeeded,
+    tradeoffDeltas,
+    couldSpendDeltas,
+    reconcileCouldSpend,
+    firstDepletionAge,
+    personOf,
+    DEFAULT_MAX_AGE_STEPUP_PROBES,
+} from './retirementAgeSearch';
+import type { AgeFeasibilityProbe, AgeProbeResult, AgeStepUpAction, Who } from './retirementAgeSearch';
 
 type WithdrawalStrategy = 'tax-efficient' | 'rrsp-first';
+
+// The three things the optimizer can solve for.
+export type OptimizerObjective = 'estate' | 'max-spend' | 'earliest-age';
 
 // --- Public options / result types ---------------------------------------
 
 export interface OptimizeMeltdownOptions {
     // Which objective to solve for (default 'estate'). 'max-spend' finds the
-    // highest sustainable annual spending instead of the largest estate.
-    objective?: 'estate' | 'max-spend';
+    // highest sustainable annual spending instead of the largest estate;
+    // 'earliest-age' finds the earliest retirement age at the planned spending.
+    objective?: OptimizerObjective;
     // Also search CPP/OAS start ages (default true). When false, both are pinned
-    // to the user's current input values. Applies to both objectives.
+    // to the user's current input values. Applies to every objective.
     considerCppOas?: boolean;
     // Monte Carlo iterations for the validation pass (default 200).
     mcIterations?: number;
-    // max-spend only: the Monte Carlo success rate (0-100) the sustainable spend
-    // must clear during the step-down. Default 85.
+    // max-spend and earliest-age: the Monte Carlo success rate (0-100) the answer
+    // must clear (the spend step-down / the age step-up). Default 85.
     mcSuccessTarget?: number;
+    // earliest-age only: which trade-off rows get the costly "could spend"
+    // column (a full max-spend search each). 'near' (default) = the answer row
+    // and its two neighbours; 'all' = every row; 'none' = skip it.
+    couldSpendRows?: 'all' | 'near' | 'none';
     // Progress callback. `total` is an estimate that the run snaps to on finish.
     onProgress?: (done: number, total: number) => void;
     // Cancellation. Checked between batches; rejects with an AbortError.
@@ -85,15 +117,86 @@ export interface MaxSpendResult {
     onTrack: boolean;           // sustainable within one precision step of current
 }
 
+// earliest-age: one shifted person's ages. Present for everyone whose
+// retirement age the search moves (retirementAge > age today).
+export interface EarliestAgePerson {
+    who: Who;
+    label: string;                     // 'You' / 'Spouse'
+    currentAge: number;                // age today
+    planRetirementAge: number;         // the plan's retirementAge
+    answerRetirementAge: number | null; // retirementAge at the answer (null when not found)
+    planCppYears: number;
+    answerCppYears: number | null;     // follows the age unless a CPP Calculator estimate is held
+}
+
+// earliest-age: one row of the trade-off table.
+export interface EarliestAgeRow {
+    delta: number;                     // Δ vs the plan (negative = sooner)
+    retirementAge: number;             // the reported person's retirement age
+    otherRetirementAge?: number;       // the other shifted person's, when both move
+    successRate: number;               // MC success at the planned spending
+    clearsTarget: boolean;
+    deterministicFeasible: boolean;    // some strategy funds the plan on average returns
+    netEstate: number;                 // nominal net estate at the end (best strategy at this age)
+    lifetimeTax: number;               // nominal lifetime tax incl. terminal tax
+    couldSpend: number | null;         // max sustainable spend at this age to the same bar; null = not computed / none clears
+    isAnswer: boolean;
+    isPlan: boolean;                   // Δ = 0, the plan's own age
+}
+
+// earliest-age-only extras. Present only when `objective === 'earliest-age'`.
+export interface EarliestAgeResult {
+    // 'found': an age clears the plan (check boundHit/stepUpCapHit for how firmly).
+    // 'unreachable': no age up to the cap funds the planned spending even on
+    //   average returns. 'unavailable': nothing to move (see unavailableReason).
+    status: 'found' | 'unreachable' | 'unavailable';
+    unavailableReason?: 'nobody-working' | 'no-common-range';
+    reportedWho: Who;                  // whose age the headline reports
+    people: EarliestAgePerson[];       // every shifted person
+    currentAge: number;                // reported person's age today
+    planAge: number;                   // reported person's planned retirement age
+    answerAge: number | null;          // reported person's earliest retirement age
+    deltaYears: number | null;         // answerAge − planAge (negative = sooner)
+    deterministicAge: number | null;   // earliest age feasible on average returns (≤ answerAge)
+    minAge: number;                    // reported person's search bounds
+    maxAge: number;
+    retiresNow: boolean;               // answer is the reported person's age today
+    atLowerBound: boolean;             // answer is the earliest age the search can test
+    mcSuccessTarget: number;
+    achievedSuccessRate: number | null; // MC success at the answer age, planned spending
+    stepUpCapHit: boolean;             // MC probe budget ran out (answer may be a little late)
+    boundHit: boolean;                 // even the latest allowed age misses the bar
+    onTrack: boolean;                  // answer equals the plan's own age
+    // The answer is the plan's own age, but only with a different strategy: the
+    // answer's CPP/OAS start, melt amount or withdrawal order differs from the
+    // plan's AND the plan as entered misses the success bar. Always false when
+    // the answer moves the age (that is a change in its own right) and when
+    // there is no answer.
+    strategyChangeNeeded: boolean;
+    postRetirementSpend: number;       // the spending the age was solved at
+    cppOverrideHeld: boolean;          // a CPP Calculator estimate did not move with retirement age
+    pensionHeld: boolean;              // a shifted person's DB pension was held as entered
+    withdrawalStrategy: WithdrawalStrategy; // the answer age's winning order
+    strategyChanged: boolean;
+    rows: EarliestAgeRow[];            // trade-off table (empty unless found)
+    // Reported person's age when the 5th-percentile balance first hits ~0 after
+    // retiring (the worst 1-in-20 markets), or null when money lasts the plan.
+    badMarketsAge: number | null;
+}
+
 export interface MeltdownResult {
     // Which objective produced this result. Drives both the UI rendering and
-    // whether applyMeltdownRecommendation carries the spend over.
-    objective: 'estate' | 'max-spend';
+    // which fields applyMeltdownRecommendation carries over.
+    objective: OptimizerObjective;
 
     // For estate: false when nothing feasible beats the baseline. For max-spend:
     // false when the sustainable spend lands within one precision step of the
-    // current planned spend ("your plan is about right"). Either way the UI shows
-    // a muted "already looks good" state and hides Apply/Save.
+    // current planned spend ("your plan is about right"). For earliest-age:
+    // true when the answer moves the age, or when it keeps the plan's own age
+    // but needs a different strategy to clear the bar (see
+    // EarliestAgeResult.strategyChangeNeeded); false when the plan already works
+    // at its own age as entered, or when there is no answer (unreachable /
+    // unavailable). Either way the UI shows a muted state and hides Apply/Save.
     improved: boolean;
 
     baselineInputs: SimulationInputs;
@@ -116,11 +219,14 @@ export interface MeltdownResult {
     recommendedSuccessRate: number | null;
     // estate only: set when the deterministic winner was kept despite a Monte
     // Carlo success rate materially (>1pt) below baseline and no safer runner-up
-    // qualified. Always false in max-spend mode (the step-down IS the guard).
+    // qualified. Always false in max-spend and earliest-age modes (the MC
+    // step-down / step-up IS the guard).
     mcWarning: boolean;
 
     // Present only when objective === 'max-spend'.
     maxSpend?: MaxSpendResult;
+    // Present only when objective === 'earliest-age'.
+    earliestAge?: EarliestAgeResult;
 }
 
 // --- Tunables ------------------------------------------------------------
@@ -151,6 +257,14 @@ const STEPDOWN_PRECISION = 2500;      // refine the sustainable spend to this gr
 const MAX_STEPDOWN_PROBES = 16;       // cap on step-down MC probes (each a full runMonteCarlo)
 const STEPDOWN_WARM_MISS_MARGIN = 8;  // pp below target that marks a "badly missing" baseline
 const STEPDOWN_WARM_MIN_GAP = 20_000; // det-max must clear current spend by this to warm-start low
+
+// earliest-age tunables. The inner "is any strategy feasible at this age" check
+// runs once per probed age, so it uses max-spend's cheap grid (few melt steps,
+// no refinement): the melt amount mostly reorders taxes rather than deciding
+// whether the money lasts.
+export const EARLIEST_AGE_MELT_STEPS = MAXSPEND_MELT_STEPS;
+const MAX_AGE_STEPUP_PROBES = DEFAULT_MAX_AGE_STEPUP_PROBES;
+const DEPLETION_THRESHOLD = SHORTFALL_TOL; // p5 balance at/below this counts as "run out"
 
 // --- Candidate builders (exported for testing) ---------------------------
 
@@ -427,6 +541,10 @@ function personChoices(melt: number[], cpp: number[], oas: number[]): PersonChoi
     return out;
 }
 
+// cppOverrideStartAge is deliberately NOT a searched field: it records the age a
+// CPP Calculator estimate was worked out at, and the engine re-bases the
+// estimate to whichever cppStartAge is being tried. Moving it with cppStartAge
+// would pay the same amount at every start age and make 60 look best.
 function applyChoice(p: Person, c: PersonChoice): void {
     p.rrspMeltAmount = c.melt;
     p.rrspMeltStartAge = undefined; // engine defaults the start to retirementAge
@@ -483,8 +601,8 @@ function abortError(): DOMException {
 // --- Objective abstraction -----------------------------------------------
 // An objective bundles: how to score a candidate (and at what run cost), how to
 // compare two scored candidates, how dense the melt grid is, whether to refine,
-// and which household withdrawal strategies to search. Both modes reuse the same
-// coordinate-descent loop; only these knobs differ.
+// and which household withdrawal strategies to search. Every mode reuses the
+// same coordinate-descent loop; only these knobs differ.
 
 interface ScoreOutput {
     inputs: SimulationInputs;   // possibly spend-adjusted
@@ -496,10 +614,16 @@ interface ScoreOutput {
 }
 
 interface Objective {
-    mode: 'estate' | 'max-spend';
+    mode: OptimizerObjective;
     meltSteps: number;
     refine: boolean;
     strategies: WithdrawalStrategy[];
+    // When true, every scored candidate (feasible or not) may become the
+    // incumbent, and `cmp` must rank feasible ahead of infeasible. The search is
+    // then steered toward feasibility by the least-bad candidate instead of
+    // holding its starting point until something happens to clear — which
+    // matters when the question is "is ANY candidate feasible here".
+    rankInfeasible?: boolean;
     score: (inputs: SimulationInputs) => ScoreOutput;
     cmp: (a: Evaluated, b: Evaluated) => number;
 }
@@ -577,61 +701,117 @@ function maxSpendObjective(): Objective {
     };
 }
 
-// --- Main entry point ----------------------------------------------------
+// earliest-age inner check: "does ANY strategy keep the plan funded at this
+// age", answered by the same descent. Scored like estate mode (net estate, so
+// the age's recommended strategy is the best-estate one among those that work)
+// on max-spend's cheap grid. rankInfeasible keeps the descent moving toward
+// feasibility on an age where nothing clears yet: infeasible candidates rank by
+// total shortfall, smallest first, and always behind every feasible one — so
+// the winner is feasible exactly when some evaluated candidate is.
+function earliestAgeObjective(): Objective {
+    const cmp = (a: Evaluated, b: Evaluated): number => {
+        if (a.feasible !== b.feasible) return a.feasible ? -1 : 1;
+        const d = a.feasible
+            ? b.score - a.score                                        // estate desc
+            : a.metrics.totalShortfall - b.metrics.totalShortfall;     // shortfall asc
+        if (Math.abs(d) > TIE_EPS) return d < 0 ? -1 : 1;
+        if (a.ageDist !== b.ageDist) return a.ageDist - b.ageDist;
+        if (a.totalMelt !== b.totalMelt) return a.totalMelt - b.totalMelt;
+        if (a.strategyMatchesCurrent !== b.strategyMatchesCurrent) return a.strategyMatchesCurrent ? -1 : 1;
+        return 0;
+    };
+    return {
+        mode: 'earliest-age',
+        meltSteps: EARLIEST_AGE_MELT_STEPS,
+        refine: false,
+        strategies: ['tax-efficient', 'rrsp-first'],
+        rankInfeasible: true,
+        score: (inputs) => {
+            const results = runSimulation(inputs);
+            const metrics = computeSummaryMetrics(results, inputs, false);
+            return {
+                inputs,
+                score: metrics.netEstateValue,
+                results,
+                metrics,
+                feasible: metrics.totalShortfall <= SHORTFALL_TOL,
+                runs: 1,
+            };
+        },
+        cmp,
+    };
+}
 
-export async function optimizeMeltdown(
-    baseInputs: SimulationInputs,
-    options: OptimizeMeltdownOptions = {},
-): Promise<MeltdownResult> {
-    const considerCppOas = options.considerCppOas ?? true;
-    const mcIterations = options.mcIterations ?? 200;
-    const mcSuccessTarget = options.mcSuccessTarget ?? DEFAULT_MC_TARGET;
-    const { onProgress, signal } = options;
-    const objective = (options.objective ?? 'estate') === 'max-spend' ? maxSpendObjective() : estateObjective();
+function objectiveFor(mode: OptimizerObjective): Objective {
+    if (mode === 'max-spend') return maxSpendObjective();
+    if (mode === 'earliest-age') return earliestAgeObjective();
+    return estateObjective();
+}
 
-    if (signal?.aborted) throw abortError();
+// --- Shared strategy search ----------------------------------------------
+//
+// One coordinate-descent search over melt × CPP × OAS per person, once per
+// withdrawal strategy, scored by `objective`. Every mode runs this: estate and
+// max-spend once on the plan, earliest-age once per probed retirement age.
 
-    const base = structuredClone(baseInputs);
-    const currentStrategy: WithdrawalStrategy = base.withdrawalStrategy ?? 'tax-efficient';
+interface SearchGrids {
+    p1Melt: number[]; p1Cpp: number[]; p1Oas: number[];
+    p2Melt: number[]; p2Cpp: number[]; p2Oas: number[];
+}
 
-    // Baseline: the user's plan exactly as entered (its own rrspMeltStartAge and
-    // amount), scored nominally for an apples-to-apples comparison.
-    const baselineResults = runSimulation(base);
-    const baselineMetrics = computeSummaryMetrics(baselineResults, base, false);
-
-    // Per-person sub-grids (melt density comes from the objective).
-    const p1Melt = buildMeltGrid(base.person, objective.meltSteps);
-    const p1Cpp = buildCppCandidates(base.person, considerCppOas);
-    const p1Oas = buildOasCandidates(base.person, considerCppOas);
-
+function buildSearchGrids(base: SimulationInputs, objective: Objective, considerCppOas: boolean): SearchGrids {
     const hasSpouse = !!base.spouse;
-    const p2Melt = hasSpouse ? buildMeltGrid(base.spouse!, objective.meltSteps) : [];
-    const p2Cpp = hasSpouse ? buildCppCandidates(base.spouse!, considerCppOas) : [];
-    const p2Oas = hasSpouse ? buildOasCandidates(base.spouse!, considerCppOas) : [];
+    return {
+        p1Melt: buildMeltGrid(base.person, objective.meltSteps),
+        p1Cpp: buildCppCandidates(base.person, considerCppOas),
+        p1Oas: buildOasCandidates(base.person, considerCppOas),
+        p2Melt: hasSpouse ? buildMeltGrid(base.spouse!, objective.meltSteps) : [],
+        p2Cpp: hasSpouse ? buildCppCandidates(base.spouse!, considerCppOas) : [],
+        p2Oas: hasSpouse ? buildOasCandidates(base.spouse!, considerCppOas) : [],
+    };
+}
 
-    // Progress total estimate (deterministic sweeps × runs-per-candidate ×
-    // strategies + a Monte Carlo buffer). Snaps to `total` on finish.
-    const s1 = p1Melt.length * p1Cpp.length * p1Oas.length;
-    const s2 = hasSpouse ? p2Melt.length * p2Cpp.length * p2Oas.length : 0;
+// Engine runs a search is expected to take (progress estimate only).
+function estimateSearchRuns(base: SimulationInputs, objective: Objective, grids: SearchGrids): number {
+    const hasSpouse = !!base.spouse;
+    const s1 = grids.p1Melt.length * grids.p1Cpp.length * grids.p1Oas.length;
+    const s2 = hasSpouse ? grids.p2Melt.length * grids.p2Cpp.length * grids.p2Oas.length : 0;
     const REFINE_EST = objective.refine ? 3 : 0;
     const detPerStrategy = hasSpouse
         ? MAX_SWEEPS * (s1 + s2 + PATTERN_EST) + 2 * REFINE_EST
         : s1 + REFINE_EST;
     const runsPerCandidate = objective.mode === 'max-spend' ? AVG_BISECTION_RUNS : 1;
-    const detEstimate = detPerStrategy * objective.strategies.length * runsPerCandidate;
-    // Baseline MC (1) + up to MAX_STEPDOWN_PROBES step-down probes.
-    const mcBuffer = objective.mode === 'max-spend' ? 1 + MAX_STEPDOWN_PROBES : 4;
-    const total = detEstimate + mcBuffer;
+    return detPerStrategy * objective.strategies.length * runsPerCandidate;
+}
 
-    let done = 0;
+interface StrategySearchArgs {
+    base: SimulationInputs;
+    objective: Objective;
+    grids: SearchGrids;
+    signal?: AbortSignal;
+    // Called after each scored candidate with the engine runs it cost.
+    onRuns: (runs: number) => void;
+}
+
+interface StrategySearchOutcome {
+    // Best candidate by objective.cmp. Only feasible candidates qualify unless
+    // the objective sets rankInfeasible. Null when nothing qualified.
+    winner: Evaluated | null;
+    allEvals: Evaluated[];
+}
+
+async function runStrategySearch(args: StrategySearchArgs): Promise<StrategySearchOutcome> {
+    const { base, objective, grids, signal, onRuns } = args;
+    const { p1Melt, p1Cpp, p1Oas, p2Melt, p2Cpp, p2Oas } = grids;
+    const hasSpouse = !!base.spouse;
+    const currentStrategy: WithdrawalStrategy = base.withdrawalStrategy ?? 'tax-efficient';
+
     let sinceYield = 0;
     // Held in a ref so the closure below can update it without TS narrowing the
     // outer reads to `null` (control-flow analysis ignores closure writes).
     const bestRef: { current: Evaluated | null } = { current: null };
     const cache = new Map<string, Evaluated>();
     const allEvals: Evaluated[] = [];
-
-    const report = () => onProgress?.(Math.min(done, total), total);
 
     const evaluate = async (a: Assignment): Promise<Evaluated> => {
         const sig = signatureOf(a);
@@ -654,10 +834,10 @@ export async function optimizeMeltdown(
         };
         cache.set(sig, ev);
         allEvals.push(ev);
-        if (ev.feasible && (bestRef.current === null || objective.cmp(ev, bestRef.current) < 0)) bestRef.current = ev;
+        const eligible = ev.feasible || objective.rankInfeasible === true;
+        if (eligible && (bestRef.current === null || objective.cmp(ev, bestRef.current) < 0)) bestRef.current = ev;
 
-        done += sc.runs;
-        report();
+        onRuns(sc.runs);
         sinceYield += sc.runs;
         if (sinceYield >= BATCH) {
             sinceYield = 0;
@@ -784,7 +964,51 @@ export async function optimizeMeltdown(
         await runDescent(strategy);
     }
 
-    const winner = bestRef.current;
+    return { winner: bestRef.current, allEvals };
+}
+
+// --- Main entry point ----------------------------------------------------
+
+export async function optimizeMeltdown(
+    baseInputs: SimulationInputs,
+    options: OptimizeMeltdownOptions = {},
+): Promise<MeltdownResult> {
+    const mode = options.objective ?? 'estate';
+    if (mode === 'earliest-age') return solveEarliestAge(baseInputs, options);
+
+    const considerCppOas = options.considerCppOas ?? true;
+    const mcIterations = options.mcIterations ?? 200;
+    const mcSuccessTarget = options.mcSuccessTarget ?? DEFAULT_MC_TARGET;
+    const { onProgress, signal } = options;
+    const objective = objectiveFor(mode);
+
+    if (signal?.aborted) throw abortError();
+
+    const base = structuredClone(baseInputs);
+    const currentStrategy: WithdrawalStrategy = base.withdrawalStrategy ?? 'tax-efficient';
+
+    // Baseline: the user's plan exactly as entered (its own rrspMeltStartAge and
+    // amount), scored nominally for an apples-to-apples comparison.
+    const baselineResults = runSimulation(base);
+    const baselineMetrics = computeSummaryMetrics(baselineResults, base, false);
+
+    // Per-person sub-grids (melt density comes from the objective).
+    const grids = buildSearchGrids(base, objective, considerCppOas);
+
+    // Progress total estimate (deterministic sweeps × runs-per-candidate ×
+    // strategies + a Monte Carlo buffer). Snaps to `total` on finish.
+    const detEstimate = estimateSearchRuns(base, objective, grids);
+    // Baseline MC (1) + up to MAX_STEPDOWN_PROBES step-down probes.
+    const mcBuffer = objective.mode === 'max-spend' ? 1 + MAX_STEPDOWN_PROBES : 4;
+    const total = detEstimate + mcBuffer;
+
+    let done = 0;
+    const report = () => onProgress?.(Math.min(done, total), total);
+
+    const { winner, allEvals } = await runStrategySearch({
+        base, objective, grids, signal,
+        onRuns: (runs) => { done += runs; report(); },
+    });
 
     if (objective.mode === 'max-spend') {
         return finishMaxSpend({
@@ -1074,6 +1298,358 @@ function finishMaxSpend(args: FinishMaxSpendArgs): MeltdownResult {
     };
 }
 
+// --- Earliest-age solve ----------------------------------------------------
+//
+// Outer loop over a shared retirement-age shift Δ (see retirementAgeSearch.ts
+// for the pure planners it drives):
+//   1. Deterministic bisection: the earliest Δ at which ANY strategy funds the
+//      plan on average returns (inner check = runStrategySearch with
+//      earliestAgeObjective, cached per Δ).
+//   2. Monte Carlo step-up from there until the success bar clears.
+//   3. Trade-off rows around the answer, reusing the cached checks and MCs; the
+//      "could spend" column is a full max-spend run per row, so by default only
+//      the answer and its two neighbours get it.
+
+// Progress for a run made of phases whose costs are only roughly known: each
+// phase owns a slice of a fixed 0-1000 scale and reports a fraction of that
+// slice, so the bar never moves backwards and never sits at 100% early.
+function phasedProgress(onProgress?: (done: number, total: number) => void) {
+    const TOTAL = 1000;
+    let last = 0;
+    return {
+        at(from: number, to: number, fraction: number): void {
+            const f = Math.max(0, Math.min(1, fraction));
+            const v = Math.min(TOTAL - 1, Math.floor((from + (to - from) * f) * TOTAL));
+            if (v > last) {
+                last = v;
+                onProgress?.(v, TOTAL);
+            }
+        },
+        finish(): void {
+            onProgress?.(TOTAL, TOTAL);
+        },
+    };
+}
+
+const PROGRESS_DET_END = 0.2;   // deterministic bisection
+const PROGRESS_MC_END = 0.3;    // MC step-up; the trade-off rows take the rest
+const COULD_SPEND_WEIGHT = 5;   // a could-spend run vs one row's check + MC (progress only)
+const EXPECTED_STEPUP_PROBES = 3;
+
+interface AgeCheck {
+    delta: number;
+    // Best strategy at this age: the largest net estate among feasible
+    // candidates, or — when none is feasible — the smallest shortfall.
+    winner: Evaluated;
+    feasible: boolean;
+}
+
+function hasPension(p: Person): boolean {
+    return !!p.pension && (p.pension.annualAmount > 0 || (p.pension.bridgeAmount ?? 0) > 0);
+}
+
+async function solveEarliestAge(
+    baseInputs: SimulationInputs,
+    options: OptimizeMeltdownOptions,
+): Promise<MeltdownResult> {
+    const considerCppOas = options.considerCppOas ?? true;
+    const mcIterations = options.mcIterations ?? 200;
+    const mcSuccessTarget = options.mcSuccessTarget ?? DEFAULT_MC_TARGET;
+    const couldSpendScope = options.couldSpendRows ?? 'near';
+    const { signal } = options;
+    const progress = phasedProgress(options.onProgress);
+
+    if (signal?.aborted) throw abortError();
+
+    const base = structuredClone(baseInputs);
+    const currentStrategy: WithdrawalStrategy = base.withdrawalStrategy ?? 'tax-efficient';
+    const baselineResults = runSimulation(base);
+    const baselineMetrics = computeSummaryMetrics(baselineResults, base, false);
+
+    const runMc = async (inputs: SimulationInputs): Promise<MonteCarloResult> => {
+        if (signal?.aborted) throw abortError();
+        const mc = runMonteCarlo(inputs, mcIterations);
+        await yieldToEventLoop();
+        if (signal?.aborted) throw abortError();
+        return mc;
+    };
+
+    const shift = planAgeShift(base);
+    const reported = personOf(base, shift.reportedWho);
+    const pensionHeld = shift.shifted.some(w => hasPension(personOf(base, w)));
+    const cppOverrideHeld = shift.shifted.some(w => personOf(base, w).cppAnnualOverride != null);
+
+    const personSummary = (who: Who, answerInputs: SimulationInputs | null): EarliestAgePerson => {
+        const p = personOf(base, who);
+        const a = answerInputs ? personOf(answerInputs, who) : null;
+        return {
+            who,
+            label: who === 'spouse' ? 'Spouse' : 'You',
+            currentAge: p.age,
+            planRetirementAge: p.retirementAge,
+            answerRetirementAge: a ? a.retirementAge : null,
+            planCppYears: p.cppContributedYears,
+            answerCppYears: a ? a.cppContributedYears : null,
+        };
+    };
+
+    // No answer to give: nothing to move, or no age up to the cap is fundable.
+    // Returns the plan unchanged (improved: false hides Apply/Save).
+    const noAnswer = async (status: 'unreachable' | 'unavailable'): Promise<MeltdownResult> => {
+        const baselineMonteCarlo = await runMc(base);
+        progress.finish();
+        return {
+            objective: 'earliest-age',
+            improved: false,
+            baselineInputs: base,
+            recommendedInputs: structuredClone(base),
+            baselineResults,
+            recommendedResults: baselineResults,
+            baselineMetrics,
+            recommendedMetrics: baselineMetrics,
+            baselineMonteCarlo,
+            recommendedMonteCarlo: baselineMonteCarlo,
+            decisions: [],
+            netEstateDelta: 0,
+            lifetimeTaxDelta: 0,
+            baselineSuccessRate: baselineMonteCarlo.successRate,
+            recommendedSuccessRate: baselineMonteCarlo.successRate,
+            mcWarning: false,
+            earliestAge: {
+                status,
+                unavailableReason: shift.unavailableReason,
+                reportedWho: shift.reportedWho,
+                people: shift.shifted.map(w => personSummary(w, null)),
+                currentAge: reported.age,
+                planAge: reported.retirementAge,
+                answerAge: null,
+                deltaYears: null,
+                deterministicAge: null,
+                minAge: reported.retirementAge + shift.minDelta,
+                maxAge: reported.retirementAge + shift.maxDelta,
+                retiresNow: false,
+                atLowerBound: false,
+                mcSuccessTarget,
+                achievedSuccessRate: null,
+                stepUpCapHit: false,
+                boundHit: false,
+                onTrack: false,
+                strategyChangeNeeded: false,
+                postRetirementSpend: base.postRetirementSpend,
+                cppOverrideHeld,
+                pensionHeld,
+                withdrawalStrategy: currentStrategy,
+                strategyChanged: false,
+                rows: [],
+                badMarketsAge: null,
+            },
+        };
+    };
+
+    if (!shift.available) return noAnswer('unavailable');
+
+    // --- Inner check, cached per Δ ---
+    const objective = earliestAgeObjective();
+    const checks = new Map<number, AgeCheck>();
+    const checkAt = async (delta: number, onFraction?: (f: number) => void): Promise<AgeCheck> => {
+        const hit = checks.get(delta);
+        if (hit) return hit;
+        const shifted = applyRetirementShift(base, shift, delta).inputs;
+        const grids = buildSearchGrids(shifted, objective, considerCppOas);
+        const est = Math.max(1, estimateSearchRuns(shifted, objective, grids));
+        let runs = 0;
+        const { winner } = await runStrategySearch({
+            base: shifted, objective, grids, signal,
+            onRuns: (n) => { runs += n; onFraction?.(Math.min(1, runs / est)); },
+        });
+        // rankInfeasible makes every scored candidate eligible, and the grids are
+        // never empty, so a winner always exists.
+        if (!winner) throw new Error('earliest-age inner check scored no candidates');
+        const check: AgeCheck = { delta, winner, feasible: winner.feasible };
+        checks.set(delta, check);
+        return check;
+    };
+
+    // --- 1. Deterministic bisection over Δ ---
+    const rangeSize = shift.maxDelta - shift.minDelta + 1;
+    const estDetChecks = Math.ceil(Math.log2(rangeSize + 1)) + 1;
+    const bisectPlan = { minDelta: shift.minDelta, maxDelta: shift.maxDelta, start: 0 };
+    const detProbes: AgeFeasibilityProbe[] = [];
+    let bisect = planAgeBisection(bisectPlan, detProbes);
+    while (bisect.kind === 'probe') {
+        const n = detProbes.length;
+        const c = await checkAt(bisect.delta, f => progress.at(0, PROGRESS_DET_END, (n + f) / estDetChecks));
+        detProbes.push({ delta: bisect.delta, feasible: c.feasible });
+        bisect = planAgeBisection(bisectPlan, detProbes);
+    }
+    if (bisect.kind === 'unreachable') return noAnswer('unreachable');
+    const detDelta = bisect.delta;
+    progress.at(0, PROGRESS_DET_END, 1);
+
+    // --- 2. Monte Carlo step-up from the deterministic answer ---
+    const mcByDelta = new Map<number, MonteCarloResult>();
+    const mcAt = async (delta: number): Promise<MonteCarloResult> => {
+        const hit = mcByDelta.get(delta);
+        if (hit) return hit;
+        const c = await checkAt(delta);
+        const mc = await runMc(c.winner.inputs);
+        mcByDelta.set(delta, mc);
+        return mc;
+    };
+
+    const stepPlan = { target: mcSuccessTarget, start: detDelta, max: shift.maxDelta, maxProbes: MAX_AGE_STEPUP_PROBES };
+    const mcProbes: AgeProbeResult[] = [];
+    let step: AgeStepUpAction = planAgeStepUp(stepPlan, mcProbes);
+    while (step.kind === 'probe') {
+        const mc = await mcAt(step.age);
+        mcProbes.push({ age: step.age, successRate: mc.successRate });
+        progress.at(PROGRESS_DET_END, PROGRESS_MC_END, mcProbes.length / EXPECTED_STEPUP_PROBES);
+        step = planAgeStepUp(stepPlan, mcProbes);
+    }
+    const answerDelta = step.age;
+    const stepUpCapHit = step.kind === 'capHit';
+    const boundHit = step.kind === 'boundHit';
+
+    const baselineMonteCarlo = await runMc(base);
+
+    // --- 3. Trade-off rows ---
+    const rowDeltas = tradeoffDeltas(answerDelta, shift.minDelta, shift.maxDelta);
+    const spendDeltas = new Set(
+        couldSpendScope === 'none' ? [] : couldSpendDeltas(rowDeltas, answerDelta, couldSpendScope),
+    );
+    const totalUnits = rowDeltas.length + spendDeltas.size * COULD_SPEND_WEIGHT;
+    let unitsDone = 0;
+    const rowProgress = (extra: number) => progress.at(PROGRESS_MC_END, 1, (unitsDone + extra) / totalUnits);
+
+    const otherWho = shift.shifted.find(w => w !== shift.reportedWho);
+    const rows: EarliestAgeRow[] = [];
+    for (const delta of rowDeltas) {
+        const c = await checkAt(delta);
+        const mc = await mcAt(delta);
+        unitsDone += 1;
+        rowProgress(0);
+        const clears = mc.successRate >= mcSuccessTarget;
+
+        let couldSpend: number | null = null;
+        if (spendDeltas.has(delta)) {
+            // Phase 2's machinery as-is: the max-spend search + MC step-down on the
+            // plan moved to this age (strategy searched afresh, spend free).
+            const atAge = applyRetirementShift(base, shift, delta).inputs;
+            const ms = await optimizeMeltdown(atAge, {
+                objective: 'max-spend', considerCppOas, mcIterations, mcSuccessTarget, signal,
+                onProgress: (d, t) => rowProgress(COULD_SPEND_WEIGHT * (t > 0 ? d / t : 0)),
+            });
+            const m = ms.maxSpend!;
+            couldSpend = m.stepDownCapHit
+                ? null // no spend cleared the bar — nothing honest to show
+                : reconcileCouldSpend(m.sustainableSpend, clears, base.postRetirementSpend, SPEND_PRECISION);
+            unitsDone += COULD_SPEND_WEIGHT;
+            rowProgress(0);
+        }
+
+        rows.push({
+            delta,
+            retirementAge: reported.retirementAge + delta,
+            otherRetirementAge: otherWho ? personOf(base, otherWho).retirementAge + delta : undefined,
+            successRate: mc.successRate,
+            clearsTarget: clears,
+            deterministicFeasible: c.feasible,
+            netEstate: c.winner.metrics.netEstateValue,
+            lifetimeTax: c.winner.metrics.lifetimeTaxPaid,
+            couldSpend,
+            isAnswer: delta === answerDelta,
+            isPlan: delta === 0,
+        });
+    }
+
+    // --- Result assembly ---
+    const answerCheck = await checkAt(answerDelta); // cached: the step-up probed it
+    const answerMc = await mcAt(answerDelta);       // cached likewise
+    const winner = answerCheck.winner;
+    const recommendedInputs = winner.inputs;
+    const answerAge = reported.retirementAge + answerDelta;
+
+    // Bad-markets line: the percentile rows run on the primary person's clock
+    // (age = primary age today + years elapsed). Search from the reported
+    // person's retirement onward, then report on the reported person's clock.
+    const yearsToRetirement = answerAge - reported.age;
+    const depletionPrimaryAge = firstDepletionAge(
+        answerMc.percentiles, base.person.age + yearsToRetirement, DEPLETION_THRESHOLD,
+    );
+    const badMarketsAge = depletionPrimaryAge === null
+        ? null
+        : depletionPrimaryAge - base.person.age + reported.age;
+
+    const decisions: PersonMeltdownDecision[] = [
+        buildDecision('person', 'You', base.person, winner.a.person, recommendedInputs.person.retirementAge),
+    ];
+    if (base.spouse && winner.a.spouse && recommendedInputs.spouse) {
+        decisions.push(buildDecision(
+            'spouse', 'Spouse', base.spouse, winner.a.spouse, recommendedInputs.spouse.retirementAge,
+        ));
+    }
+
+    const onTrack = answerDelta === 0;
+    const winningStrategy = winner.a.strategy;
+    // At the plan's own age there is still something to apply when the plan
+    // only clears the bar with a different strategy. When the plan as entered
+    // already clears it, the search's pick is a preference, not a fix: stay on
+    // track with nothing to apply.
+    const strategyChangeNeeded = isStrategyChangeNeeded(
+        answerDelta,
+        strategyDiffersFromPlan(decisions, currentStrategy, winningStrategy),
+        baselineMonteCarlo.successRate,
+        mcSuccessTarget,
+    );
+    progress.finish();
+
+    return {
+        objective: 'earliest-age',
+        improved: !onTrack || strategyChangeNeeded,
+        baselineInputs: base,
+        recommendedInputs,
+        baselineResults,
+        recommendedResults: winner.results,
+        baselineMetrics,
+        recommendedMetrics: winner.metrics,
+        baselineMonteCarlo,
+        recommendedMonteCarlo: answerMc,
+        decisions,
+        netEstateDelta: winner.metrics.netEstateValue - baselineMetrics.netEstateValue,
+        lifetimeTaxDelta: winner.metrics.lifetimeTaxPaid - baselineMetrics.lifetimeTaxPaid,
+        baselineSuccessRate: baselineMonteCarlo.successRate,
+        recommendedSuccessRate: answerMc.successRate,
+        mcWarning: false, // the MC step-up is the guard in earliest-age mode
+        earliestAge: {
+            status: 'found',
+            reportedWho: shift.reportedWho,
+            people: shift.shifted.map(w => personSummary(w, recommendedInputs)),
+            currentAge: reported.age,
+            planAge: reported.retirementAge,
+            answerAge,
+            deltaYears: answerDelta,
+            deterministicAge: reported.retirementAge + detDelta,
+            minAge: reported.retirementAge + shift.minDelta,
+            maxAge: reported.retirementAge + shift.maxDelta,
+            retiresNow: answerAge === reported.age,
+            atLowerBound: answerDelta === shift.minDelta,
+            mcSuccessTarget,
+            achievedSuccessRate: answerMc.successRate,
+            stepUpCapHit,
+            boundHit,
+            onTrack,
+            strategyChangeNeeded,
+            postRetirementSpend: base.postRetirementSpend,
+            cppOverrideHeld,
+            pensionHeld,
+            withdrawalStrategy: winningStrategy,
+            strategyChanged: winningStrategy !== currentStrategy,
+            rows,
+            badMarketsAge,
+        },
+    };
+}
+
 // Merge only the fields the optimizer searched from `recommended` onto a fresh
 // clone of `current`. Everything else — balances, any edits made while the
 // optimizer was open — comes from `current`, so applying a stale recommendation
@@ -1085,16 +1661,19 @@ function finishMaxSpend(args: FinishMaxSpendArgs): MeltdownResult {
 // carried over (a recommendation whose winning order is never applied would be
 // displayed and then silently dropped). postRetirementSpend is max-spend's alone
 // — the estate search leaves spending exactly as planned — so an estate apply
-// still never touches it.
+// still never touches it. earliest-age additionally owns the retirement ages and
+// the CPP contribution years that follow them (an unmoved spouse's values come
+// across unchanged), and also leaves spending alone.
 export function applyMeltdownRecommendation(
     current: SimulationInputs,
     recommended: SimulationInputs,
-    objective: 'estate' | 'max-spend' = 'estate',
+    objective: OptimizerObjective = 'estate',
 ): SimulationInputs {
     const next = structuredClone(current);
-    copySearchedFields(next.person, recommended.person);
+    const withAges = objective === 'earliest-age';
+    copySearchedFields(next.person, recommended.person, withAges);
     if (next.spouse && recommended.spouse) {
-        copySearchedFields(next.spouse, recommended.spouse);
+        copySearchedFields(next.spouse, recommended.spouse, withAges);
     }
     // A recommendation always carries a strategy; the guard only keeps a
     // hand-built payload without one from erasing the user's setting.
@@ -1107,25 +1686,49 @@ export function applyMeltdownRecommendation(
     return next;
 }
 
-function copySearchedFields(target: Person, source: Person): void {
+// cppAnnualOverride / cppOverrideStartAge stay as `current` has them (see
+// applyChoice): applying a new cppStartAge keeps the estimate's base age.
+function copySearchedFields(target: Person, source: Person, withRetirementAge: boolean): void {
     target.rrspMeltAmount = source.rrspMeltAmount;
     target.rrspMeltStartAge = source.rrspMeltStartAge;
     target.cppStartAge = source.cppStartAge;
     target.oasStartAge = source.oasStartAge;
+    if (withRetirementAge) {
+        target.retirementAge = source.retirementAge;
+        target.cppContributedYears = source.cppContributedYears;
+    }
 }
 
+// Whether a recommendation changes any searched strategy field vs the plan:
+// a CPP or OAS start age, the melt amount (for someone with an RRSP — without
+// one the melt does nothing), or the household withdrawal order. These are
+// exactly the changes describeStrategyChanges puts into words, so "differs"
+// here and a non-empty strategy line there always agree.
+export function strategyDiffersFromPlan(
+    decisions: PersonMeltdownDecision[],
+    currentStrategy: WithdrawalStrategy,
+    suggestedStrategy: WithdrawalStrategy,
+): boolean {
+    if (suggestedStrategy !== currentStrategy) return true;
+    return decisions.some(d =>
+        d.cppChanged || d.oasChanged || (d.hasRrsp && d.meltAmount !== d.originalMeltAmount));
+}
+
+// `retirementAge` is the age the recommendation retires at — the plan's own
+// unless the earliest-age search moved it. The melt starts there.
 function buildDecision(
     who: 'person' | 'spouse',
     label: string,
     base: Person,
     choice: PersonChoice,
+    retirementAge: number = base.retirementAge,
 ): PersonMeltdownDecision {
     return {
         who,
         label,
         hasRrsp: base.rrsp.balance > 0,
         meltAmount: choice.melt,
-        meltStartAge: Math.max(base.retirementAge, base.age),
+        meltStartAge: Math.max(retirementAge, base.age),
         meltEndAge: 71,
         originalMeltAmount: base.rrspMeltAmount ?? 0,
         originalMeltStartAge: Math.max(base.rrspMeltStartAge || base.retirementAge, base.age),

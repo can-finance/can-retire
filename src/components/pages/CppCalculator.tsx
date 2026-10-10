@@ -298,12 +298,15 @@ export function CppCalculator() {
     const applyToPlan = (target: 'person' | 'spouse') => {
         const plan = savedPlan ?? INITIAL_INPUTS;
         const annual = Math.round(result.annualBenefit);
+        // The amount is for this start age; recording it lets the plan adjust the
+        // amount if its CPP start age is changed later (cppOverrideStartAge).
+        const cpp = { cppAnnualOverride: annual, cppStartAge: startAge, cppOverrideStartAge: startAge };
         const updated: SimulationInputs = { ...plan };
         if (target === 'person') {
-            updated.person = { ...plan.person, cppAnnualOverride: annual, cppStartAge: startAge };
+            updated.person = { ...plan.person, ...cpp };
         } else {
             if (!plan.spouse) return;
-            updated.spouse = { ...plan.spouse, cppAnnualOverride: annual, cppStartAge: startAge };
+            updated.spouse = { ...plan.spouse, ...cpp };
         }
         window.localStorage.setItem(SIM_KEY, JSON.stringify(updated));
         setAppliedTo(target === 'person' ? 'You' : 'Spouse');

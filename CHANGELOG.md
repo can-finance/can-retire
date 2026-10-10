@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **"Retire as early as possible" in the optimizer.** A third goal finds the
+  earliest age your plan stays funded at your current spending, held to the same
+  75/85/95% confidence target as "Spend the most in retirement". It also tries
+  CPP/OAS start ages, RRSP melt amounts and withdrawal orders at each age, and
+  moves your CPP contribution years with your retirement age (a CPP Calculator
+  estimate and a workplace pension are held as entered, and the result says so).
+  A table shows the odds, estate, lifetime tax and how much you could spend for
+  retiring a few years earlier or later. Apply moves your retirement age in the
+  plan; your spending stays the same. If your planned age already works but only
+  with a different CPP/OAS start, RRSP melt or withdrawal order, the result says
+  so and Apply makes those changes.
+- **New "When can I retire?" page** at
+  [craptool.ca/when-can-i-retire](https://craptool.ca/when-can-i-retire/). Enter
+  your age, province, income, savings, spending, any workplace pension and an
+  optional spouse, pick how sure you want to be, and it finds the earliest age
+  your savings can support, with the same odds table as the optimizer. "See the
+  full plan" opens the result as a new plan in the planner. It is listed first
+  in a new **Tools** menu in the header, next to the RRSP withdrawal strategy
+  page and the CPP calculator.
+
 ### Fixed
 - **Ages with decimals are now rounded to whole years.** The plan works one year
   at a time, so an age like 48.5 could quietly break it: one-time expenses and
@@ -14,6 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never worked out. Age fields now take whole numbers only. **Projections change
   for plans saved with a decimal age**, since they now include those expenses and
   that final tax.
+- **A CPP Calculator estimate now adjusts when you change your CPP start age.**
+  The estimate is worked out for one start age. If you later started CPP earlier
+  or later in the plan, the plan kept paying the same yearly amount, so starting
+  at 60 looked like five extra years of the same cheque. Now it uses the same
+  early/late rule as the calculator: 0.6% less for each month before 65, 0.7% more
+  for each month after, up to 70. The plan shows the adjusted amount and the age
+  it was adjusted from. The optimizer had the same problem and recommended CPP at
+  60 for every plan with an estimate; it now weighs each start age properly.
+  **Projections change for plans with a CPP Calculator estimate once their CPP
+  start age is changed, and optimizer recommendations change for any plan with
+  an estimate.** Plans saved before this fix treat their current CPP start age as
+  the age the estimate was worked out for, so they show the same numbers until
+  you change it. If you changed the start age after applying an estimate, apply
+  it again from the CPP Calculator to get the adjusted amount.
 
 ### Changed
 - **Plainer wording throughout.** Setup, tooltips, the optimizer, the year-by-year

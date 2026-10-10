@@ -1,10 +1,20 @@
 import { createDefaultPerson, createNonRegAccount } from '../../utils/inputSanitizer';
-import type { NonRegisteredAccount, Person, SimulationInputs } from '../../engine/types';
+import type { DBPension, NonRegisteredAccount, Person, SimulationInputs } from '../../engine/types';
+
+/** A workplace (defined-benefit) pension as a quick form asks for it. */
+export interface SimplePension {
+    annualAmount: number; // per year, in today's dollars
+    startAge: number;
+}
 
 /**
  * The handful of answers the Quick start path collects. Everything else in the
  * simulation is carried through from the draft (CPP/OAS ages, melt amounts,
  * asset mix, return rates, inflation, strategy toggles, one-time events, …).
+ *
+ * The optional fields at the end are extras the onboarding form doesn't ask for
+ * but the /when-can-i-retire/ page does. Left out (undefined), each keeps
+ * whatever the draft already has, so onboarding is unaffected by them.
  */
 export interface SimpleAnswers {
     age: number;
@@ -22,6 +32,12 @@ export interface SimpleAnswers {
     spouseNonReg: number;
     preRetirementSpend: number;
     postRetirementSpend: number;
+    /** The spouse's retirement age. Undefined keeps the draft spouse's. */
+    spouseRetirementAge?: number;
+    /** Workplace pension: undefined keeps the draft's, null (or a $0 amount) removes it. */
+    pension?: SimplePension | null;
+    /** The spouse's workplace pension, same rules as `pension`. */
+    spousePension?: SimplePension | null;
 }
 
 const sumNonReg = (person: Person): number =>
@@ -93,6 +109,25 @@ interface MergeOpts {
     rrsp: number;
     tfsa: number;
     nonRegAggregate: number;
+    pension?: SimplePension | null;
+}
+
+/**
+ * Merge a quick-form pension onto the person's existing one. Undefined = the
+ * form didn't ask, keep what's there. Null or a non-positive amount = no
+ * pension. Otherwise only the amount and start age are overwritten; whether it
+ * rises with inflation and any bridge benefit come from the existing pension
+ * (a new pension rises with inflation, the sanitizer's default).
+ */
+function mergePension(existing: DBPension | undefined, answer: SimplePension | null | undefined): DBPension | undefined {
+    if (answer === undefined) return existing;
+    if (answer === null || !(answer.annualAmount > 0)) return undefined;
+    return {
+        ...existing,
+        annualAmount: answer.annualAmount,
+        startAge: Math.round(answer.startAge),
+        indexedToInflation: existing?.indexedToInflation ?? true,
+    };
 }
 
 /**
@@ -117,6 +152,8 @@ function mergePerson(base: Person, opts: MergeOpts): Person {
         lifeExpectancy,
         rrspMeltStartAge,
         currentIncome: opts.income,
+        // Only touched when the form asked — onboarding's output stays as it was.
+        ...(opts.pension !== undefined ? { pension: mergePension(base.pension, opts.pension) } : {}),
         rrsp: { ...base.rrsp, balance: opts.rrsp },
         tfsa: { ...base.tfsa, balance: opts.tfsa },
         nonRegisteredAccounts: mergeNonReg(base.nonRegisteredAccounts, opts.nonRegAggregate),
@@ -138,6 +175,7 @@ export function mergeSimpleAnswers(draft: SimulationInputs, a: SimpleAnswers): S
         rrsp: a.rrsp,
         tfsa: a.tfsa,
         nonRegAggregate: a.nonReg,
+        pension: a.pension,
     });
 
     let spouse: Person | undefined;
@@ -145,12 +183,14 @@ export function mergeSimpleAnswers(draft: SimulationInputs, a: SimpleAnswers): S
         const spouseBase = draft.spouse ?? createDefaultPerson(true);
         spouse = mergePerson(spouseBase, {
             age: a.spouseAge,
-            // The quick form doesn't collect the spouse's retirement age — keep it.
-            retirementAge: spouseBase.retirementAge,
+            // The onboarding form doesn't collect the spouse's retirement age —
+            // keep it unless the caller supplied one.
+            retirementAge: a.spouseRetirementAge ?? spouseBase.retirementAge,
             income: a.spouseIncome,
             rrsp: a.spouseRrsp,
             tfsa: a.spouseTfsa,
             nonRegAggregate: a.spouseNonReg,
+            pension: a.spousePension,
         });
     }
 

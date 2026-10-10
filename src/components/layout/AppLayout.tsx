@@ -3,11 +3,12 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 import { Dialog, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
 import { clearAllAppData } from '../../utils/clearAllData';
 
-export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy';
+export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy' | 'when-can-i-retire';
 
 // Single source for the tool pages, shared by the header "Tools" menu and the
 // footer links. Adding a tool is one entry here. Order is display order.
 const TOOLS: { id: PageId; label: string; href: string; description: string }[] = [
+    { id: 'when-can-i-retire', label: 'When can I retire?', href: '/when-can-i-retire/', description: 'Find the earliest age your savings can support' },
     { id: 'rrsp-withdrawal-strategy', label: 'RRSP withdrawal strategy', href: '/rrsp-withdrawal-strategy/', description: 'Plan when and how much to draw from your RRSP' },
     { id: 'cpp-calculator', label: 'CPP calculator', href: '/cpp-calculator/', description: 'Estimate your CPP pension from your earnings' },
 ];
@@ -190,7 +191,8 @@ export function BrandLockup({
 
 export function AppLayout({ children, activePage, onLaunchOnboarding }: AppLayoutProps) {
     // AppLayout is shared by the dashboard SPA and the standalone MPA pages
-    // (/cpp-calculator/, /how-it-works/, /rrsp-withdrawal-strategy/), so this
+    // (/cpp-calculator/, /how-it-works/, /rrsp-withdrawal-strategy/,
+    // /when-can-i-retire/), so this
     // control — and the wipe it triggers — must work from any of them.
     const [confirmClear, setConfirmClear] = useState(false);
 

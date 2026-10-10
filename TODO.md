@@ -16,7 +16,12 @@ step-down (gap-scaled steps, baseline-rate warm start, upward search so a low
 warm start can't understate the answer), with the planner logic kept pure and
 unit-tested MC-free.
 
-- **Phase 3 — "When can I retire?" (next up).** See spec below.
+- **Phase 3 — "When can I retire?" (built 2026-10-09, unreleased).** Optimizer
+  mode + /when-can-i-retire/ page. Follow-ups: MC-test the top few feasible
+  strategies per age instead of only the estate-best one (on the default couple
+  this may cost a year — weak evidence, best-of-many MC noise); name the plan
+  the landing page hands off ("Shared plan" today, via the #start= import);
+  confirm the Cloudflare analytics beacon doesn't record the #start= hash.
 - **Phase 3b — "How much do I need to retire?"** See spec below.
 - **Phase 4 — the engine phase.** See spec below.
 

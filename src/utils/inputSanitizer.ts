@@ -216,20 +216,37 @@ function sanitizePension(raw: unknown, resolvedRetirementAge: number): DBPension
     };
 }
 
+// CPP can start from 60 to 70; the CPP Calculator only produces ages in that range.
+const clampCppAge = (v: number): number => Math.min(70, Math.max(60, v));
+
 function sanitizePerson(raw: unknown, defaults: Person, legacyRebalance?: boolean): Person {
     const r = isObject(raw) ? raw : {};
     const rrsp = isObject(r.rrsp) ? r.rrsp : {};
     const tfsa = isObject(r.tfsa) ? r.tfsa : {};
     const retirementAge = age(r.retirementAge, defaults.retirementAge);
+    const cppStartAge = age(r.cppStartAge, defaults.cppStartAge);
+
+    // A CPP Calculator estimate is the amount for the start age it was worked
+    // out at (cppOverrideStartAge); the engine re-bases it when cppStartAge
+    // moves. Payloads from before that field existed get their saved
+    // cppStartAge — the age the calculator wrote alongside the amount — so they
+    // project exactly as before until the start age changes. That makes this a
+    // structural migration (absent field = older payload), so no schemaVersion
+    // is needed. Without an estimate the age means nothing and is dropped.
+    const cppAnnualOverride = optNum(r.cppAnnualOverride, undefined);
+    const cppOverrideStartAge = cppAnnualOverride === undefined
+        ? undefined
+        : clampCppAge(age(r.cppOverrideStartAge, cppStartAge));
 
     return {
         age: age(r.age, defaults.age),
         retirementAge,
         lifeExpectancy: age(r.lifeExpectancy, defaults.lifeExpectancy),
         currentIncome: num(r.currentIncome, defaults.currentIncome),
-        cppStartAge: age(r.cppStartAge, defaults.cppStartAge),
+        cppStartAge,
         cppContributedYears: num(r.cppContributedYears, defaults.cppContributedYears),
-        cppAnnualOverride: optNum(r.cppAnnualOverride, undefined),
+        cppAnnualOverride,
+        cppOverrideStartAge,
         oasStartAge: age(r.oasStartAge, defaults.oasStartAge),
         rrspMeltStartAge: optAge(r.rrspMeltStartAge, defaults.rrspMeltStartAge),
         rrspMeltAmount: optNum(r.rrspMeltAmount, defaults.rrspMeltAmount),

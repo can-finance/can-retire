@@ -4,7 +4,8 @@ import type { ComparisonRun, BandMode } from '../../utils/comparison';
 import { buildComparisonChartData } from '../../utils/comparison';
 import { computeSummaryMetrics } from '../../utils/summaryMetrics';
 import { optimizeMeltdown } from '../../utils/meltdownOptimizer';
-import type { MeltdownResult, PersonMeltdownDecision } from '../../utils/meltdownOptimizer';
+import type { MeltdownResult, OptimizerObjective, PersonMeltdownDecision } from '../../utils/meltdownOptimizer';
+import { planAgeShift } from '../../utils/retirementAgeSearch';
 import { PLAN_COLORS } from '../../constants/chartColors';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { Toggle } from '../ui/Toggle';
@@ -13,6 +14,10 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 import { ComparisonChart } from '../charts/ComparisonChart';
 import { ComparisonSummaryCards } from '../comparison/ComparisonSummaryCards';
 import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
+import { EarliestAgeHeadline } from './EarliestAgeHeadline';
+import { EarliestAgeTable } from './EarliestAgeTable';
+import { describeStrategyChanges } from './strategySummary';
+import { SUCCESS_TARGETS, DEFAULT_SUCCESS_TARGET } from './successTargets';
 
 interface MeltdownOptimizerViewProps {
     liveInputs: SimulationInputs;
@@ -23,10 +28,10 @@ interface MeltdownOptimizerViewProps {
     onToggleInflation: (v: boolean) => void;
     onExit: () => void;
     onSavePlan: (name: string, inputs: SimulationInputs) => string;
-    onApply: (recommended: SimulationInputs, objective: 'estate' | 'max-spend') => void;
+    onApply: (recommended: SimulationInputs, objective: OptimizerObjective) => void;
 }
 
-type Objective = 'estate' | 'max-spend';
+type Objective = OptimizerObjective;
 
 /*
  * What the search was solving for. Used both as the comparison run's label and
@@ -34,7 +39,9 @@ type Objective = 'estate' | 'max-spend';
  * chart legend and the plan list can never call the same scenario two things.
  */
 function objectiveLabel(objective: Objective): string {
-    return objective === 'max-spend' ? 'Maximize Spend' : 'Maximize Estate';
+    if (objective === 'max-spend') return 'Maximize Spend';
+    if (objective === 'earliest-age') return 'Earliest Retirement';
+    return 'Maximize Estate';
 }
 
 // Human labels for the household withdrawal strategy. Matches
@@ -44,12 +51,6 @@ function objectiveLabel(objective: Objective): string {
 function strategyLabel(s: 'tax-efficient' | 'rrsp-first' | undefined): string {
     return s === 'rrsp-first' ? 'RRSP first' : 'RRSP last';
 }
-
-const SUCCESS_TARGETS: { value: number; label: string; blurb: string }[] = [
-    { value: 75, label: 'Aggressive', blurb: 'Spend more, accept more risk of falling short.' },
-    { value: 85, label: 'Balanced', blurb: 'A sensible middle ground (recommended).' },
-    { value: 95, label: 'Conservative', blurb: 'Spend less, stay funded in almost every scenario.' },
-];
 
 type Phase =
     | { kind: 'setup' }
@@ -80,13 +81,19 @@ export function MeltdownOptimizerView({
 }: MeltdownOptimizerViewProps) {
     const [phase, setPhase] = useState<Phase>({ kind: 'setup' });
     const [objective, setObjective] = useState<Objective>('estate');
-    const [mcSuccessTarget, setMcSuccessTarget] = useState(85);
+    const [mcSuccessTarget, setMcSuccessTarget] = useState(DEFAULT_SUCCESS_TARGET);
     const [considerCppOas, setConsiderCppOas] = useState(true);
     const [bandMode, setBandMode] = useState<BandMode>('p25p75');
     const [savedName, setSavedName] = useState<string | null>(null);
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [applied, setApplied] = useState(false);
     const abortRef = useRef<AbortController | null>(null);
+
+    // The earliest-age search moves the retirement age of whoever is still
+    // working — with nobody working there is nothing to move.
+    const ageShift = useMemo(() => planAgeShift(liveInputs), [liveInputs]);
+    const earliestUnavailable = !ageShift.available;
+    const runDisabled = objective === 'earliest-age' && earliestUnavailable;
 
     // Abort any in-flight search on unmount.
     useEffect(() => () => abortRef.current?.abort(), []);
@@ -191,7 +198,7 @@ export function MeltdownOptimizerView({
 
                     <div className="mt-6">
                         <p className="text-sm font-semibold text-slate-800">What should the optimizer aim for?</p>
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
                             <ObjectiveCard
                                 selected={objective === 'estate'}
                                 onSelect={() => setObjective('estate')}
@@ -206,12 +213,26 @@ export function MeltdownOptimizerView({
                                 sub="Finds the most you can spend each year without running out."
                                 detail="Changes the same settings, plus your yearly spending."
                             />
+                            <ObjectiveCard
+                                selected={objective === 'earliest-age'}
+                                onSelect={() => setObjective('earliest-age')}
+                                disabled={earliestUnavailable}
+                                title="Retire as early as possible"
+                                sub="Finds the earliest age your plan stays funded at your current spending."
+                                detail={earliestUnavailable
+                                    ? (ageShift.unavailableReason === 'no-common-range'
+                                        ? 'Not available: your two retirement ages leave no room to move them together.'
+                                        : 'Not available: everyone in this plan is already retired.')
+                                    : 'Changes your retirement age, plus the same settings. Your spending stays the same.'}
+                            />
                         </div>
                     </div>
 
-                    {objective === 'max-spend' && (
+                    {(objective === 'max-spend' || objective === 'earliest-age') && (
                         <div className="mt-5">
-                            <p className="text-sm font-semibold text-slate-800">How safe should that spending be?</p>
+                            <p className="text-sm font-semibold text-slate-800">
+                                {objective === 'earliest-age' ? 'How sure do you want to be?' : 'How safe should that spending be?'}
+                            </p>
                             <p className="mt-1 text-xs text-slate-500">
                                 The portion of simulated market scenarios in which your money must last to the end of the plan.
                             </p>
@@ -232,7 +253,10 @@ export function MeltdownOptimizerView({
                                 ))}
                             </div>
                             <p className="mt-2 text-xs text-slate-500">
-                                {SUCCESS_TARGETS.find(t => t.value === mcSuccessTarget)?.blurb}
+                                {(() => {
+                                    const t = SUCCESS_TARGETS.find(x => x.value === mcSuccessTarget);
+                                    return objective === 'earliest-age' ? t?.ageBlurb : t?.blurb;
+                                })()}
                             </p>
                         </div>
                     )}
@@ -289,9 +313,17 @@ export function MeltdownOptimizerView({
                     )}
 
                     <div className="mt-6 flex flex-wrap items-center gap-3">
-                        <button onClick={runSearch} className={hasRealPlan ? primaryBtn : secondaryBtn}>
+                        <button
+                            onClick={runSearch}
+                            disabled={runDisabled}
+                            className={hasRealPlan ? primaryBtn : `${secondaryBtn} disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
                             {hasRealPlan
-                                ? (objective === 'max-spend' ? 'Find my highest spending' : 'Find my largest estate')
+                                ? (objective === 'max-spend'
+                                    ? 'Find my highest spending'
+                                    : objective === 'earliest-age'
+                                        ? 'Find my earliest retirement age'
+                                        : 'Find my largest estate')
                                 : 'Continue with sample numbers'}
                         </button>
                         <button onClick={onExit} className={secondaryBtn}>
@@ -312,7 +344,9 @@ export function MeltdownOptimizerView({
                     <p className="text-sm font-medium text-slate-700">
                         {objective === 'max-spend'
                             ? 'Searching for your highest spending…'
-                            : 'Searching for your largest estate…'}
+                            : objective === 'earliest-age'
+                                ? 'Searching for your earliest retirement age…'
+                                : 'Searching for your largest estate…'}
                     </p>
                     <div className="mt-4 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
                         <div
@@ -463,7 +497,9 @@ function ResultsView({
                 <p className="text-xs text-slate-500">
                     {result.objective === 'max-spend'
                         ? 'Applying changes your annual spending, RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'
-                        : 'Applying changes the RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'}
+                        : result.objective === 'earliest-age'
+                            ? `Applying changes your retirement age${result.earliestAge?.cppOverrideHeld ? '' : ' (and your CPP years to match)'}, RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Your spending and everything else stay the same. To keep both versions, use Save as new plan instead.`
+                            : 'Applying changes the RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'}
                 </p>
             )}
 
@@ -500,9 +536,10 @@ function ResultsView({
         </>
     );
 
-    // MaxSpendCard renders `actions` itself, between its two boxes — don't
-    // render them a second time at view level.
-    const actionsInCard = result.objective === 'max-spend' && result.improved;
+    // MaxSpendCard and EarliestAgeCard render `actions` themselves, between
+    // their boxes — don't render them a second time at view level.
+    const actionsInCard = (result.objective === 'max-spend' && result.improved)
+        || result.objective === 'earliest-age';
 
     return (
         <div className="flex flex-col gap-6">
@@ -511,7 +548,9 @@ function ResultsView({
                 <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded font-bold align-middle">BETA</span>
             </h2>
 
-            {result.objective === 'max-spend' ? (
+            {result.objective === 'earliest-age' ? (
+                <EarliestAgeCard result={result} actions={actions} />
+            ) : result.objective === 'max-spend' ? (
                 result.improved ? (
                     <MaxSpendCard result={result} actions={actions} />
                 ) : (
@@ -741,17 +780,18 @@ function Headline({ label, value, tone }: { label: string; value: string; tone: 
 // Selectable objective card for the setup screen. `detail` is the tiny
 // "what it adjusts / what it solves for" line — the per-objective search space.
 function ObjectiveCard({
-    selected, onSelect, title, sub, detail,
-}: { selected: boolean; onSelect: () => void; title: string; sub: string; detail?: string }) {
+    selected, onSelect, title, sub, detail, disabled = false,
+}: { selected: boolean; onSelect: () => void; title: string; sub: string; detail?: string; disabled?: boolean }) {
     return (
         <button
             type="button"
             onClick={onSelect}
             aria-pressed={selected}
-            className={`text-left rounded-xl border p-4 transition-colors ${
+            disabled={disabled}
+            className={`text-left rounded-xl border p-4 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                 selected
                     ? 'border-brand-600 bg-brand-50 ring-1 ring-brand-600'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                    : 'border-slate-200 bg-white hover:border-slate-300 disabled:hover:border-slate-200'
             }`}
         >
             <p className={`text-base font-semibold ${selected ? 'text-brand-700' : 'text-slate-800'}`}>{title}</p>
@@ -806,6 +846,89 @@ function SimpleChangeTable({
                     </tbody>
                 </table>
             </div>
+        </div>
+    );
+}
+
+/*
+ * Earliest-age result: the answer box (age, odds, what the strategy changed,
+ * the bad-markets line, disclosures), the trade-off table, the actions, then
+ * the strategy detail as the same current-vs-suggested tables the other modes
+ * use. The answer box and table are shared components, so the landing page
+ * shows the same thing. Unreachable / unavailable results stop after the
+ * answer box — there is no age to tabulate or apply.
+ */
+function EarliestAgeCard({ result, actions }: { result: MeltdownResult; actions: React.ReactNode }) {
+    const ea = result.earliestAge!;
+    const found = ea.status === 'found';
+    const currentStrategy = result.baselineInputs.withdrawalStrategy ?? 'tax-efficient';
+    // Only when there is something to apply: at the plan's own age with a
+    // strategy that already clears the bar, the search's different pick is a
+    // preference, and "To get there: …" would contradict "nothing to apply".
+    const strategyNote = found && result.improved
+        ? describeStrategyChanges(result.decisions, currentStrategy, ea.withdrawalStrategy)
+        : null;
+
+    const named = ea.people.length > 1 || ea.reportedWho === 'spouse';
+    const householdRows = [
+        ...ea.people.map(p => ({
+            label: named ? `Retirement age (${p.label})` : 'Retirement age',
+            current: String(p.planRetirementAge),
+            suggested: String(p.answerRetirementAge ?? p.planRetirementAge),
+            changed: p.answerRetirementAge !== p.planRetirementAge,
+        })),
+        ...ea.people.map(p => ({
+            label: named ? `CPP years (${p.label})` : 'CPP years',
+            tooltip: 'Years you paid into CPP move with your retirement age (only years before 65 count). A CPP Calculator estimate doesn’t move with your retirement age.',
+            current: String(p.planCppYears),
+            suggested: String(p.answerCppYears ?? p.planCppYears),
+            changed: p.answerCppYears !== p.planCppYears,
+        })),
+        {
+            label: 'Withdrawal order',
+            current: strategyLabel(currentStrategy),
+            suggested: strategyLabel(ea.withdrawalStrategy),
+            changed: ea.strategyChanged,
+        },
+    ];
+
+    return (
+        <div className="flex flex-col gap-6">
+            <EarliestAgeHeadline result={ea} strategyNote={strategyNote} />
+
+            {found && (
+                <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900">Retiring earlier or later</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                        How your odds and the numbers change around your answer, at the same spending.
+                    </p>
+                    <div className="mt-4">
+                        <EarliestAgeTable result={ea} />
+                    </div>
+                </div>
+            )}
+
+            {actions}
+
+            {found && (
+                <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900">{objectiveLabel(result.objective)}</h3>
+
+                    <div className="mt-4">
+                        <SimpleChangeTable title="Household" rows={householdRows} />
+                    </div>
+
+                    <div className="mt-6 space-y-6">
+                        {result.decisions.map(d => (
+                            <DecisionTable key={d.who} decision={d} showLabel={result.decisions.length > 1} />
+                        ))}
+                    </div>
+
+                    <p className="mt-3 text-xs text-slate-500">
+                        The melt runs each year from retirement until age 71 (RRIF conversion) or until the RRSP is empty.
+                    </p>
+                </div>
+            )}
         </div>
     );
 }

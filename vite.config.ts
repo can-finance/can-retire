@@ -31,6 +31,7 @@ export default defineConfig({
         'cpp-calculator': fileURLToPath(new URL('./cpp-calculator/index.html', import.meta.url)),
         'how-it-works': fileURLToPath(new URL('./how-it-works/index.html', import.meta.url)),
         'rrsp-withdrawal-strategy': fileURLToPath(new URL('./rrsp-withdrawal-strategy/index.html', import.meta.url)),
+        'when-can-i-retire': fileURLToPath(new URL('./when-can-i-retire/index.html', import.meta.url)),
       },
       output: {
         manualChunks: {

@@ -1,5 +1,44 @@
 import { describe, it, expect } from 'vitest';
-import { calculateEstimatedCPP, calculateOAS } from './cpp';
+import { calculateEstimatedCPP, calculateOAS, cppOverrideAtStartAge } from './cpp';
+
+describe('cppOverrideAtStartAge', () => {
+    it('returns the estimate unchanged (bit-for-bit) at the age it was worked out for', () => {
+        expect(cppOverrideAtStartAge(14_000, 65, 65)).toBe(14_000);
+        expect(cppOverrideAtStartAge(14_000, 60, 60)).toBe(14_000);
+        expect(cppOverrideAtStartAge(14_000, 70, 70)).toBe(14_000);
+        expect(cppOverrideAtStartAge(12_345.67, 62, 62)).toBe(12_345.67);
+    });
+
+    it('treats a missing base age as the current start age (no adjustment)', () => {
+        expect(cppOverrideAtStartAge(14_000, 60)).toBe(14_000);
+        expect(cppOverrideAtStartAge(14_000, 70, undefined)).toBe(14_000);
+    });
+
+    it('re-bases an age-65 estimate: 36% less at 60, 42% more at 70', () => {
+        expect(cppOverrideAtStartAge(10_000, 60, 65)).toBeCloseTo(6_400, 6);
+        expect(cppOverrideAtStartAge(10_000, 62, 65)).toBeCloseTo(10_000 * (1 - 36 * 0.006), 6);
+        expect(cppOverrideAtStartAge(10_000, 70, 65)).toBeCloseTo(14_200, 6);
+    });
+
+    it('re-bases between two non-65 ages through the age-65 amount', () => {
+        // 14,200 at 70 is 10,000 at 65, which is 6,400 at 60 — and back again
+        expect(cppOverrideAtStartAge(14_200, 60, 70)).toBeCloseTo(6_400, 6);
+        expect(cppOverrideAtStartAge(6_400, 70, 60)).toBeCloseTo(14_200, 6);
+        expect(cppOverrideAtStartAge(14_200, 65, 70)).toBeCloseTo(10_000, 6);
+    });
+
+    it('caps at 70 and floors at 60, like the CPP Calculator', () => {
+        expect(cppOverrideAtStartAge(10_000, 72, 65)).toBeCloseTo(14_200, 6);
+        expect(cppOverrideAtStartAge(14_200, 75, 70)).toBe(14_200);
+        expect(cppOverrideAtStartAge(10_000, 58, 65)).toBeCloseTo(6_400, 6);
+    });
+
+    it('uses the same early/late rates as the simple estimate within 60–70', () => {
+        for (let a = 60; a <= 70; a++) {
+            expect(cppOverrideAtStartAge(18_092, a, 65)).toBeCloseTo(calculateEstimatedCPP(40, a), 6);
+        }
+    });
+});
 
 describe('calculateEstimatedCPP', () => {
     it('full career starting at 65 gets the 2026 maximum', () => {

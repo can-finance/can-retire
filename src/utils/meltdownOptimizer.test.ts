@@ -761,6 +761,85 @@ describe('candidate builders', () => {
     });
 });
 
+// --- CPP Calculator estimate vs the CPP start-age search -------------------
+//
+// A CPP Calculator estimate (cppAnnualOverride) is the amount for the age it was
+// worked out at (cppOverrideStartAge). Before the fix the engine paid it from
+// ANY start age, so for every plan with an estimate the search saw "the same
+// cheque, five years sooner" at 60 and always picked it. Now each candidate
+// start age is re-based with the early/late adjustment.
+//
+// The fixture pairs an estimate of exactly the simple estimate's full pension at
+// 65 (40 years: $18,092) with the same plan on the simple estimate. The two must
+// then be scored identically at every candidate CPP age — the strongest
+// statement that the search treats the estimate like real CPP. A long life makes
+// deferring worth it, so a working search must NOT land on 60 here.
+describe('a CPP Calculator estimate is re-based at each candidate CPP start age', () => {
+    const FULL_AT_65 = 18_092;
+    const longLife = (cpp: Partial<Person>) => inputs({
+        person: person({
+            age: 60, retirementAge: 60, lifeExpectancy: 95,
+            cppStartAge: 65, cppContributedYears: 40,
+            rrsp: { type: 'RRSP', balance: 700_000 },
+            tfsa: { type: 'TFSA', balance: 150_000 },
+            nonRegisteredAccounts: [nonReg({ balance: 300_000, adjustedCostBase: 250_000 })],
+            ...cpp,
+        }),
+        postRetirementSpend: 45_000,
+        returnRates: {
+            bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+            capitalGrowth: 0.05, rrspGrowth: 0.05, tfsaGrowth: 0.05, volatility: 0.02,
+        },
+    });
+    const withEstimate = () => longLife({ cppAnnualOverride: FULL_AT_65, cppOverrideStartAge: 65 });
+    const simpleEstimate = () => longLife({});
+
+    const estateAt = (base: SimulationInputs, cppStartAge: number): number => {
+        const trial = structuredClone(base);
+        trial.person.cppStartAge = cppStartAge;
+        return computeSummaryMetrics(runSimulation(trial), trial, false).netEstateValue;
+    };
+    const bestAge = (scores: Record<number, number>): number =>
+        Number(Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0]);
+
+    it('scores every candidate start age exactly as the equivalent simple estimate does', () => {
+        const ages = buildCppCandidates(withEstimate().person, true);
+        expect(ages).toEqual([60, 65, 70]);
+
+        const scores: Record<number, number> = {};
+        for (const a of ages) {
+            scores[a] = estateAt(withEstimate(), a);
+            expect(scores[a]).toBeCloseTo(estateAt(simpleEstimate(), a), 2);
+        }
+        expect(bestAge(scores)).not.toBe(60);
+
+        // Non-vacuous: scored the pre-fix way (base age moving with the start
+        // age, so the same amount at every age), this fixture DOES prefer 60.
+        const preFix: Record<number, number> = {};
+        for (const a of ages) {
+            preFix[a] = estateAt(longLife({ cppAnnualOverride: FULL_AT_65 }), a);
+        }
+        expect(bestAge(preFix)).toBe(60);
+    });
+
+    it('estate search: same CPP choice as the simple estimate, not 60, base age kept', async () => {
+        const res = await optimizeMeltdown(withEstimate(), ORACLE_OPTS);
+        const simple = await optimizeMeltdown(simpleEstimate(), ORACLE_OPTS);
+        expect(res.recommendedInputs.person.cppStartAge).toBe(simple.recommendedInputs.person.cppStartAge);
+        expect(res.recommendedInputs.person.cppStartAge).not.toBe(60);
+        expect(res.recommendedInputs.person.cppAnnualOverride).toBe(FULL_AT_65);
+        expect(res.recommendedInputs.person.cppOverrideStartAge).toBe(65);
+    }, 120_000);
+
+    it('max-spend search: same CPP choice as the simple estimate, not 60', async () => {
+        const res = await optimizeMeltdown(withEstimate(), MS_OPTS);
+        const simple = await optimizeMeltdown(simpleEstimate(), MS_OPTS);
+        expect(res.recommendedInputs.person.cppStartAge).toBe(simple.recommendedInputs.person.cppStartAge);
+        expect(res.recommendedInputs.person.cppStartAge).not.toBe(60);
+        expect(res.recommendedInputs.person.cppOverrideStartAge).toBe(65);
+    }, 120_000);
+});
+
 describe('applyMeltdownRecommendation', () => {
     const recommendedPerson = person({
         rrspMeltAmount: 25_000, rrspMeltStartAge: undefined, cppStartAge: 70, oasStartAge: 70,
@@ -858,6 +937,58 @@ describe('applyMeltdownRecommendation', () => {
         const maxSpend = applyMeltdownRecommendation(current, recommended, 'max-spend');
         expect(maxSpend.postRetirementSpend).toBe(62_500);
         expect(maxSpend.withdrawalStrategy).toBe('rrsp-first');
+    });
+
+    // earliest-age owns the retirement ages and the CPP years that follow them,
+    // and — like estate — leaves spending exactly as planned.
+    it('earliest-age carries retirement ages and CPP years for both people, never the spend', () => {
+        const current = inputs({
+            postRetirementSpend: 70_000,
+            person: person({ age: 50, retirementAge: 60, cppContributedYears: 35 }),
+            spouse: person({ age: 48, retirementAge: 62, cppContributedYears: 30 }),
+        });
+        const recommended = inputs({
+            postRetirementSpend: 99_000,
+            withdrawalStrategy: 'rrsp-first',
+            person: person({ age: 50, retirementAge: 58, cppContributedYears: 33, cppStartAge: 70 }),
+            spouse: person({ age: 48, retirementAge: 60, cppContributedYears: 28 }),
+        });
+
+        const result = applyMeltdownRecommendation(current, recommended, 'earliest-age');
+
+        expect(result.person.retirementAge).toBe(58);
+        expect(result.person.cppContributedYears).toBe(33);
+        expect(result.person.cppStartAge).toBe(70);
+        expect(result.spouse?.retirementAge).toBe(60);
+        expect(result.spouse?.cppContributedYears).toBe(28);
+        expect(result.withdrawalStrategy).toBe('rrsp-first');
+        expect(result.postRetirementSpend).toBe(70_000);
+    });
+
+    it('estate and max-spend never touch retirement ages or CPP years', () => {
+        const current = inputs({ person: person({ retirementAge: 60, cppContributedYears: 35 }) });
+        const recommended = inputs({ person: person({ retirementAge: 55, cppContributedYears: 30 }) });
+        for (const objective of ['estate', 'max-spend'] as const) {
+            const result = applyMeltdownRecommendation(current, recommended, objective);
+            expect(result.person.retirementAge).toBe(60);
+            expect(result.person.cppContributedYears).toBe(35);
+        }
+    });
+
+    it('a new CPP start age keeps the CPP Calculator estimate and the age it was worked out at', () => {
+        const current = inputs({
+            person: person({ cppStartAge: 65, cppAnnualOverride: 12_000, cppOverrideStartAge: 65 }),
+        });
+        // The recommendation's own copy of the base age must not leak across
+        const recommended = inputs({
+            person: person({ cppStartAge: 70, cppAnnualOverride: 12_000, cppOverrideStartAge: 70 }),
+        });
+        for (const objective of ['estate', 'max-spend', 'earliest-age'] as const) {
+            const result = applyMeltdownRecommendation(current, recommended, objective);
+            expect(result.person.cppStartAge).toBe(70);
+            expect(result.person.cppAnnualOverride).toBe(12_000);
+            expect(result.person.cppOverrideStartAge).toBe(65);
+        }
     });
 
     it('leaves the current withdrawal order alone when the recommendation carries none', () => {

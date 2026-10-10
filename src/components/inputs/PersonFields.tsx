@@ -64,13 +64,16 @@ export function BenefitsFields({
 }) {
     // CPP Years only feeds the plan's simple CPP estimate; once a CPP
     // Calculator estimate is applied (cppAnnualOverride), the engine uses that
-    // fixed annual amount instead and this field has no effect.
+    // annual amount instead (adjusted for the CPP start age) and this field has
+    // no effect.
     const cppOverrideApplied = person.cppAnnualOverride != null;
     return (
         <div className="grid grid-cols-3 gap-3">
             <FinancialInput label={labels.cppStartAge} prefix="" value={person.cppStartAge}
                 onChange={(e) => onPatch({ cppStartAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                tooltip="Between 60 and 70. Starting later increases the monthly amount. Whole numbers only." />
+                tooltip={cppOverrideApplied
+                    ? "Between 60 and 70. Starting later increases the monthly amount, and your CPP Calculator estimate is adjusted to match. Whole numbers only."
+                    : "Between 60 and 70. Starting later increases the monthly amount. Whole numbers only."} />
             <FinancialInput label={labels.yearsContributed} prefix="" value={person.cppContributedYears ?? 35}
                 onChange={(e) => onPatch({ cppContributedYears: Number(e.target.value) })}
                 disabled={cppOverrideApplied}

@@ -1250,6 +1250,77 @@ describe('DB pension income', () => {
     });
 });
 
+// A CPP Calculator estimate is the amount for the start age it was worked out
+// at (cppOverrideStartAge). Moving cppStartAge afterwards must apply the same
+// early/late adjustment the calculator would have — before this, the engine
+// paid the same amount from any start age, so CPP at 60 always looked best.
+describe('CPP Calculator estimate (cppAnnualOverride)', () => {
+    const plan = (over: Partial<Person> = {}, inflationRate = 0) => inputs({
+        person: person({
+            age: 58, retirementAge: 58, lifeExpectancy: 75,
+            cppStartAge: 65, cppAnnualOverride: 12_000, cppOverrideStartAge: 65,
+            ...over,
+        }),
+        postRetirementSpend: 0,
+        inflationRate,
+    });
+    const cppAt = (res: SimulationResult[], age: number) => res.find(r => r.age === age)!.cppIncome;
+
+    it('pays the estimate as-is from the start age it was worked out for', () => {
+        const res = runSimulation(plan());
+        expect(cppAt(res, 64)).toBe(0);
+        expect(cppAt(res, 65)).toBe(12_000);
+        expect(cppAt(res, 74)).toBe(12_000);
+    });
+
+    it('moved to 60, pays 36% less (0.6%/month × 60), starting at 60', () => {
+        const res = runSimulation(plan({ cppStartAge: 60 }));
+        expect(cppAt(res, 59)).toBe(0);
+        expect(cppAt(res, 60)).toBeCloseTo(12_000 * 0.64, 6);
+        expect(cppAt(res, 72)).toBeCloseTo(12_000 * 0.64, 6);
+    });
+
+    it('moved to 70, pays 42% more (0.7%/month × 60), starting at 70', () => {
+        const res = runSimulation(plan({ cppStartAge: 70 }));
+        expect(cppAt(res, 69)).toBe(0);
+        expect(cppAt(res, 70)).toBeCloseTo(12_000 * 1.42, 6);
+    });
+
+    it('an estimate worked out at 70 and moved to 65 pays the age-65 amount', () => {
+        const res = runSimulation(plan({ cppAnnualOverride: 14_200, cppOverrideStartAge: 70, cppStartAge: 65 }));
+        expect(cppAt(res, 65)).toBeCloseTo(10_000, 6);
+    });
+
+    it('unmoved, it pays exactly what it paid before the fix: estimate × inflation factor', () => {
+        const withBase = runSimulation(plan({}, 0.025));
+        // No base age at all = the pre-fix shape of an override plan
+        const withoutBase = runSimulation(plan({ cppOverrideStartAge: undefined }, 0.025));
+        expect(withBase).toEqual(withoutBase);
+        for (const age of [65, 70, 74]) {
+            expect(cppAt(withBase, age)).toBeCloseTo(12_000 * Math.pow(1.025, age - 58), 6);
+        }
+    });
+
+    it('the adjusted amount still rises with inflation', () => {
+        const res = runSimulation(plan({ cppStartAge: 70 }, 0.02));
+        expect(cppAt(res, 70)).toBeCloseTo(12_000 * 1.42 * Math.pow(1.02, 70 - 58), 6);
+    });
+
+    it('adjusts each spouse from their own base age', () => {
+        const res = runSimulation(inputs({
+            person: plan({ cppStartAge: 60 }).person,
+            spouse: person({
+                age: 58, retirementAge: 58, lifeExpectancy: 75,
+                cppStartAge: 70, cppAnnualOverride: 8_000, cppOverrideStartAge: 65,
+            }),
+            postRetirementSpend: 0,
+        }));
+        // Person draws from 60, spouse (same age) from 70
+        expect(cppAt(res, 65)).toBeCloseTo(12_000 * 0.64, 6);
+        expect(cppAt(res, 70)).toBeCloseTo(12_000 * 0.64 + 8_000 * 1.42, 6);
+    });
+});
+
 describe('lognormalReturn', () => {
     // Standard normal density, for numerically integrating E[1 + rate].
     const phi = (z: number) => Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);

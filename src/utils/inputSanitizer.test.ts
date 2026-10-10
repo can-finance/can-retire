@@ -372,6 +372,62 @@ describe('sanitizeSimulationInputs', () => {
         expect(result.person.pension!.bridgeEndAge).toBe(55);
     });
 
+    describe('CPP Calculator estimate base age (cppOverrideStartAge)', () => {
+        it('keeps a valid base age alongside the estimate', () => {
+            const p = sanitizeSimulationInputs({
+                person: { cppAnnualOverride: 14_200, cppStartAge: 60, cppOverrideStartAge: 70 }
+            })!.person;
+            expect(p.cppAnnualOverride).toBe(14_200);
+            expect(p.cppStartAge).toBe(60);
+            expect(p.cppOverrideStartAge).toBe(70);
+        });
+
+        it('migrates a payload from before the field: the base age is the saved CPP start age', () => {
+            // The calculator wrote the amount together with cppStartAge, so that is
+            // the best record of the age it was worked out at — and with base ===
+            // start age the engine pays exactly what it did before the fix.
+            const result = sanitizeSimulationInputs({
+                person: { cppAnnualOverride: 12_000, cppStartAge: 67 },
+                spouse: { cppAnnualOverride: 9_000, cppStartAge: 62 },
+            })!;
+            expect(result.person.cppOverrideStartAge).toBe(67);
+            expect(result.spouse!.cppOverrideStartAge).toBe(62);
+        });
+
+        it('rounds the base age and clamps it to 60–70', () => {
+            const at = (raw: Record<string, unknown>) =>
+                sanitizeSimulationInputs({ person: { cppAnnualOverride: 10_000, ...raw } })!.person.cppOverrideStartAge;
+            expect(at({ cppOverrideStartAge: 64.6 })).toBe(65);
+            expect(at({ cppOverrideStartAge: 75 })).toBe(70);
+            expect(at({ cppOverrideStartAge: 55 })).toBe(60);
+            expect(at({ cppOverrideStartAge: 'x', cppStartAge: 63 })).toBe(63);
+            // Migration from an out-of-range saved start age clamps the same way
+            // (the adjustment caps at 60/70, so the payout is still unchanged)
+            expect(at({ cppStartAge: 72 })).toBe(70);
+            expect(at({ cppStartAge: 58 })).toBe(60);
+        });
+
+        it('drops the base age when there is no estimate', () => {
+            const p = sanitizeSimulationInputs({ person: { cppStartAge: 65, cppOverrideStartAge: 65 } })!.person;
+            expect(p.cppAnnualOverride).toBeUndefined();
+            expect(p.cppOverrideStartAge).toBeUndefined();
+            expect(JSON.stringify(p)).not.toContain('cppOverrideStartAge');
+            const bad = sanitizeSimulationInputs({ person: { cppAnnualOverride: 'x', cppOverrideStartAge: 65 } })!.person;
+            expect(bad.cppOverrideStartAge).toBeUndefined();
+        });
+
+        it('round-trips through sanitize → JSON → sanitize unchanged (migrated or not)', () => {
+            for (const person of [
+                { cppAnnualOverride: 12_000, cppStartAge: 67 },
+                { cppAnnualOverride: 12_000, cppStartAge: 60, cppOverrideStartAge: 65 },
+            ]) {
+                const once = sanitizeSimulationInputs({ person })!;
+                const twice = sanitizeSimulationInputs(JSON.parse(JSON.stringify(once)))!;
+                expect(JSON.stringify(twice)).toBe(JSON.stringify(once));
+            }
+        });
+    });
+
     it('keeps an absent rrspMeltStartAge absent-equivalent and integer payloads byte-identical', () => {
         const once = sanitizeSimulationInputs({
             ...INITIAL_INPUTS,

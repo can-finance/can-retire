@@ -4,6 +4,7 @@ import { CollapsibleSection } from '../ui/CollapsibleSection';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { ValidationBanner } from '../ui/ValidationBanner';
 import type { Person, NonRegisteredAccount } from '../../engine/types';
+import { cppOverrideAtStartAge } from '../../engine/cpp';
 import { getValidationErrors } from '../../utils/personValidation';
 
 // Dashboard label wording — terser than the wizard's sentence-case labels
@@ -63,6 +64,15 @@ export function PersonSection({
 }: PersonSectionProps) {
     const validationErrors = getValidationErrors(person);
     const isSpouse = colorTheme === 'purple';
+
+    // The CPP Calculator estimate as the engine pays it: re-based to the CPP
+    // start age the plan uses now, which may differ from the calculator's.
+    const cppOverride = person.cppAnnualOverride != null
+        ? {
+            amount: cppOverrideAtStartAge(person.cppAnnualOverride, person.cppStartAge, person.cppOverrideStartAge),
+            baseAge: person.cppOverrideStartAge ?? person.cppStartAge,
+        }
+        : null;
     const avatar = PERSON_AVATAR[colorTheme] ?? PERSON_AVATAR.slate;
 
     // Every shared field group patches the same person via one merge callback —
@@ -127,14 +137,17 @@ export function PersonSection({
                     </HelpTooltip>
                 )}
 
-                {person.cppAnnualOverride != null && (
+                {cppOverride && (
                     <div className="flex items-center justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
                         <p className="text-xs text-sky-800">
                             Using CPP Calculator estimate:{' '}
                             <span className="font-bold">
-                                {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(person.cppAnnualOverride)}/yr
+                                {new Intl.NumberFormat('en-CA', { style: 'currency', currency: 'CAD', maximumFractionDigits: 0 }).format(cppOverride.amount)}/yr
                             </span>{' '}
-                            (CPP Years is ignored)
+                            starting at {person.cppStartAge}{' '}
+                            {cppOverride.baseAge !== person.cppStartAge
+                                ? `(adjusted from age ${cppOverride.baseAge}; CPP Years is ignored)`
+                                : '(CPP Years is ignored)'}
                         </p>
                         <button
                             onClick={() => onChange('cppAnnualOverride', undefined)}
