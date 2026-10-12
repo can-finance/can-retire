@@ -220,7 +220,11 @@ export function WhenCanIRetire() {
         if (!answer) return null;
         const r = answer.result;
         const inputs = r.improved ? r.recommendedInputs : r.baselineInputs;
-        const name = `Retire at ${inputs.person.retirementAge}`;
+        // Named after whoever the answer is about: the spouse when only their age moves.
+        const spouseReported = r.earliestAge?.reportedWho === 'spouse' && inputs.spouse;
+        const name = spouseReported
+            ? `Spouse retires at ${inputs.spouse!.retirementAge}`
+            : `Retire at ${inputs.person.retirementAge}`;
         return `/${buildStartHash(LZString.compressToEncodedURIComponent(JSON.stringify(inputs)), name)}`;
     }, [answer]);
 
