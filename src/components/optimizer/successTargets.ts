@@ -15,7 +15,7 @@ export interface SuccessTarget {
 
 export const SUCCESS_TARGETS: SuccessTarget[] = [
     {
-        value: 75, label: 'Aggressive',
+        value: 75, label: 'Some risk',
         blurb: 'Spend more, accept more risk of falling short.',
         ageBlurb: 'Retire sooner, accept more risk of falling short.',
     },
@@ -25,7 +25,7 @@ export const SUCCESS_TARGETS: SuccessTarget[] = [
         ageBlurb: 'A sensible middle ground (recommended).',
     },
     {
-        value: 95, label: 'Conservative',
+        value: 95, label: 'Very safe',
         blurb: 'Spend less, stay funded in almost every scenario.',
         ageBlurb: 'Retire later, stay funded in almost every scenario.',
     },

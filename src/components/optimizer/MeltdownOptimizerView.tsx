@@ -234,7 +234,7 @@ export function MeltdownOptimizerView({
                                 {objective === 'earliest-age' ? 'How sure do you want to be?' : 'How safe should that spending be?'}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
-                                The portion of simulated market scenarios in which your money must last to the end of the plan.
+                                The portion of market simulations in which your money must last to the end of the plan.
                             </p>
                             <div className="mt-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
                                 {SUCCESS_TARGETS.map(t => (
@@ -676,7 +676,7 @@ function RecommendationCard({ result }: { result: MeltdownResult }) {
                     tone={result.netEstateDelta >= 0 ? 'good' : 'bad'}
                 />
                 <Headline
-                    label="Lifetime tax"
+                    label="Total tax paid"
                     value={`${result.lifetimeTaxDelta <= 0 ? '−' : '+'}${formatCurrencyCAD(Math.abs(result.lifetimeTaxDelta))}`}
                     tone={result.lifetimeTaxDelta <= 0 ? 'good' : 'bad'}
                 />
@@ -984,9 +984,9 @@ function MaxSpendCard({ result, actions }: { result: MeltdownResult; actions?: R
                 </p>
                 <p className={`mt-1.5 text-sm ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
                     {!metTarget
-                        ? `Even the lowest spending we tested, ${sustainable}/yr, only lasted in ${ms.achievedSuccessRate.toFixed(0)}% of market scenarios. The spending that meets ${ms.mcSuccessTarget}% is lower than that. Run it again with a lower target to get a firm answer.`
+                        ? `Even the lowest spending we tested, ${sustainable}/yr, only lasted in ${ms.achievedSuccessRate.toFixed(0)}% of market simulations. The spending that meets ${ms.mcSuccessTarget}% is lower than that. Run it again with a lower target to get a firm answer.`
                         : good
-                            ? `That’s the most you can spend each year (the same amount, adjusted for inflation) while your money lasts in at least ${ms.mcSuccessTarget}% of market scenarios.`
+                            ? `That’s the most you can spend each year (the same amount, adjusted for inflation) while your money lasts in at least ${ms.mcSuccessTarget}% of market simulations.`
                             : `With a ${ms.mcSuccessTarget}% target, your savings can’t support your planned spending. Applying lowers your plan’s spending to the level they can support.`}
                 </p>
                 <p className={`mt-2 text-sm font-medium ${good ? 'text-emerald-800' : 'text-amber-800'}`}>

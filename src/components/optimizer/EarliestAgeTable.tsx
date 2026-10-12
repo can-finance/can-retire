@@ -5,7 +5,7 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 /*
  * The "When can I retire?" trade-off table: a row per retirement age around the
  * answer, showing the odds at the planned spending and what each age costs or
- * buys (estate, lifetime tax, and how much you could spend instead). Pure
+ * buys (money left at the end, total tax paid, and how much you could spend instead). Pure
  * presentation over EarliestAgeResult, shared with the landing page.
  *
  * The table scrolls sideways inside its own box on narrow screens (min width on
@@ -39,8 +39,12 @@ export function EarliestAgeTable({
                             <th className={`${th} text-left pr-4`}>{ageHeader}</th>
                             {showOther && <th className={`${th} text-left pr-4`}>Spouse</th>}
                             <th className={`${th} text-right pl-4`}>Success</th>
-                            <th className={`${th} text-right pl-4`}>Estate left</th>
-                            <th className={`${th} text-right pl-4`}>Lifetime tax</th>
+                            <th className={`${th} text-right pl-4`}>
+                                <HelpTooltip text="What's left when the plan ends, after tax at death.">
+                                    <span className="cursor-help border-b border-dashed border-slate-400">Left at the end</span>
+                                </HelpTooltip>
+                            </th>
+                            <th className={`${th} text-right pl-4`}>Total tax paid</th>
                             <th className={`${th} text-right pl-4`}>
                                 <HelpTooltip text={`The most you could spend each year retiring at that age and still meet your ${target}% target.`}>
                                     <span className="cursor-help border-b border-dashed border-slate-400">Could spend</span>
@@ -94,9 +98,10 @@ export function EarliestAgeTable({
                 </table>
             </div>
             <p className="mt-3 text-xs text-slate-500 leading-relaxed">
-                Success is the share of market scenarios in which your money lasts, spending {spend};
-                ✓ meets your {target}% target. Estate left and lifetime tax use the best strategy for
-                each age, in future dollars (not adjusted for inflation).
+                Success is the share of market simulations in which your money lasts, spending {spend};
+                ✓ meets your {target}% target. Left at the end and total tax paid use the best strategy
+                for each age. These are in the dollars of that future year, so they look bigger than
+                today's dollars.
                 {anyCouldSpendMissing && ' Could spend is worked out only for the ages next to your answer.'}
             </p>
         </div>

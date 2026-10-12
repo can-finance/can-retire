@@ -25,12 +25,12 @@ export function describeStrategyChanges(
         if (d.oasChanged) parts.push(`start ${whose} OAS at ${d.oasStartAge} instead of ${d.originalOasStartAge}`);
         if (d.hasRrsp && d.meltAmount !== d.originalMeltAmount) {
             parts.push(d.meltAmount > 0
-                ? `take ${formatCurrencyCAD(d.meltAmount)}/yr from ${whose} RRSP from ${d.meltStartAge} to ${d.meltEndAge}`
+                ? `take ${formatCurrencyCAD(d.meltAmount)}/yr from ${whose} RRSP from ${d.meltStartAge} to ${d.meltEndAge}, to lower the tax on it later`
                 : `stop the early withdrawals from ${whose} RRSP`);
         }
     }
     if (suggestedStrategy !== currentStrategy) {
-        parts.push(suggestedStrategy === 'rrsp-first' ? 'draw on your RRSP first' : 'draw on your RRSP last');
+        parts.push(suggestedStrategy === 'rrsp-first' ? 'take money from your RRSP before your other savings' : 'take money from your RRSP after your other savings');
     }
 
     if (parts.length === 0) return null;

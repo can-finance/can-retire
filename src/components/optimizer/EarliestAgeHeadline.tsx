@@ -68,13 +68,13 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
             ? {
                 tone: 'muted',
                 title: 'Your retirement ages can’t move together',
-                body: 'This search moves both retirement ages by the same number of years, and your ages leave no room to do that. Change one of the retirement ages and try again.',
+                body: 'Both retirement ages move by the same number of years, and your ages leave no room to do that. Change one of the retirement ages and try again.',
                 notes: [],
             }
             : {
                 tone: 'muted',
                 title: 'Everyone in this plan is already retired',
-                body: `This search moves your retirement age, so there’s nothing for it to change. Try ${MAX_SPEND} to see what your savings can support.`,
+                body: `There’s no retirement age left to move. Try ${MAX_SPEND} to see what your savings can support.`,
                 notes: [],
             };
     }
@@ -83,7 +83,7 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
         return {
             tone: 'warn',
             title: `Your plan can’t fund ${spend} at any retirement age up to ${r.maxAge}`,
-            body: `Even ${isSpouse ? 'with your spouse working' : 'working'} until ${r.maxAge}, your savings run out before the end of the plan at this spending. ${spendTip ? `${capitalize(spendTip)}.` : `Try ${MAX_SPEND} to see how much your savings can support.`}`,
+            body: `Even if ${isSpouse ? 'your spouse works' : 'you work'} until ${r.maxAge}, your money runs out before the end of the plan at this spending. ${spendTip ? `${capitalize(spendTip)}.` : `Try ${MAX_SPEND} to see how much your savings can support.`}`,
             notes: [],
         };
     }
@@ -97,7 +97,7 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
         return {
             tone: 'warn',
             title: `Even retiring at ${age}, your plan falls short of your ${target}% target`,
-            body: `At ${age}, your money lasts in ${pct(r.achievedSuccessRate)} of market scenarios at ${spend}. Choose a lower target, or ${spendTip ?? `try ${MAX_SPEND} to see what spending your savings can support`}.`,
+            body: `At ${age}, your money lasts in ${pct(r.achievedSuccessRate)} of market simulations at ${spend}. Choose a lower target, or ${spendTip ?? `try ${MAX_SPEND} to see what spending your savings can support`}.`,
             notes,
         };
     }
@@ -128,10 +128,10 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
     // At the lower bound without retiring now, the spouse is the one already
     // at today's age (a spouse-only search always retires "now" at its bound).
     if (r.atLowerBound && !r.retiresNow) {
-        notes.push('That’s as early as this search goes: it has your spouse retiring right away.');
+        notes.push('That’s as early as it can go: it has your spouse retiring right away.');
     }
     if (r.stepUpCapHit) {
-        notes.push('The search stopped early, so this age may be a year or so later than you need.');
+        notes.push('The calculator stopped checking before narrowing it down, so this age may be a year or so later than you need.');
     }
 
     return {
@@ -140,7 +140,7 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
         tone: delta > 0 && compareTo !== 'none' ? 'warn' : 'good',
         title,
         body: answerBody(r, together),
-        successLine: `${pct(r.achievedSuccessRate)} success at your spending of ${spend} (target ${target}%)`,
+        successLine: `Your money lasts in ${pct(r.achievedSuccessRate)} of market simulations at ${spend} (your target: ${target}%).`,
         notes,
     };
 }
@@ -157,7 +157,7 @@ function answerBody(r: EarliestAgeResult, together: boolean): string {
         const stop = r.reportedWho === 'spouse'
             ? 'your spouse stops'
             : together ? 'you both stop' : 'you stop';
-        return `Your money lasts in at least ${target}% of market scenarios even if ${stop} working now, spending the same amount each year (adjusted for inflation).`;
+        return `Your money lasts in at least ${target}% of market simulations even if ${stop} working now, spending the same amount each year (adjusted for inflation).`;
     }
     if (r.onTrack) {
         const yearEarlier = r.rows.find(row => row.delta === r.deltaYears! - 1);
@@ -165,16 +165,16 @@ function answerBody(r: EarliestAgeResult, together: boolean): string {
             return `Retiring a year earlier would drop below your ${target}% target.`;
         }
     }
-    return `This is the earliest age at which your money lasts in at least ${target}% of market scenarios, spending the same amount each year (adjusted for inflation).`;
+    return `This is the earliest age at which your money lasts in at least ${target}% of market simulations, spending the same amount each year (adjusted for inflation).`;
 }
 
 function badMarketsLine(r: EarliestAgeResult): string | null {
     if (r.status !== 'found') return null;
-    if (r.badMarketsAge === null) return 'In the worst 1-in-20 markets, your money still lasts the whole plan.';
+    if (r.badMarketsAge === null) return 'In the worst 5% of market simulations, your money still lasts the whole plan.';
     const until = r.reportedWho === 'spouse'
         ? `until your spouse is about ${r.badMarketsAge}`
         : `until you’re about ${r.badMarketsAge}`;
-    return `In the worst 1-in-20 markets, your money lasts ${until}.`;
+    return `In the worst 5% of market simulations, your money lasts ${until}.`;
 }
 
 function disclosureNotes(r: EarliestAgeResult): string[] {

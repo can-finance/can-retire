@@ -22,6 +22,24 @@ unit-tested MC-free.
   this may cost a year — weak evidence, best-of-many MC noise); name the plan
   the landing page hands off ("Shared plan" today, via the #start= import);
   confirm the Cloudflare analytics beacon doesn't record the #start= hash.
+- **Earliest-age table: show money in today's dollars (noted 2026-10-12).**
+  The trade-off table's "Left at the end" and "Total tax paid" columns are
+  nominal (future) dollars, while every input on the page is in today's
+  dollars. For a 48-year-old planning to 90 that's 42 years of 2.5% inflation,
+  so a nominal $1.2M estate is about $425k in today's money (÷ ~2.8) — the
+  nominal figure overstates what it buys and reads inconsistently next to the
+  "could spend" column, which is already today's dollars. Lifetime tax is
+  inflated the same way, less so (it's a sum across years, mostly earlier
+  ones). Today the footnote explains it; the fix is to show today's dollars and
+  drop that sentence. Code change: in `solveEarliestAge`
+  (`src/utils/meltdownOptimizer.ts`) the row values come from
+  `c.winner.metrics`, scored with `computeSummaryMetrics(..., false)`; compute
+  the rows' estate and tax with `isInflationAdjusted = true` instead (an extra
+  `computeSummaryMetrics` call per row on the cached results — cheap, no new
+  engine runs), keep the nominal metrics the search ranks on unchanged, and
+  update the `EarliestAgeRow` field comments, the table footnote and the tests.
+  The optimizer's other result cards (estate/max-spend deltas) are nominal too
+  — decide whether to switch them at the same time for consistency.
 - **Phase 3b — "How much do I need to retire?"** See spec below.
 - **Phase 4 — the engine phase.** See spec below.
 

@@ -232,8 +232,8 @@ export function WhenCanIRetire() {
                 <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">When can I retire?</h1>
                 <p className="max-w-2xl mx-auto text-lg text-slate-600 leading-relaxed">
                     Find the earliest age you can stop working and still have your money last. Enter your
-                    age, savings and spending. The calculator works through Canadian tax, CPP and OAS one
-                    year at a time, then checks the answer against hundreds of possible markets.
+                    age, savings and spending. It includes Canadian taxes, CPP and OAS, and tests your plan
+                    in good and bad markets.
                 </p>
                 <p className="text-sm text-slate-500">
                     Free · No account/login needed · Runs entirely in your browser
@@ -245,8 +245,9 @@ export function WhenCanIRetire() {
                 <div>
                     <h2 className="text-2xl font-bold text-slate-900">Your numbers</h2>
                     <p className="mt-1 text-sm text-slate-500">
-                        Use today's dollars. Everything else, like investment returns, inflation and a plan
-                        that runs to age 90, uses the planner's defaults. You can change them in the full plan.
+                        Enter amounts as they are today. We add inflation for you. Everything else, like
+                        investment returns and a plan that runs to age 90, uses the full planner's defaults.
+                        You can change them there.
                     </p>
                 </div>
 
@@ -297,7 +298,7 @@ export function WhenCanIRetire() {
                             onChange={(e) => update({ tfsa: Number(e.target.value) })} />
                         <FinancialInput
                             label="Non-registered"
-                            tooltip="Taxable investment accounts. We assume half the balance is what you originally put in and half is growth. You can change this in the full plan."
+                            tooltip="Taxable investment accounts. We assume half the balance is what you originally put in and half is growth. You can change this in the full planner."
                             value={form.nonReg}
                             onChange={(e) => update({ nonReg: Number(e.target.value) })}
                         />
@@ -320,7 +321,7 @@ export function WhenCanIRetire() {
                             onChange={(e) => update({ preRetirementSpend: Number(e.target.value) })} />
                         <FinancialInput
                             label="After retirement"
-                            tooltip="What you plan to spend each year once retired, in today's dollars. It rises with inflation. The search keeps this the same and finds the age instead."
+                            tooltip="What you plan to spend each year once retired, in today's dollars. It rises with inflation. The calculator keeps this the same and finds the age instead."
                             value={form.postRetirementSpend}
                             onChange={(e) => update({ postRetirementSpend: Number(e.target.value) })}
                         />
@@ -367,8 +368,8 @@ export function WhenCanIRetire() {
                             />
                             <p className="text-xs text-slate-500 leading-relaxed">
                                 If your spouse has income, we assume they stop working at the same age as you
-                                (or now, if they're already past it). With no income, they count as not working.
-                                You can set different ages in the full plan.
+                                (or now, if they're already past it). If they have no income, we treat them as
+                                already retired. You can set different ages in the full planner.
                             </p>
                         </div>
                     )}
@@ -378,7 +379,8 @@ export function WhenCanIRetire() {
                 <div className="space-y-2">
                     <p className="text-sm font-semibold text-slate-800">How sure do you want to be?</p>
                     <p className="text-xs text-slate-500">
-                        The share of simulated markets in which your money must last to the end of the plan.
+                        We run your plan through hundreds of market simulations, some good and some bad. In
+                        what share of them should your money last?
                     </p>
                     <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 w-fit max-w-full">
                         {SUCCESS_TARGETS.map((t) => (
@@ -431,7 +433,7 @@ export function WhenCanIRetire() {
                             <p className="mt-1 text-xs text-slate-500">{status.pct}%</p>
                         </div>
                     ) : status.kind === 'error' ? (
-                        <p className="text-sm text-rose-600">Something went wrong running the search. Please try again.</p>
+                        <p className="text-sm text-rose-600">Something went wrong running the calculator. Please try again.</p>
                     ) : (
                         <p className="text-xs text-slate-500">Takes a few seconds.</p>
                     )}
@@ -444,7 +446,7 @@ export function WhenCanIRetire() {
                     <h2 className="text-2xl font-bold text-slate-900">Your answer</h2>
                     {stale && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                            You've changed your numbers since this answer. Run the search again to update it.
+                            You've changed your numbers since this answer. Run the calculator again to update it.
                         </div>
                     )}
                     <div className={`space-y-6 ${stale ? 'opacity-60' : ''}`}>
@@ -501,13 +503,21 @@ export function WhenCanIRetire() {
                         <li>
                             <strong>Average returns first.</strong> It finds the earliest age at which your money
                             lasts to the end of the plan if investments earn their average return every year. At
-                            each age it tries different CPP and OAS start ages, early RRSP withdrawals and
-                            withdrawal orders, and keeps the mix that works and leaves the most behind.
+                            each age it tries different choices:
+                            <ul className="list-disc pl-6 mt-1 space-y-1">
+                                <li>when to start CPP</li>
+                                <li>when to start OAS</li>
+                                <li>early RRSP withdrawals</li>
+                                <li>which accounts to take money from first</li>
+                            </ul>
+                            <span className="block mt-1">
+                                It keeps the mix that works and leaves the most at the end.
+                            </span>
                         </li>
                         <li>
-                            <strong>Then hundreds of random markets.</strong> Real returns go up and down. It runs
-                            that age through hundreds of simulated markets. If your money doesn't last in enough
-                            of them to meet the confidence you chose, it tries later ages (up to 75) until it does.
+                            <strong>Then market simulations.</strong> Real returns go up and down. It runs that age
+                            through hundreds of market simulations. If your money doesn't last in enough of them
+                            to meet the confidence you chose, it tries later ages (up to 75) until it does.
                         </li>
                     </ol>
                     <p>A few things to know:</p>
