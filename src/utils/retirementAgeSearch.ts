@@ -283,14 +283,8 @@ export function tradeoffDeltas(answer: number, minDelta: number, maxDelta: numbe
     return out;
 }
 
-// Which rows get the expensive "could spend" column: every row, or only the
-// answer and its immediate neighbours.
-export function couldSpendDeltas(rowDeltas: number[], answer: number, scope: 'all' | 'near'): number[] {
-    return scope === 'all' ? [...rowDeltas] : rowDeltas.filter(d => Math.abs(d - answer) <= 1);
-}
-
-// "Could spend" comes from a separate max-spend search with its own MC wobble,
-// so it can land a step on the wrong side of the planned spend. The row's
+// "Could spend" comes from its own MC step-down with its own MC wobble, so it
+// can land a step on the wrong side of the planned spend. The row's
 // success check at the planned spend is the authoritative measurement, so keep
 // the two consistent: a row that clears at the planned spend could spend at
 // least that much; a row that misses could spend less than it.

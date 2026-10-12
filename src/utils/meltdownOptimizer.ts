@@ -47,7 +47,6 @@ import {
     planAgeStepUp,
     isStrategyChangeNeeded,
     tradeoffDeltas,
-    couldSpendDeltas,
     reconcileCouldSpend,
     firstDepletionAge,
     personOf,
@@ -75,10 +74,9 @@ export interface OptimizeMeltdownOptions {
     // max-spend and earliest-age: the Monte Carlo success rate (0-100) the answer
     // must clear (the spend step-down / the age step-up). Default 85.
     mcSuccessTarget?: number;
-    // earliest-age only: which trade-off rows get the costly "could spend"
-    // column (a full max-spend search each). 'near' (default) = the answer row
-    // and its two neighbours; 'all' = every row; 'none' = skip it.
-    couldSpendRows?: 'all' | 'near' | 'none';
+    // earliest-age only: 'all' (default) fills the "could spend" column on
+    // every trade-off row; 'none' skips it (faster, e.g. for tests).
+    couldSpendRows?: 'all' | 'none';
     // Progress callback. `total` is an estimate that the run snaps to on finish.
     onProgress?: (done: number, total: number) => void;
     // Cancellation. Checked between batches; rejects with an AbortError.
@@ -139,7 +137,10 @@ export interface EarliestAgeRow {
     deterministicFeasible: boolean;    // some strategy funds the plan on average returns
     netEstate: number;                 // nominal net estate at the end (best strategy at this age)
     lifetimeTax: number;               // nominal lifetime tax incl. terminal tax
-    couldSpend: number | null;         // max sustainable spend at this age to the same bar; null = not computed / none clears
+    // Estimated max sustainable spend at this age to the same bar, on this row's
+    // winning strategy (not re-searched). null = skipped (couldSpendRows 'none')
+    // or no spend clears the bar.
+    couldSpend: number | null;
     isAnswer: boolean;
     isPlan: boolean;                   // Δ = 0, the plan's own age
 }
@@ -1122,6 +1123,138 @@ export async function optimizeMeltdown(
     };
 }
 
+// --- Shared MC step-down driver --------------------------------------------
+//
+// Adaptive MC step-down. We do NOT bisect on the raw MC rate — it wobbles a few
+// points at these iteration counts. Instead we probe spends, bracket the target
+// between a "clears" and a "misses" probe, and refine to precision. The
+// per-probe decision lives in planStepDownProbe; here we just run the MC and
+// feed it back. Warm-started from a baseline at `currentSpend` so a
+// far-below-max answer doesn't cost a long descent. Used by max-spend mode (on
+// the searched winner) and by earliest-age's could-spend column (on each row's
+// winner).
+
+interface SpendStepDownArgs {
+    ceilingInputs: SimulationInputs; // the plan at the deterministic max (spend = ceiling)
+    ceiling: number;                 // deterministic max
+    currentSpend: number;            // the spend `baselineRate` was measured at
+    baselineRate: number;            // MC success rate at currentSpend (warm start)
+    // Optional: the MC run behind baselineRate, when it was run on these same
+    // inputs at currentSpend — then it is the first probe. Max-spend mode omits
+    // it (its baseline is the plan as entered, a different strategy).
+    baselineMc?: MonteCarloResult;
+    target: number;
+    mcIterations: number;
+    signal?: AbortSignal;
+    onProbe?: () => void;
+}
+
+interface SpendStepDownOutcome {
+    spend: number;          // final sustainable spend (a probed spend)
+    mc: MonteCarloResult;   // the MC run at that spend
+    capHit: boolean;        // no probed spend cleared the target
+}
+
+function runSpendStepDown(args: SpendStepDownArgs): SpendStepDownOutcome {
+    const { ceilingInputs, ceiling, currentSpend, baselineRate, target, mcIterations, signal, onProbe } = args;
+    const stepPlan: StepDownPlan = { target, ceiling, floor: 0 };
+    const probeAt = (spendValue: number): { spend: number; mc: MonteCarloResult } => {
+        const atSpend = spendValue === ceiling ? ceilingInputs : withSpend(ceilingInputs, spendValue);
+        const runMc = runMonteCarlo(atSpend, mcIterations);
+        onProbe?.();
+        return { spend: spendValue, mc: runMc };
+    };
+
+    const probes: { spend: number; mc: MonteCarloResult }[] = [];
+    let runs = 0;
+    if (args.baselineMc && currentSpend <= ceiling) {
+        // A baseline MC run on these same inputs is a real probe, already paid
+        // for, so planStepDownProbe takes the first step from it: up toward the
+        // ceiling if it clears, down if it misses. (Only within the ceiling, so
+        // no bracket can send a probe above the deterministic max.)
+        probes.push({ spend: currentSpend, mc: args.baselineMc });
+    } else {
+        // Otherwise anchor the first probe heuristically from the baseline rate.
+        probes.push(probeAt(initialStepDownSpend({ ceiling, floor: 0, currentSpend, baselineRate, target })));
+        runs++;
+    }
+
+    const asResults = () => probes.map(p => ({ spend: p.spend, successRate: p.mc.successRate }));
+    let action = planStepDownProbe(stepPlan, asResults());
+    while (action.kind === 'probe' && runs < MAX_STEPDOWN_PROBES) {
+        if (signal?.aborted) throw abortError();
+        probes.push(probeAt(action.spend));
+        runs++;
+        action = planStepDownProbe(stepPlan, asResults());
+    }
+
+    // Resolve the final spend. A 'done'/'capHit' action names a probed spend; if
+    // we merely ran out of probe budget, fall back to the best clearing probe (or
+    // the highest-success probe, flagged as a cap hit).
+    let spend: number;
+    let capHit: boolean;
+    if (action.kind === 'done') {
+        spend = action.spend;
+        capHit = false;
+    } else if (action.kind === 'capHit') {
+        spend = action.spend;
+        capHit = true;
+    } else {
+        const clearing = probes.filter(p => p.mc.successRate >= target);
+        if (clearing.length) {
+            spend = clearing.reduce((b, p) => (p.spend > b.spend ? p : b)).spend;
+            capHit = false;
+        } else {
+            spend = probes.reduce((b, p) => (p.mc.successRate > b.mc.successRate ? p : b)).spend;
+            capHit = true;
+        }
+    }
+
+    // The MC result at the reported spend (it was probed).
+    const finalProbe = probes.find(p => p.spend === spend)
+        ?? probes.reduce((b, p) => (Math.abs(p.spend - spend) < Math.abs(b.spend - spend) ? p : b));
+    return { spend, mc: finalProbe.mc, capHit };
+}
+
+export interface SustainableSpendEstimate {
+    deterministicMax: number; // bisected max on average returns
+    spend: number;            // after the MC step-down
+    successRate: number;      // MC success rate at `spend`
+    capHit: boolean;          // no probed spend cleared the target
+}
+
+// Max-spend's spending machinery (Phase 2) on FIXED inputs: no strategy
+// search, just the deterministic bisection and the MC step-down held to
+// `mcSuccessTarget`. `baselineMc` is an MC run already made on these inputs at
+// their own postRetirementSpend: it serves as the step-down's first probe (or,
+// above the deterministic max, its rate as the warm start). Used for the
+// earliest-age "could spend"
+// column, on each row's winning strategy.
+export function estimateSustainableSpend(
+    inputs: SimulationInputs,
+    opts: {
+        baselineMc: MonteCarloResult;
+        mcIterations: number;
+        mcSuccessTarget: number;
+        signal?: AbortSignal;
+        onProbe?: () => void;
+    },
+): SustainableSpendEstimate {
+    const { spend: deterministicMax } = maxSustainableSpend(inputs);
+    const out = runSpendStepDown({
+        ceilingInputs: withSpend(inputs, deterministicMax),
+        ceiling: deterministicMax,
+        currentSpend: inputs.postRetirementSpend,
+        baselineRate: opts.baselineMc.successRate,
+        baselineMc: opts.baselineMc,
+        target: opts.mcSuccessTarget,
+        mcIterations: opts.mcIterations,
+        signal: opts.signal,
+        onProbe: opts.onProbe,
+    });
+    return { deterministicMax, spend: out.spend, successRate: out.mc.successRate, capHit: out.capHit };
+}
+
 // --- Max-spend finish: MC step-down + result assembly --------------------
 
 interface FinishMaxSpendArgs {
@@ -1189,63 +1322,16 @@ function finishMaxSpend(args: FinishMaxSpendArgs): MeltdownResult {
 
     const deterministicMax = winner.score;
 
-    // Adaptive MC step-down. We do NOT bisect on the raw MC rate — it wobbles a
-    // few points at these iteration counts. Instead we probe spends, bracket the
-    // target between a "clears" and a "misses" probe, and refine to precision. The
-    // per-probe decision lives in planStepDownProbe; here we just run the MC and
-    // feed it back. Warm-started from the baseline signal so a far-below-max answer
-    // doesn't cost a long descent.
-    const stepPlan: StepDownPlan = { target: mcSuccessTarget, ceiling: deterministicMax, floor: 0 };
-    const probeAt = (spendValue: number): { spend: number; mc: MonteCarloResult } => {
-        const atSpend = spendValue === deterministicMax ? winner.inputs : withSpend(winner.inputs, spendValue);
-        const runMc = runMonteCarlo(atSpend, mcIterations);
-        reportProbe();
-        return { spend: spendValue, mc: runMc };
-    };
-
-    const probes: { spend: number; mc: MonteCarloResult }[] = [];
-    probes.push(probeAt(initialStepDownSpend({
-        ceiling: deterministicMax, floor: 0, currentSpend,
+    // Adaptive MC step-down from the winner's deterministic max, warm-started
+    // from the baseline signal (see runSpendStepDown).
+    const { spend: sustainableSpend, mc, capHit: stepDownCapHit } = runSpendStepDown({
+        ceilingInputs: winner.inputs, ceiling: deterministicMax, currentSpend,
         baselineRate: baselineMonteCarlo.successRate, target: mcSuccessTarget,
-    })));
+        mcIterations, signal, onProbe: reportProbe,
+    });
 
-    const asResults = () => probes.map(p => ({ spend: p.spend, successRate: p.mc.successRate }));
-    let action = planStepDownProbe(stepPlan, asResults());
-    while (action.kind === 'probe' && probes.length < MAX_STEPDOWN_PROBES) {
-        if (signal?.aborted) throw abortError();
-        probes.push(probeAt(action.spend));
-        action = planStepDownProbe(stepPlan, asResults());
-    }
-
-    // Resolve the final spend. A 'done'/'capHit' action names a probed spend; if
-    // we merely ran out of probe budget, fall back to the best clearing probe (or
-    // the highest-success probe, flagged as a cap hit).
-    let sustainableSpend: number;
-    let stepDownCapHit: boolean;
-    if (action.kind === 'done') {
-        sustainableSpend = action.spend;
-        stepDownCapHit = false;
-    } else if (action.kind === 'capHit') {
-        sustainableSpend = action.spend;
-        stepDownCapHit = true;
-    } else {
-        const clearing = probes.filter(p => p.mc.successRate >= mcSuccessTarget);
-        if (clearing.length) {
-            sustainableSpend = clearing.reduce((b, p) => (p.spend > b.spend ? p : b)).spend;
-            stepDownCapHit = false;
-        } else {
-            sustainableSpend = probes.reduce((b, p) => (p.mc.successRate > b.mc.successRate ? p : b)).spend;
-            stepDownCapHit = true;
-        }
-    }
-
-    // The MC result at the reported spend (it was probed). Recompute the nominal
-    // projection/metrics at that spend, reusing the winner's at the deterministic max.
-    const finalProbe = probes.find(p => p.spend === sustainableSpend)
-        ?? probes.reduce((b, p) =>
-            (Math.abs(p.spend - sustainableSpend) < Math.abs(b.spend - sustainableSpend) ? p : b));
-    const mc = finalProbe.mc;
-
+    // Recompute the nominal projection/metrics at the final spend, reusing the
+    // winner's at the deterministic max.
     const recommendedInputs = withSpend(winner.inputs, sustainableSpend);
     const recResults = sustainableSpend === deterministicMax ? winner.results : runSimulation(recommendedInputs);
     const recMetrics = sustainableSpend === deterministicMax
@@ -1306,9 +1392,9 @@ function finishMaxSpend(args: FinishMaxSpendArgs): MeltdownResult {
 //      plan on average returns (inner check = runStrategySearch with
 //      earliestAgeObjective, cached per Δ).
 //   2. Monte Carlo step-up from there until the success bar clears.
-//   3. Trade-off rows around the answer, reusing the cached checks and MCs; the
-//      "could spend" column is a full max-spend run per row, so by default only
-//      the answer and its two neighbours get it.
+//   3. Trade-off rows around the answer, reusing the cached checks and MCs. The
+//      "could spend" column is an estimate on each row's winning strategy:
+//      max-spend's bisection + MC step-down, without a fresh strategy search.
 
 // Progress for a run made of phases whose costs are only roughly known: each
 // phase owns a slice of a fixed 0-1000 scale and reports a fraction of that
@@ -1333,7 +1419,10 @@ function phasedProgress(onProgress?: (done: number, total: number) => void) {
 
 const PROGRESS_DET_END = 0.2;   // deterministic bisection
 const PROGRESS_MC_END = 0.3;    // MC step-up; the trade-off rows take the rest
-const COULD_SPEND_WEIGHT = 5;   // a could-spend run vs one row's check + MC (progress only)
+// A row's could-spend estimate (bisection + a few MC probes) vs that row's
+// check + MC, in progress units. Progress only.
+const COULD_SPEND_WEIGHT = 2;
+const EXPECTED_COULD_SPEND_PROBES = 3;
 const EXPECTED_STEPUP_PROBES = 3;
 
 interface AgeCheck {
@@ -1355,7 +1444,7 @@ async function solveEarliestAge(
     const considerCppOas = options.considerCppOas ?? true;
     const mcIterations = options.mcIterations ?? 200;
     const mcSuccessTarget = options.mcSuccessTarget ?? DEFAULT_MC_TARGET;
-    const couldSpendScope = options.couldSpendRows ?? 'near';
+    const couldSpendScope = options.couldSpendRows ?? 'all';
     const { signal } = options;
     const progress = phasedProgress(options.onProgress);
 
@@ -1514,10 +1603,8 @@ async function solveEarliestAge(
 
     // --- 3. Trade-off rows ---
     const rowDeltas = tradeoffDeltas(answerDelta, shift.minDelta, shift.maxDelta);
-    const spendDeltas = new Set(
-        couldSpendScope === 'none' ? [] : couldSpendDeltas(rowDeltas, answerDelta, couldSpendScope),
-    );
-    const totalUnits = rowDeltas.length + spendDeltas.size * COULD_SPEND_WEIGHT;
+    const withCouldSpend = couldSpendScope === 'all';
+    const totalUnits = rowDeltas.length * (1 + (withCouldSpend ? COULD_SPEND_WEIGHT : 0));
     let unitsDone = 0;
     const rowProgress = (extra: number) => progress.at(PROGRESS_MC_END, 1, (unitsDone + extra) / totalUnits);
 
@@ -1531,20 +1618,26 @@ async function solveEarliestAge(
         const clears = mc.successRate >= mcSuccessTarget;
 
         let couldSpend: number | null = null;
-        if (spendDeltas.has(delta)) {
-            // Phase 2's machinery as-is: the max-spend search + MC step-down on the
-            // plan moved to this age (strategy searched afresh, spend free).
-            const atAge = applyRetirementShift(base, shift, delta).inputs;
-            const ms = await optimizeMeltdown(atAge, {
-                objective: 'max-spend', considerCppOas, mcIterations, mcSuccessTarget, signal,
-                onProgress: (d, t) => rowProgress(COULD_SPEND_WEIGHT * (t > 0 ? d / t : 0)),
+        if (withCouldSpend) {
+            // An estimate: Phase 2's spending machinery (bisection + MC step-down)
+            // on this row's own winning strategy, held fixed — no fresh strategy
+            // search. The row's MC at the planned spend (same inputs) is the
+            // step-down's first probe.
+            let probesRun = 0;
+            const est = estimateSustainableSpend(c.winner.inputs, {
+                baselineMc: mc, mcIterations, mcSuccessTarget, signal,
+                onProbe: () => {
+                    probesRun++;
+                    rowProgress(COULD_SPEND_WEIGHT * Math.min(1, probesRun / EXPECTED_COULD_SPEND_PROBES));
+                },
             });
-            const m = ms.maxSpend!;
-            couldSpend = m.stepDownCapHit
+            couldSpend = est.capHit
                 ? null // no spend cleared the bar — nothing honest to show
-                : reconcileCouldSpend(m.sustainableSpend, clears, base.postRetirementSpend, SPEND_PRECISION);
+                : reconcileCouldSpend(est.spend, clears, base.postRetirementSpend, SPEND_PRECISION);
             unitsDone += COULD_SPEND_WEIGHT;
             rowProgress(0);
+            await yieldToEventLoop();
+            if (signal?.aborted) throw abortError();
         }
 
         rows.push({

@@ -26,7 +26,7 @@ export const WHEN_CAN_I_RETIRE_FAQ_ITEMS: FaqItem[] = [
     {
         question: 'How much do I need to retire?',
         answer:
-            'It depends on what you spend, when you stop working, and what CPP, OAS and any pension will pay. This calculator answers the age question: with what you have and plan to spend, how soon can you stop? The "Could spend" column shows the other side: the most you could spend each year at ages near your answer. To see what your savings can support at a retirement age you choose, open the full planner and choose "Spend the most in retirement" in the optimizer.',
+            'It depends on what you spend, when you stop working, and what CPP, OAS and any pension will pay. This calculator answers the age question: with what you have and plan to spend, how soon can you stop? The "Could spend" column shows the other side: about the most you could spend each year retiring at each age in the table. To see what your savings can support at a retirement age you choose, open the full planner and choose "Spend the most in retirement" in the optimizer.',
     },
     {
         question: 'What does 85% success mean?',

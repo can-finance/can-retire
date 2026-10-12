@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { NonRegisteredAccount, Person, SimulationInputs, MonteCarloResult } from '../engine/types';
-import { runSimulation } from '../engine/projection';
+import { runSimulation, runMonteCarlo } from '../engine/projection';
 import { computeSummaryMetrics } from './summaryMetrics';
 import { INITIAL_INPUTS, createDefaultPerson, DEFAULT_SPEND } from './inputSanitizer';
 import {
@@ -19,6 +19,8 @@ import {
     buildCppCandidates,
     buildOasCandidates,
     EARLIEST_AGE_MELT_STEPS,
+    estimateSustainableSpend,
+    maxSustainableSpend,
 } from './meltdownOptimizer';
 import type { MeltdownResult, OptimizeMeltdownOptions } from './meltdownOptimizer';
 import { applyRetirementShift, planAgeShift, shiftCppContributedYears } from './retirementAgeSearch';
@@ -208,21 +210,79 @@ describe('optimizeMeltdown (earliest-age objective)', () => {
             expect(r.otherRetirementAge).toBeUndefined();
         }
 
-        // Default 'near': could-spend only on the answer row and its neighbours.
+        // Every row gets a could-spend value. Clears at the planned spend → could
+        // spend at least that; misses → less.
+        expect(ea.rows.some(r => !r.clearsTarget)).toBe(true); // fixture has ✗ rows
         for (const r of ea.rows) {
-            if (Math.abs(r.retirementAge - ea.answerAge!) <= 1) expect(r.couldSpend).not.toBeNull();
-            else expect(r.couldSpend).toBeNull();
+            expect(r.couldSpend).not.toBeNull();
+            if (r.clearsTarget) expect(r.couldSpend!).toBeGreaterThanOrEqual(ea.postRetirementSpend);
+            else expect(r.couldSpend!).toBeLessThan(ea.postRetirementSpend);
         }
-        // Clears at the planned spend → could spend at least that; misses → less.
-        expect(answerRow.couldSpend!).toBeGreaterThanOrEqual(ea.postRetirementSpend);
-        const before = ea.rows.find(r => r.retirementAge === ea.answerAge! - 1);
-        if (before) expect(before.couldSpend!).toBeLessThan(ea.postRetirementSpend);
+
+        // The answer row's value is the shared spend estimate on its winning
+        // strategy (= recommendedInputs), warm-started from the row's own MC run
+        // at the planned spend (= recommendedMonteCarlo).
+        expect(res.recommendedMonteCarlo!.successRate).toBe(answerRow.successRate);
+        const est = estimateSustainableSpend(res.recommendedInputs, {
+            baselineMc: res.recommendedMonteCarlo!, mcIterations: EA.mcIterations!, mcSuccessTarget: 85,
+        });
+        expect(est.capHit).toBe(false);
+        expect(answerRow.couldSpend).toBe(Math.max(est.spend, ea.postRetirementSpend));
+        // With the deterministic stand-in nothing steps down: the estimate is the
+        // winner's deterministic max, found without re-searching the strategy.
+        expect(est.spend).toBe(est.deterministicMax);
+        expect(est.deterministicMax).toBe(maxSustainableSpend(res.recommendedInputs).spend);
 
         // Bad-markets age, if any, comes after retirement.
         if (ea.badMarketsAge !== null) expect(ea.badMarketsAge).toBeGreaterThanOrEqual(ea.answerAge!);
     }, 60_000);
 
-    it('couldSpendRows "none" skips the max-spend runs', async () => {
+    it('could spend: steps down to the success bar on each row’s own strategy', async () => {
+        const base = defaultSingle();
+        const planned = base.postRetirementSpend;
+        const bar = planned + 5_000;
+        // Success clears 85% only at spends up to `bar`; the planned spend clears
+        // at every age, so every row is ✓ and the step-down does the work.
+        mcHooks.rate = (i) => (i.postRetirementSpend <= bar ? 90 : 60);
+        const res = await optimizeMeltdown(base, EA);
+        const ea = res.earliestAge!;
+        const answerRow = ea.rows.find(r => r.isAnswer)!;
+
+        for (const r of ea.rows) {
+            expect(r.clearsTarget).toBe(true);
+            expect(r.couldSpend).not.toBeNull();
+            expect(r.couldSpend!).toBeGreaterThanOrEqual(planned);
+            expect(r.couldSpend!).toBeLessThanOrEqual(bar);
+        }
+        // The answer row's value is the shared estimate on its winning strategy.
+        const est = estimateSustainableSpend(res.recommendedInputs, {
+            baselineMc: res.recommendedMonteCarlo!, mcIterations: EA.mcIterations!, mcSuccessTarget: 85,
+        });
+        expect(est.capHit).toBe(false);
+        expect(answerRow.couldSpend).toBe(Math.max(est.spend, planned));
+
+        // On fixed inputs, with the bar well below the deterministic max, the
+        // estimate steps down to within one step-down precision ($2,500) of it.
+        const detMax = maxSustainableSpend(res.recommendedInputs).spend;
+        const lowBar = detMax - 7_000;
+        mcHooks.rate = (i) => (i.postRetirementSpend <= lowBar ? 90 : 60);
+        const stepped = estimateSustainableSpend(res.recommendedInputs, {
+            baselineMc: runMonteCarlo(res.recommendedInputs, 10), mcIterations: EA.mcIterations!, mcSuccessTarget: 85,
+        });
+        expect(stepped.deterministicMax).toBe(detMax);
+        expect(stepped.capHit).toBe(false);
+        expect(stepped.spend).toBeGreaterThan(lowBar - 2_500);
+        expect(stepped.spend).toBeLessThanOrEqual(lowBar);
+        expect(stepped.successRate).toBe(90);
+    }, 60_000);
+
+    it('could spend: null when no spend clears the bar', async () => {
+        mcHooks.rate = () => 60;
+        const res = await optimizeMeltdown(defaultSingle(), EA);
+        expect(res.earliestAge!.rows.every(r => r.couldSpend === null)).toBe(true);
+    }, 60_000);
+
+    it('couldSpendRows "none" skips the could-spend estimates', async () => {
         const res = await optimizeMeltdown(defaultSingle(), { ...EA, couldSpendRows: 'none' });
         expect(res.earliestAge!.rows.every(r => r.couldSpend === null)).toBe(true);
     }, 60_000);

@@ -8,7 +8,6 @@ import {
     ageStepForGap,
     planAgeStepUp,
     tradeoffDeltas,
-    couldSpendDeltas,
     reconcileCouldSpend,
     firstDepletionAge,
     isStrategyChangeNeeded,
@@ -452,17 +451,6 @@ describe('tradeoffDeltas', () => {
         expect(tradeoffDeltas(-9, -10, 15)).toEqual([-10, -9, -8, -7, -6, -5]);
         expect(tradeoffDeltas(14, -10, 15)).toEqual([12, 13, 14, 15]);
         expect(tradeoffDeltas(0, 0, 0)).toEqual([0]);
-    });
-});
-
-describe('couldSpendDeltas', () => {
-    const rows = [-5, -4, -3, -2, -1, 0, 1];
-    it('near: the answer row and its two neighbours', () => {
-        expect(couldSpendDeltas(rows, -3, 'near')).toEqual([-4, -3, -2]);
-        expect(couldSpendDeltas([-10, -9, -8], -10, 'near')).toEqual([-10, -9]);
-    });
-    it('all: every row', () => {
-        expect(couldSpendDeltas(rows, -3, 'all')).toEqual(rows);
     });
 });
 

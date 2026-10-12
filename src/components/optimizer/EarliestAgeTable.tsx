@@ -26,7 +26,6 @@ export function EarliestAgeTable({
     const ageHeader = isSpouse ? 'Spouse retires at' : showOther ? 'You retire at' : 'Retire at';
     const spend = `${formatCurrencyCAD(result.postRetirementSpend)}/yr`;
     const target = result.mcSuccessTarget;
-    const anyCouldSpendMissing = rows.some(r => r.couldSpend === null);
 
     const th = 'font-medium text-slate-500 py-2 whitespace-nowrap';
 
@@ -46,7 +45,7 @@ export function EarliestAgeTable({
                             </th>
                             <th className={`${th} text-right pl-4`}>Total tax paid</th>
                             <th className={`${th} text-right pl-4`}>
-                                <HelpTooltip text={`The most you could spend each year retiring at that age and still meet your ${target}% target.`}>
+                                <HelpTooltip text={`About the most you could spend each year retiring at that age, with the same choices shown for that age, and still meet your ${target}% target.`}>
                                     <span className="cursor-help border-b border-dashed border-slate-400">Could spend</span>
                                 </HelpTooltip>
                             </th>
@@ -102,7 +101,6 @@ export function EarliestAgeTable({
                 ✓ meets your {target}% target. Left at the end and total tax paid use the best strategy
                 for each age. These are in the dollars of that future year, so they look bigger than
                 today's dollars.
-                {anyCouldSpendMissing && ' Could spend is worked out only for the ages next to your answer.'}
             </p>
         </div>
     );
