@@ -16,17 +16,19 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest so a runner-image migration can't change
+    # the build environment unannounced; bump it deliberately.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Pin the runtime that builds the deployed site. Without this the job runs
-      # on whatever Node the ubuntu-latest image happens to ship, which drifts
+      # on whatever Node the runner image happens to ship, which drifts
       # independently of the dev container — keep this in step with Dockerfile.dev.
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
 
