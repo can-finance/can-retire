@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-12
+
 ### Added
 - **"Retire as early as possible" in the optimizer.** A third goal finds the
   earliest age your plan stays funded at your current spending, held to the same
