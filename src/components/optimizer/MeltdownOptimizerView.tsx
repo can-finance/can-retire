@@ -154,7 +154,7 @@ export function MeltdownOptimizerView({
         return (
             <div className="flex flex-col gap-6">
                 {header}
-                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
+                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-4xl w-full mx-auto">
                     <h3 className="text-lg font-bold text-slate-900">What is an RRSP meltdown?</h3>
                     <p className="mt-3 text-sm text-slate-600 leading-relaxed">
                         An RRSP meltdown means withdrawing from your RRSP in your early
@@ -204,14 +204,12 @@ export function MeltdownOptimizerView({
                                 onSelect={() => setObjective('estate')}
                                 title="Leave the largest estate"
                                 sub="Cuts the tax owed at death so more goes to your heirs."
-                                detail="Changes your RRSP melt, CPP/OAS start ages and withdrawal order. Your spending stays the same."
                             />
                             <ObjectiveCard
                                 selected={objective === 'max-spend'}
                                 onSelect={() => setObjective('max-spend')}
                                 title="Spend the most in retirement"
                                 sub="Finds the most you can spend each year without running out."
-                                detail="Changes the same settings, plus your yearly spending."
                             />
                             <ObjectiveCard
                                 selected={objective === 'earliest-age'}
@@ -219,13 +217,16 @@ export function MeltdownOptimizerView({
                                 disabled={earliestUnavailable}
                                 title="Retire as early as possible"
                                 sub="Finds the earliest age your plan stays funded at your current spending."
-                                detail={earliestUnavailable
+                                note={earliestUnavailable
                                     ? (ageShift.unavailableReason === 'no-common-range'
                                         ? 'Not available: your two retirement ages leave no room to move them together.'
                                         : 'Not available: everyone in this plan is already retired.')
-                                    : 'Changes your retirement age, plus the same settings. Your spending stays the same.'}
+                                    : undefined}
                             />
                         </div>
+                        {/* What the chosen goal changes, said once under the cards rather
+                            than in all three — it only matters for the one you pick. */}
+                        <p className="mt-3 text-sm text-slate-600">{OBJECTIVE_CHANGES[objective]}</p>
                     </div>
 
                     {(objective === 'max-spend' || objective === 'earliest-age') && (
@@ -340,7 +341,7 @@ export function MeltdownOptimizerView({
         return (
             <div className="flex flex-col gap-6">
                 {header}
-                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
+                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-4xl w-full mx-auto">
                     <p className="text-sm font-medium text-slate-700">
                         {objective === 'max-spend'
                             ? 'Searching for your highest spending…'
@@ -367,7 +368,7 @@ export function MeltdownOptimizerView({
         return (
             <div className="flex flex-col gap-6">
                 {header}
-                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-2xl w-full mx-auto">
+                <div className="rounded-2xl bg-white p-8 shadow-sm border border-slate-100 max-w-4xl w-full mx-auto">
                     <p className="text-sm text-rose-600">
                         Something went wrong running the optimizer. Please try again.
                     </p>
@@ -779,9 +780,18 @@ function Headline({ label, value, tone }: { label: string; value: string; tone: 
 
 // Selectable objective card for the setup screen. `detail` is the tiny
 // "what it adjusts / what it solves for" line — the per-objective search space.
+// The settings each goal changes, shown under the goal cards for the chosen one.
+const OBJECTIVE_CHANGES: Record<Objective, string> = {
+    'estate': 'Changes your RRSP meltdown, CPP/OAS start ages and withdrawal order. Your spending stays the same.',
+    'max-spend': 'Changes your RRSP meltdown, CPP/OAS start ages and withdrawal order, plus your yearly spending.',
+    'earliest-age': 'Changes your retirement age, RRSP meltdown, CPP/OAS start ages and withdrawal order. Your spending stays the same.',
+};
+
+// Two text levels only: title and one sentence. `note` is for a reason the
+// card can't be chosen, which belongs on the card itself.
 function ObjectiveCard({
-    selected, onSelect, title, sub, detail, disabled = false,
-}: { selected: boolean; onSelect: () => void; title: string; sub: string; detail?: string; disabled?: boolean }) {
+    selected, onSelect, title, sub, note, disabled = false,
+}: { selected: boolean; onSelect: () => void; title: string; sub: string; note?: string; disabled?: boolean }) {
     return (
         <button
             type="button"
@@ -794,9 +804,9 @@ function ObjectiveCard({
                     : 'border-slate-200 bg-white hover:border-slate-300 disabled:hover:border-slate-200'
             }`}
         >
-            <p className={`text-base font-semibold ${selected ? 'text-brand-700' : 'text-slate-800'}`}>{title}</p>
+            <p className={`text-sm font-semibold ${selected ? 'text-brand-700' : 'text-slate-800'}`}>{title}</p>
             <p className="mt-1 text-sm text-slate-500 leading-relaxed">{sub}</p>
-            {detail && <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">{detail}</p>}
+            {note && <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{note}</p>}
         </button>
     );
 }

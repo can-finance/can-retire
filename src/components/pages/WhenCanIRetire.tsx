@@ -4,6 +4,7 @@ import { FinancialInput } from '../inputs/FinancialInput';
 import { Toggle } from '../ui/Toggle';
 import { PROVINCES } from '../../constants/provinces';
 import { DEFAULT_SPEND } from '../../utils/inputSanitizer';
+import { buildStartHash } from '../../utils/shareLink';
 import { optimizeMeltdown } from '../../utils/meltdownOptimizer';
 import type { MeltdownResult } from '../../utils/meltdownOptimizer';
 import { EarliestAgeHeadline } from '../optimizer/EarliestAgeHeadline';
@@ -219,7 +220,8 @@ export function WhenCanIRetire() {
         if (!answer) return null;
         const r = answer.result;
         const inputs = r.improved ? r.recommendedInputs : r.baselineInputs;
-        return `/#start=${LZString.compressToEncodedURIComponent(JSON.stringify(inputs))}`;
+        const name = `Retire at ${inputs.person.retirementAge}`;
+        return `/${buildStartHash(LZString.compressToEncodedURIComponent(JSON.stringify(inputs)), name)}`;
     }, [answer]);
 
     const targetBlurb = SUCCESS_TARGETS.find((t) => t.value === successTarget)?.ageBlurb;
@@ -507,7 +509,10 @@ export function WhenCanIRetire() {
                             <ul className="list-disc pl-6 mt-1 space-y-1">
                                 <li>when to start CPP</li>
                                 <li>when to start OAS</li>
-                                <li>early RRSP withdrawals</li>
+                                <li>
+                                    early RRSP withdrawals, known as an{' '}
+                                    <a href="/rrsp-withdrawal-strategy/" className="underline decoration-dotted underline-offset-2 hover:text-slate-900">RRSP meltdown</a>
+                                </li>
                                 <li>which accounts to take money from first</li>
                             </ul>
                             <span className="block mt-1">
@@ -522,7 +527,6 @@ export function WhenCanIRetire() {
                     </ol>
                     <p>A few things to know:</p>
                     <ul className="list-disc pl-6 space-y-2">
-                        <li>Retirement ages are whole years.</li>
                         <li>
                             Your CPP moves with your retirement age. Retiring earlier means fewer years paying
                             in, and only years before 65 count.

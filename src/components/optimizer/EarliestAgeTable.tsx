@@ -99,8 +99,7 @@ export function EarliestAgeTable({
             <p className="mt-3 text-xs text-slate-500 leading-relaxed">
                 Success is the share of market simulations in which your money lasts, spending {spend};
                 ✓ meets your {target}% target. Left at the end and total tax paid use the best strategy
-                for each age. These are in the dollars of that future year, so they look bigger than
-                today's dollars.
+                for each age. All amounts are in today's dollars.
             </p>
         </div>
     );

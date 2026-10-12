@@ -135,8 +135,11 @@ export interface EarliestAgeRow {
     successRate: number;               // MC success at the planned spending
     clearsTarget: boolean;
     deterministicFeasible: boolean;    // some strategy funds the plan on average returns
-    netEstate: number;                 // nominal net estate at the end (best strategy at this age)
-    lifetimeTax: number;               // nominal lifetime tax incl. terminal tax
+    // Display-only, in TODAY'S dollars (computeSummaryMetrics(..., true)) so they
+    // compare with couldSpend and the page's inputs. The search itself ranks on
+    // the nominal metrics; these never feed back into it.
+    netEstate: number;                 // net estate at the end, today's $ (best strategy at this age)
+    lifetimeTax: number;               // lifetime tax incl. terminal tax, today's $
     // Estimated max sustainable spend at this age to the same bar, on this row's
     // winning strategy (not re-searched). null = skipped (couldSpendRows 'none')
     // or no spend clears the bar.
@@ -1640,6 +1643,10 @@ async function solveEarliestAge(
             if (signal?.aborted) throw abortError();
         }
 
+        // Today's-dollar view of the row's cached winner run (no new engine run);
+        // the nominal c.winner.metrics the search ranked on stay untouched.
+        const realMetrics = computeSummaryMetrics(c.winner.results, c.winner.inputs, true);
+
         rows.push({
             delta,
             retirementAge: reported.retirementAge + delta,
@@ -1647,8 +1654,8 @@ async function solveEarliestAge(
             successRate: mc.successRate,
             clearsTarget: clears,
             deterministicFeasible: c.feasible,
-            netEstate: c.winner.metrics.netEstateValue,
-            lifetimeTax: c.winner.metrics.lifetimeTaxPaid,
+            netEstate: realMetrics.netEstateValue,
+            lifetimeTax: realMetrics.lifetimeTaxPaid,
             couldSpend,
             isAnswer: delta === answerDelta,
             isPlan: delta === 0,

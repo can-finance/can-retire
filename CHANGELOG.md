@@ -10,21 +10,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **"Retire as early as possible" in the optimizer.** A third goal finds the
   earliest age your plan stays funded at your current spending, held to the same
-  75/85/95% confidence target as "Spend the most in retirement". It also tries
-  CPP/OAS start ages, RRSP melt amounts and withdrawal orders at each age, and
-  moves your CPP contribution years with your retirement age (a CPP Calculator
-  estimate and a workplace pension are held as entered, and the result says so).
-  A table shows the odds, estate, lifetime tax and how much you could spend for
-  retiring a few years earlier or later. Apply moves your retirement age in the
-  plan; your spending stays the same. If your planned age already works but only
-  with a different CPP/OAS start, RRSP melt or withdrawal order, the result says
-  so and Apply makes those changes.
+  75/85/95% confidence target as "Spend the most in retirement". At each age it
+  tries different CPP and OAS start ages, RRSP meltdown amounts (early RRSP
+  withdrawals) and which accounts to take money from first. Your CPP
+  contribution years move with your retirement age; a CPP Calculator estimate
+  and a workplace pension are held as entered, and the result says so. A table
+  shows, for retiring a few years earlier or later, the success rate in market
+  simulations, what's left at the end, total tax paid and about how much you
+  could spend, all in today's dollars. Apply moves your retirement age in the
+  plan; your spending stays the same. If your planned age already works but
+  only with different choices, the result says so and Apply makes those changes.
 - **New "When can I retire?" page** at
   [craptool.ca/when-can-i-retire](https://craptool.ca/when-can-i-retire/). Enter
   your age, province, income, savings, spending, any workplace pension and an
   optional spouse, pick how sure you want to be, and it finds the earliest age
-  your savings can support, with the same odds table as the optimizer. "See the
-  full plan" opens the result as a new plan in the planner. It is listed first
+  your savings can support, with the same table as the optimizer. "See the full
+  plan" opens the result as a new plan in the full planner, named after the
+  age (e.g. "Retire at 58"). It is listed first
   in a new **Tools** menu in the header, next to the RRSP withdrawal strategy
   page and the CPP calculator.
 

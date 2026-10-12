@@ -201,8 +201,18 @@ describe('optimizeMeltdown (earliest-age objective)', () => {
         expect(answerRow.retirementAge).toBe(ea.answerAge);
         expect(answerRow.clearsTarget).toBe(true);
         expect(answerRow.successRate).toBe(ea.achievedSuccessRate);
-        expect(answerRow.netEstate).toBeCloseTo(res.recommendedMetrics.netEstateValue, 5);
-        expect(answerRow.lifetimeTax).toBeCloseTo(res.recommendedMetrics.lifetimeTaxPaid, 5);
+        // Row estate/tax are in today's dollars: the inflation-adjusted metrics of
+        // the answer's run. recommendedMetrics (what the search ranked on) stays
+        // nominal, and with inflation > 0 the two differ.
+        const real = computeSummaryMetrics(res.recommendedResults, res.recommendedInputs, true);
+        const nominal = computeSummaryMetrics(res.recommendedResults, res.recommendedInputs, false);
+        expect(res.recommendedMetrics.netEstateValue).toBeCloseTo(nominal.netEstateValue, 5);
+        expect(res.recommendedMetrics.lifetimeTaxPaid).toBeCloseTo(nominal.lifetimeTaxPaid, 5);
+        expect(answerRow.netEstate).toBeCloseTo(real.netEstateValue, 5);
+        expect(answerRow.lifetimeTax).toBeCloseTo(real.lifetimeTaxPaid, 5);
+        expect(res.recommendedInputs.inflationRate).toBeGreaterThan(0);
+        expect(answerRow.netEstate).toBeLessThan(nominal.netEstateValue);
+        expect(answerRow.lifetimeTax).toBeLessThan(nominal.lifetimeTaxPaid);
         for (const r of ea.rows) {
             expect(r.clearsTarget).toBe(r.retirementAge >= ea.answerAge!);
             expect(r.deterministicFeasible).toBe(r.retirementAge >= ea.answerAge!);

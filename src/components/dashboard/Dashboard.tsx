@@ -19,6 +19,7 @@ import { runSimulation, runMonteCarlo, blendedNonRegMix } from '../../engine/pro
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
 import { createDefaultPerson, DEFAULT_SPEND, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
 import { SIM_KEY, hasSavedPlan } from '../../utils/onboarding';
+import { parseStartHash } from '../../utils/shareLink';
 import { formatCurrencyCAD } from '../../utils/formatters';
 import { computeSummaryMetrics } from '../../utils/summaryMetrics';
 import { SummaryHeader } from './SummaryHeader';
@@ -86,9 +87,10 @@ export function Dashboard() {
     // Hydrate from URL Hash on mount
     useEffect(() => {
         const hash = window.location.hash;
-        if (hash.startsWith('#start=')) {
+        const parsed = parseStartHash(hash);
+        if (parsed) {
             try {
-                const compressed = hash.replace('#start=', '');
+                const { compressed, name } = parsed;
                 const json = LZString.decompressFromEncodedURIComponent(compressed);
                 if (json) {
                     // Untrusted payload (often truncated by mail clients) — sanitize before
@@ -99,7 +101,7 @@ export function Dashboard() {
                         // active one. Deliberately NOT updateInputs: createPlan activates via a
                         // state update that hasn't committed yet, so syncActiveInputs in the same
                         // tick would write through to the PREVIOUS active plan.
-                        createPlan('Shared plan', clean);
+                        createPlan(name, clean);
                         setInputsRaw(clean);
                     }
                 }
