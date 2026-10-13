@@ -27,7 +27,15 @@ unit-tested MC-free.
   `MeltdownOptimizerView` show nominal `netEstateDelta`/`lifetimeTaxDelta`,
   while the comparison table beneath them follows the toggle. The
   earliest-age table was switched to today's dollars; these were left as-is.
-- **Phase 3b — "How much do I need to retire?"** See spec below.
+- **Phase 3b — "How much do I need to retire?" (built 2026-10-13, unreleased).**
+  Optimizer mode `savings-needed` + /how-much-do-i-need-to-retire/ page; pure
+  planners in `src/utils/savingsSearch.ts`. Lump-sum framing only. Follow-ups:
+  the per-year framing ("save $Y more per year", bisecting `preRetirementSpend`
+  on the same loop); a "need at each retirement age" table (one savings solve
+  per age is too slow — would need could-spend-style reuse of each age's
+  strategy); the no-savings default mix uses the TFSA limit table and ignores
+  any `tfsa.contributionRoom` entered. `TFSA_ANNUAL_LIMITS` holds the last
+  published year flat — add each new year's limit when CRA announces it.
 - **Phase 4 — the engine phase.** See spec below.
 
 **Implementation order (decided 2026-07-22):** Phase 3, then Phase 4 (engine
@@ -99,7 +107,10 @@ since for those who have one it is the biggest single input; add the 75/85/95%
 confidence picker. Everything else (CPP years, life expectancy, returns,
 inflation) stays on defaults, editable later in the full plan.
 
-**Phase 3b — "How much do I need to retire?" mode (specced 2026-10-09).** The
+**Phase 3b — "How much do I need to retire?" mode (specced 2026-10-09; built
+2026-10-13 — decided at build time: the outer variable is a dollar total D
+rather than a multiplier k, and zero savings falls back to TFSA-up-to-accumulated-room
+then RRSP, split evenly between spouses).** The
 fourth dual, adding savings to the set: fix retirement age and spending, solve
 for the savings that keep the plan funded at the user's MC bar. Today the tool
 only answers this backwards (max-spend gives spending from savings; the user can

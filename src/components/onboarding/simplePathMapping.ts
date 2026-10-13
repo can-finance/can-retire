@@ -13,7 +13,7 @@ export interface SimplePension {
  * asset mix, return rates, inflation, strategy toggles, one-time events, …).
  *
  * The optional fields at the end are extras the onboarding form doesn't ask for
- * but the /when-can-i-retire/ page does. Left out (undefined), each keeps
+ * but the /when-can-i-retire/ and /how-much-do-i-need-to-retire/ pages do. Left out (undefined), each keeps
  * whatever the draft already has, so onboarding is unaffected by them.
  */
 export interface SimpleAnswers {

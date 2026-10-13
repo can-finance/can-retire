@@ -6,9 +6,9 @@ import react from '@vitejs/plugin-react'
 import pkg from './package.json'
 
 // Dedicated SSR build for build-time prerendering of the standalone MPA pages
-// (/how-it-works/, /rrsp-withdrawal-strategy/, /when-can-i-retire/ and
-// /cpp-calculator/). The first three emit both prerendered HTML and FAQ
-// JSON-LD; cpp-calculator is JSON-LD-only
+// (/how-it-works/, /rrsp-withdrawal-strategy/, /when-can-i-retire/,
+// /how-much-do-i-need-to-retire/ and /cpp-calculator/). All but cpp-calculator
+// emit both prerendered HTML and FAQ JSON-LD; cpp-calculator is JSON-LD-only
 // (its entry exports no `render`, since the page reads window.localStorage and
 // can't be server-rendered — see src/prerender/cpp-calculator-ssr.tsx). Kept separate from
 // vite.config.ts so it doesn't inherit the multi-page client `rollupOptions.input`
@@ -38,6 +38,7 @@ export default defineConfig({
         'rrsp-withdrawal-strategy': fileURLToPath(new URL('./src/prerender/rrsp-withdrawal-strategy-ssr.tsx', import.meta.url)),
         'cpp-calculator': fileURLToPath(new URL('./src/prerender/cpp-calculator-ssr.tsx', import.meta.url)),
         'when-can-i-retire': fileURLToPath(new URL('./src/prerender/when-can-i-retire-ssr.tsx', import.meta.url)),
+        'how-much-do-i-need': fileURLToPath(new URL('./src/prerender/how-much-do-i-need-ssr.tsx', import.meta.url)),
       },
       output: {
         // Deterministic filenames so the prerender script can import each directly:

@@ -14,6 +14,12 @@ import type { SimpleAnswers } from '../onboarding/simplePathMapping';
  * mergeSimpleAnswers over the default plan — so everything the form doesn't
  * ask (CPP years, life expectancy, returns, inflation, asset mix) stays on the
  * planner's defaults and can be changed later in the full plan.
+ *
+ * The /how-much-do-i-need-to-retire/ page asks the same questions with the
+ * retirement age as an input instead, so the shared fields, their starting
+ * values, the plan building and the age checks are exported here
+ * (CalculatorForm, buildPlanInputs, calculatorFormErrors) and reused by
+ * how-much-do-i-need-inputs.ts.
  */
 
 /** The plan's retirement age when no target is given (the usual CPP/OAS age). */
@@ -23,9 +29,8 @@ export const DEFAULT_PENSION_START_AGE = 65;
 
 type BaseAnswers = Omit<SimpleAnswers, 'retirementAge' | 'spouseRetirementAge' | 'pension' | 'spousePension'>;
 
-export interface RetireForm extends BaseAnswers {
-    /** "Your target retirement age (to compare)" — null when left blank. */
-    targetAge: number | null;
+/** The fields both calculator pages ask: everything except the retirement age. */
+export interface CalculatorForm extends BaseAnswers {
     hasPension: boolean;
     pensionAmount: number;     // per year, today's dollars
     pensionStartAge: number;
@@ -34,8 +39,13 @@ export interface RetireForm extends BaseAnswers {
     spousePensionStartAge: number;
 }
 
-/** The form's starting values: the planner's sample plan, no target, no pension. */
-export function initialRetireForm(): RetireForm {
+export interface RetireForm extends CalculatorForm {
+    /** "Your target retirement age (to compare)" — null when left blank. */
+    targetAge: number | null;
+}
+
+/** The shared fields' starting values: the planner's sample plan, no pension. */
+export function initialCalculatorForm(): CalculatorForm {
     const a = seedToSimpleAnswers(INITIAL_INPUTS);
     return {
         age: a.age,
@@ -52,14 +62,21 @@ export function initialRetireForm(): RetireForm {
         spouseNonReg: a.spouseNonReg,
         preRetirementSpend: a.preRetirementSpend,
         postRetirementSpend: a.postRetirementSpend,
-        // The retirement age is the answer here, not an input.
-        targetAge: null,
         hasPension: false,
         pensionAmount: 0,
         pensionStartAge: DEFAULT_PENSION_START_AGE,
         spouseHasPension: false,
         spousePensionAmount: 0,
         spousePensionStartAge: DEFAULT_PENSION_START_AGE,
+    };
+}
+
+/** The form's starting values: the planner's sample plan, no target, no pension. */
+export function initialRetireForm(): RetireForm {
+    return {
+        ...initialCalculatorForm(),
+        // The retirement age is the answer here, not an input.
+        targetAge: null,
     };
 }
 
@@ -85,8 +102,7 @@ export function spouseRetirementAge(form: Pick<RetireForm, 'spouseAge' | 'spouse
     return form.spouseIncome > 0 ? Math.max(planAge, form.spouseAge) : form.spouseAge;
 }
 
-function toSimpleAnswers(form: RetireForm): SimpleAnswers {
-    const retirementAge = planRetirementAge(form);
+function toSimpleAnswers(form: CalculatorForm, retirementAge: number): SimpleAnswers {
     return {
         age: form.age,
         retirementAge,
@@ -115,28 +131,44 @@ function toSimpleAnswers(form: RetireForm): SimpleAnswers {
 }
 
 /**
- * The plan the search runs on. Built like onboarding's Quick start (merged onto
- * a fresh copy of the default plan), with one deliberate difference: no early
- * RRSP withdrawals to start from. The search tries a range of them anyway, and
- * starting from none means the "To get there" line describes what the search
- * adds rather than changing a sample amount the visitor never chose.
+ * The plan a search runs on, with the person retiring at `retirementAge` (the
+ * spouse's follows from it, see spouseRetirementAge; `retirementAge` may equal
+ * the current age, which means retiring now). Built like onboarding's Quick
+ * start (merged onto a fresh copy of the default plan), with one deliberate
+ * difference: no early RRSP withdrawals to start from. The search tries a range
+ * of them anyway, and starting from none means the "To get there" line
+ * describes what the search adds rather than changing a sample amount the
+ * visitor never chose.
  */
-export function buildRetireInputs(form: RetireForm): SimulationInputs {
+export function buildPlanInputs(form: CalculatorForm, retirementAge: number): SimulationInputs {
     const draft = JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs;
-    const plan = mergeSimpleAnswers(draft, toSimpleAnswers(form));
+    const plan = mergeSimpleAnswers(draft, toSimpleAnswers(form, retirementAge));
     plan.person.rrspMeltAmount = 0;
     if (plan.spouse) plan.spouse.rrspMeltAmount = 0;
     return plan;
 }
 
+/** The plan the earliest-age search runs on (see buildPlanInputs). */
+export function buildRetireInputs(form: RetireForm): SimulationInputs {
+    return buildPlanInputs(form, planRetirementAge(form));
+}
+
+/**
+ * Onboarding's checks on the ages (yours and your spouse's), in plain words.
+ * The retirement age is checked by each page against its own rule, so the one
+ * handed to onboarding's check here is one that always passes.
+ */
+export function calculatorFormErrors(form: CalculatorForm, retirementAge: number): string[] {
+    const answers = toSimpleAnswers(form, retirementAge);
+    const { person, spouse } = simpleAnswersErrors({ ...answers, retirementAge: Math.max(answers.retirementAge, form.age) });
+    return [...person, ...spouse];
+}
+
 /** Problems that stop the search from running, in plain words. Empty = OK. */
 export function retireFormErrors(form: RetireForm): string[] {
-    // Onboarding's checks on ages. The target is checked separately below (it
-    // must be later than today, not just "not earlier"), so the retirement age
-    // handed in here is one that always passes.
-    const answers = toSimpleAnswers(form);
-    const { person, spouse } = simpleAnswersErrors({ ...answers, retirementAge: Math.max(answers.retirementAge, form.age) });
-    const out = [...person, ...spouse];
+    // The target is checked separately below (it must be later than today, not
+    // just "not earlier").
+    const out = calculatorFormErrors(form, planRetirementAge(form));
     if (form.targetAge !== null && (form.targetAge <= form.age || form.targetAge > 99)) {
         out.push(`Your target retirement age must be between ${form.age + 1} and 99`);
     }

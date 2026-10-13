@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **"See how much you need" in the optimizer.** A fourth goal finds the savings
+  your plan needs to stay funded at your current spending and retirement age,
+  held to the same 75/85/95% confidence target as the other goals. It keeps your
+  mix of RRSP, TFSA and non-registered savings and scales it, and at each amount
+  tries different CPP and OAS start ages, RRSP meltdown amounts and which
+  accounts to take money from first. If you're still working, it shows what you'd
+  need on the day you retire next to what you're on track for, and what that
+  means in savings today, all in today's dollars. If you already have enough, it
+  says how much lower your savings could be. There is no Apply, since your
+  savings are what they are; Save as new plan keeps a copy at the amount needed.
+- **New "How much do I need to retire?" page** at
+  [craptool.ca/how-much-do-i-need-to-retire](https://craptool.ca/how-much-do-i-need-to-retire/).
+  Enter your age, the age you want to retire, province, income, savings,
+  spending, any workplace pension and an optional spouse, pick how sure you want
+  to be, and it finds the savings you need, with the same answer as the
+  optimizer. With no savings entered, it assumes a TFSA first, up to the room you
+  could have built up by now, then an RRSP. "See the full plan" opens the result
+  as a new plan in the full planner (e.g. "Retire at 60 with $1.2M"). It is in
+  the **Tools** menu, and it and "When can I retire?" link to each other.
+
 ## [0.13.0] - 2026-10-12
 
 ### Added

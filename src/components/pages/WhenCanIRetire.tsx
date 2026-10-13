@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import LZString from 'lz-string';
 import { FinancialInput } from '../inputs/FinancialInput';
-import { Toggle } from '../ui/Toggle';
 import { PROVINCES } from '../../constants/provinces';
-import { DEFAULT_SPEND } from '../../utils/inputSanitizer';
 import { buildStartHash } from '../../utils/shareLink';
 import { optimizeMeltdown } from '../../utils/meltdownOptimizer';
 import type { MeltdownResult } from '../../utils/meltdownOptimizer';
@@ -11,6 +9,15 @@ import { EarliestAgeHeadline } from '../optimizer/EarliestAgeHeadline';
 import { EarliestAgeTable } from '../optimizer/EarliestAgeTable';
 import { describeStrategyChanges } from '../optimizer/strategySummary';
 import { SUCCESS_TARGETS, DEFAULT_SUCCESS_TARGET } from '../optimizer/successTargets';
+import {
+    ConfidencePicker,
+    EducationalDisclaimer,
+    PensionFields,
+    RunStatusBlock,
+    SpouseSection,
+    primaryBtn,
+} from './calculatorParts';
+import type { RunStatus } from './calculatorParts';
 import { WHEN_CAN_I_RETIRE_FAQ_ITEMS } from './when-can-i-retire-faq';
 import { buildRetireInputs, initialRetireForm, retireFormErrors } from './when-can-i-retire-inputs';
 import type { RetireForm } from './when-can-i-retire-inputs';
@@ -43,13 +50,8 @@ interface Answer {
     targetAge: number | null;
 }
 
-type RunStatus = { kind: 'idle' } | { kind: 'running'; pct: number } | { kind: 'error' };
-
 const inputClass =
     'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:border-brand-500 focus:ring-brand-500';
-
-const primaryBtn =
-    'inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-brand-600 text-white font-semibold text-base hover:bg-brand-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed';
 
 /*
  * An age field that may be left blank. FinancialInput always shows a number,
@@ -92,46 +94,6 @@ function OptionalAgeInput({ id, label, hint, value, onChange }: {
     );
 }
 
-/** "Workplace pension? $___/yr from age ___", for you or your spouse. */
-function PensionFields({ who, on, amount, startAge, onToggle, onAmount, onStartAge }: {
-    who: 'you' | 'spouse';
-    on: boolean;
-    amount: number;
-    startAge: number;
-    onToggle: (v: boolean) => void;
-    onAmount: (v: number) => void;
-    onStartAge: (v: number) => void;
-}) {
-    return (
-        <div>
-            <Toggle
-                checked={on}
-                onChange={onToggle}
-                label={who === 'you' ? 'I have a workplace pension' : 'My spouse has a workplace pension'}
-                tooltip="A defined benefit pension from an employer: a set amount paid every year for life. Leave this off for a group RRSP or a defined contribution plan, and add those savings to the RRSP box instead."
-            />
-            {on && (
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FinancialInput
-                        label="Pension per year"
-                        tooltip="Before tax, in today's dollars, at the age it starts. It's held as entered: it doesn't get smaller if you retire earlier."
-                        value={amount}
-                        onChange={(e) => onAmount(Number(e.target.value))}
-                    />
-                    <FinancialInput
-                        label="Starts at age"
-                        prefix=""
-                        min={40}
-                        max={80}
-                        value={startAge}
-                        onChange={(e) => onStartAge(Math.round(Number(e.target.value)))} maxFractionDigits={0} inputMode="numeric"
-                    />
-                </div>
-            )}
-        </div>
-    );
-}
-
 export function WhenCanIRetire() {
     const [form, setForm] = useState<RetireForm>(initialRetireForm);
     const [successTarget, setSuccessTarget] = useState(DEFAULT_SUCCESS_TARGET);
@@ -143,20 +105,6 @@ export function WhenCanIRetire() {
     useEffect(() => () => abortRef.current?.abort(), []);
 
     const update = (patch: Partial<RetireForm>) => setForm((f) => ({ ...f, ...patch }));
-
-    // Adding or removing a spouse also moves the household spending defaults
-    // (see DEFAULT_SPEND) — but only while they still sit at the other size's
-    // default, exactly like the dashboard's spouse toggle.
-    const toggleSpouse = (on: boolean) => {
-        const from = on ? DEFAULT_SPEND.single : DEFAULT_SPEND.couple;
-        const to = on ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
-        setForm((f) => ({
-            ...f,
-            includeSpouse: on,
-            preRetirementSpend: f.preRetirementSpend === from.pre ? to.pre : f.preRetirementSpend,
-            postRetirementSpend: f.postRetirementSpend === from.post ? to.post : f.postRetirementSpend,
-        }));
-    };
 
     const errors = useMemo(() => retireFormErrors(form), [form]);
     const formKey = JSON.stringify([form, successTarget]);
@@ -334,79 +282,9 @@ export function WhenCanIRetire() {
                     </div>
                 </div>
 
-                <div className="space-y-4">
-                    <Toggle
-                        checked={form.includeSpouse}
-                        onChange={toggleSpouse}
-                        label="Include a spouse / partner"
-                    />
-                    {form.includeSpouse && (
-                        <div className="space-y-4 rounded-2xl bg-slate-50 border border-slate-100 p-4">
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <FinancialInput
-                                    label="Spouse's age"
-                                    prefix=""
-                                    value={form.spouseAge}
-                                    onChange={(e) => update({ spouseAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                                />
-                                <FinancialInput
-                                    label="Spouse's income before tax"
-                                    value={form.spouseIncome}
-                                    onChange={(e) => update({ spouseIncome: Number(e.target.value) })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <FinancialInput label="Spouse's RRSP" value={form.spouseRrsp}
-                                    onChange={(e) => update({ spouseRrsp: Number(e.target.value) })} />
-                                <FinancialInput label="Spouse's TFSA" value={form.spouseTfsa}
-                                    onChange={(e) => update({ spouseTfsa: Number(e.target.value) })} />
-                                <FinancialInput label="Spouse's non-registered" value={form.spouseNonReg}
-                                    onChange={(e) => update({ spouseNonReg: Number(e.target.value) })} />
-                            </div>
-                            <PensionFields
-                                who="spouse"
-                                on={form.spouseHasPension}
-                                amount={form.spousePensionAmount}
-                                startAge={form.spousePensionStartAge}
-                                onToggle={(v) => update({ spouseHasPension: v })}
-                                onAmount={(v) => update({ spousePensionAmount: v })}
-                                onStartAge={(v) => update({ spousePensionStartAge: v })}
-                            />
-                            <p className="text-xs text-slate-500 leading-relaxed">
-                                If your spouse has income, we assume they stop working at the same age as you
-                                (or now, if they're already past it). If they have no income, we treat them as
-                                already retired. You can set different ages in the full planner.
-                            </p>
-                        </div>
-                    )}
-                </div>
+                <SpouseSection form={form} update={update} />
 
-                {/* Confidence bar */}
-                <div className="space-y-2">
-                    <p className="text-sm font-semibold text-slate-800">How sure do you want to be?</p>
-                    <p className="text-xs text-slate-500">
-                        We run your plan through hundreds of market simulations, some good and some bad. In
-                        what share of them should your money last?
-                    </p>
-                    <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5 w-fit max-w-full">
-                        {SUCCESS_TARGETS.map((t) => (
-                            <button
-                                key={t.value}
-                                type="button"
-                                onClick={() => setSuccessTarget(t.value)}
-                                aria-pressed={successTarget === t.value}
-                                className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-                                    successTarget === t.value
-                                        ? 'bg-brand-600 text-white shadow-sm'
-                                        : 'text-slate-600 hover:bg-slate-100'
-                                }`}
-                            >
-                                {t.label} ({t.value}%)
-                            </button>
-                        ))}
-                    </div>
-                    {targetBlurb && <p className="text-xs text-slate-500">{targetBlurb}</p>}
-                </div>
+                <ConfidencePicker value={successTarget} onChange={setSuccessTarget} blurb={targetBlurb} />
 
                 {errors.length > 0 && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-4" role="alert">
@@ -420,29 +298,7 @@ export function WhenCanIRetire() {
                     <button type="button" onClick={run} disabled={errors.length > 0} className={primaryBtn}>
                         Find my earliest retirement age
                     </button>
-                    {status.kind === 'running' ? (
-                        <div className="max-w-md">
-                            <p className="text-sm font-medium text-slate-700">Searching for your earliest retirement age…</p>
-                            <div
-                                className="mt-2 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden"
-                                role="progressbar"
-                                aria-valuemin={0}
-                                aria-valuemax={100}
-                                aria-valuenow={status.pct}
-                                aria-label="Search progress"
-                            >
-                                <div
-                                    className="h-full rounded-full bg-brand-500 transition-all duration-150"
-                                    style={{ width: `${status.pct}%` }}
-                                />
-                            </div>
-                            <p className="mt-1 text-xs text-slate-500">{status.pct}%</p>
-                        </div>
-                    ) : status.kind === 'error' ? (
-                        <p className="text-sm text-rose-600">Something went wrong running the calculator. Please try again.</p>
-                    ) : (
-                        <p className="text-xs text-slate-500">Takes a few seconds.</p>
-                    )}
+                    <RunStatusBlock status={status} runningLabel="Searching for your earliest retirement age…" />
                 </div>
             </section>
 
@@ -541,6 +397,12 @@ export function WhenCanIRetire() {
                         </li>
                         <li>Your spending stays the same every year of retirement, rising with inflation.</li>
                         <li>With a spouse, both retirement ages move by the same number of years.</li>
+                        <li>
+                            Want it the other way around? To find how much you need to save to retire at an age
+                            you choose, use the{' '}
+                            <a href="/how-much-do-i-need-to-retire/" className="underline decoration-dotted underline-offset-2 hover:text-slate-900">how much do I need to retire</a>{' '}
+                            calculator.
+                        </li>
                     </ul>
                 </div>
             </section>
@@ -558,32 +420,7 @@ export function WhenCanIRetire() {
                 </div>
             </section>
 
-            {/* Disclaimer */}
-            <section className="pt-8 border-t border-slate-200">
-                <div className="bg-slate-50 rounded-2xl p-5 sm:p-8 border border-slate-200">
-                    <p className="text-sm text-slate-500 uppercase tracking-widest font-bold mb-4">Educational information, not advice</p>
-                    <div className="text-xs text-slate-500 leading-relaxed space-y-4">
-                        <p>
-                            This page and calculator are provided for general educational and informational purposes
-                            only. They do not constitute financial, investment, tax, or legal advice, and no
-                            personalized recommendation is being made to you. The tool uses simplified models that
-                            may not reflect your full situation.
-                        </p>
-                        <p>
-                            Projections are hypothetical and are not guarantees of future results. Tax rules, contribution
-                            and benefit thresholds, and government programs change over time. Always consult a certified
-                            financial planner, qualified tax professional, or legal advisor before making retirement
-                            decisions.{' '}
-                            <a
-                                href="/how-it-works/#full-disclaimer"
-                                className="underline decoration-dotted underline-offset-2 hover:text-slate-700 transition-colors"
-                            >
-                                Full disclaimer
-                            </a>
-                        </p>
-                    </div>
-                </div>
-            </section>
+            <EducationalDisclaimer />
         </div>
     );
 }

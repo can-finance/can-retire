@@ -5,13 +5,15 @@
 // cppStartAge, oasStartAge) plus the household withdrawalStrategy — and, in
 // max-spend mode, postRetirementSpend; in earliest-age mode, retirementAge and
 // cppContributedYears — on deep clones of the base inputs and
-// re-runs runSimulation / runMonteCarlo to score each candidate. Nothing here
-// mutates the caller's inputs.
+// re-runs runSimulation / runMonteCarlo to score each candidate. In
+// savings-needed mode the balances (and non-reg ACB) are rescaled too — on the
+// clones the search scores, never as a recommendation. Nothing here mutates the
+// caller's inputs.
 //
-// Three objective modes share one coordinate-descent search (see the `Objective`
-// abstraction below and runStrategySearch). All three are duals of the same
-// feasibility check — fix two of {retirement age, spending, estate}, solve for
-// the third:
+// Four objective modes share one coordinate-descent search (see the `Objective`
+// abstraction below and runStrategySearch). All four are duals of the same
+// feasibility check — fix all but one of {retirement age, spending, estate,
+// savings}, solve for the remaining one:
 //
 //  - 'estate' (default): maximize nominal netEstateValue subject to a $1k
 //    shortfall tolerance. A deterministic sweep picks a winner; a Monte Carlo
@@ -35,6 +37,14 @@
 //    integer bisection finds the earliest deterministically feasible age, then
 //    a Monte Carlo step-up moves later until the user's success bar clears.
 //    The pure decision helpers live in retirementAgeSearch.ts.
+//  - 'savings-needed': fix the retirement ages and spending, solve for the
+//    household savings (today's dollars) that keep the plan funded at the
+//    user's success bar. The same outer loop as earliest-age with a different
+//    outer variable: a bisection on the savings total D (the inner check is
+//    earliest-age's "does ANY strategy work here", unchanged), then a Monte
+//    Carlo step-up on D. D is placed across accounts by scaling the plan's own
+//    mix, or by a stated default mix when nothing is saved yet. The pure
+//    decision helpers live in savingsSearch.ts.
 
 import { runSimulation, runMonteCarlo } from '../engine/projection';
 import type { Person, SimulationInputs, SimulationResult, MonteCarloResult } from '../engine/types';
@@ -53,30 +63,55 @@ import {
     DEFAULT_MAX_AGE_STEPUP_PROBES,
 } from './retirementAgeSearch';
 import type { AgeFeasibilityProbe, AgeProbeResult, AgeStepUpAction, Who } from './retirementAgeSearch';
+import {
+    householdSavings,
+    savingsBasis,
+    allocateSavings,
+    savingsBreakdown,
+    savingsSearchCap,
+    savingsSearchScale,
+    planSavingsBisection,
+    planSavingsStepUp,
+    planSavingsFraming,
+    householdSavingsAtRetirement,
+    DEFAULT_MAX_SAVINGS_STEPUP_PROBES,
+} from './savingsSearch';
+import type {
+    SavingsAccountsBreakdown,
+    SavingsBasis,
+    SavingsFeasibilityProbe,
+    SavingsProbeResult,
+    SavingsStepUpAction,
+} from './savingsSearch';
 
 type WithdrawalStrategy = 'tax-efficient' | 'rrsp-first';
 
-// The three things the optimizer can solve for.
-export type OptimizerObjective = 'estate' | 'max-spend' | 'earliest-age';
+// The four things the optimizer can solve for.
+export type OptimizerObjective = 'estate' | 'max-spend' | 'earliest-age' | 'savings-needed';
 
 // --- Public options / result types ---------------------------------------
 
 export interface OptimizeMeltdownOptions {
     // Which objective to solve for (default 'estate'). 'max-spend' finds the
     // highest sustainable annual spending instead of the largest estate;
-    // 'earliest-age' finds the earliest retirement age at the planned spending.
+    // 'earliest-age' finds the earliest retirement age at the planned spending;
+    // 'savings-needed' finds the household savings the plan needs today.
     objective?: OptimizerObjective;
     // Also search CPP/OAS start ages (default true). When false, both are pinned
     // to the user's current input values. Applies to every objective.
     considerCppOas?: boolean;
     // Monte Carlo iterations for the validation pass (default 200).
     mcIterations?: number;
-    // max-spend and earliest-age: the Monte Carlo success rate (0-100) the answer
-    // must clear (the spend step-down / the age step-up). Default 85.
+    // max-spend, earliest-age and savings-needed: the Monte Carlo success rate
+    // (0-100) the answer must clear (the spend step-down / the age or savings
+    // step-up). Default 85.
     mcSuccessTarget?: number;
     // earliest-age only: 'all' (default) fills the "could spend" column on
     // every trade-off row; 'none' skips it (faster, e.g. for tests).
     couldSpendRows?: 'all' | 'none';
+    // savings-needed only, TEST-ONLY: replaces the search cap (savingsSearchCap)
+    // so the unreachable path can be reached without a pathological plan.
+    savingsSearchCap?: number;
     // Progress callback. `total` is an estimate that the run snaps to on finish.
     onProgress?: (done: number, total: number) => void;
     // Cancellation. Checked between batches; rejects with an AbortError.
@@ -188,6 +223,83 @@ export interface EarliestAgeResult {
     badMarketsAge: number | null;
 }
 
+// savings-needed: one person's balances at the answer, today's dollars, for a
+// "how that splits" line. Sums across people to neededSavings.
+export type SavingsNeededAccounts = SavingsAccountsBreakdown;
+
+// savings-needed-only extras. Present only when `objective === 'savings-needed'`.
+//
+// Every dollar figure here is in TODAY'S dollars. The answer is a household
+// total held TODAY (balances are entered as of today); for someone still
+// working the at-retirement pair restates it as what the household would hold
+// on the day they retire.
+export interface SavingsNeededResult {
+    // 'found': a savings total clears the plan (check boundHit/stepUpCapHit
+    //   for how firmly).
+    // 'unreachable': even searchCap fails on average returns, whatever the
+    //   strategy — the spending is more than savings can fund at these
+    //   retirement ages. Point at max-spend / earliest-age instead.
+    status: 'found' | 'unreachable';
+    // How a total was spread across accounts (state it in the answer — $1 of
+    // RRSP, TFSA and non-reg are worth different after-tax amounts):
+    //  'proportional': the household's current mix scaled up or down — every
+    //    RRSP, TFSA and non-registered balance, non-reg cost base with it.
+    //  'default': nothing saved today, so no mix to scale — split evenly
+    //    between spouses, then TFSA up to the room each could have built up
+    //    since 18 (or 2009), the rest to RRSP.
+    basis: SavingsBasis;
+    currentSavings: number;            // household RRSP + TFSA + non-reg today
+    neededSavings: number | null;      // household total today that clears the bar (null when unreachable)
+    deterministicSavings: number | null; // smallest total funding the plan on average returns (≤ neededSavings)
+    searchCap: number;                 // largest total the search would try
+    savingsGap: number | null;         // neededSavings − currentSavings; negative = the margin you have
+    haveEnough: boolean;               // neededSavings ≤ currentSavings (false when unreachable)
+    // The answer is $0: guaranteed income (CPP/OAS/DB pension) plus what the
+    // working years' surplus sweeps into accounts covers the spending alone.
+    needIsZero: boolean;
+    // haveEnough, but only with a different strategy: the answer's CPP/OAS
+    // start, melt amount or withdrawal order differs from the plan's AND the
+    // plan as entered misses the bar at current savings (baselineSuccessRate).
+    // When haveEnough while the plan as entered misses and this is false, the
+    // two differ by MC wobble alone (separate unseeded runs) — say "about
+    // enough" rather than contradict the odds shown.
+    strategyChangeNeeded: boolean;
+    neededAccounts: SavingsNeededAccounts[]; // per person at the answer; empty when unreachable
+
+    // --- At-retirement framing ---
+    stillWorking: boolean;             // anyone in the household still working
+    // Whose retirement frames the at-retirement figures: the primary person if
+    // still working, else the spouse if still working, else the primary (with
+    // the at-retirement figures null — already retired).
+    reportedWho: Who;
+    currentAge: number;                // reported person's age today
+    retirementAge: number | null;      // reported person's planned retirement age (null when nobody is still working)
+    // Household savings on the day `reportedWho` retires (the END-of-year
+    // balance of their last working year, deflated by that row's
+    // inflationFactor — see householdSavingsAtRetirement), today's dollars.
+    // neededAtRetirement is the answer's run; currentAtRetirement runs the
+    // answer's strategy at CURRENT savings, so the two differ only by savings
+    // (when unreachable there is no answer strategy: it is the plan as
+    // entered). Both null when nobody is still working.
+    neededAtRetirement: number | null;
+    currentAtRetirement: number | null;
+
+    mcSuccessTarget: number;
+    achievedSuccessRate: number | null; // MC success at the answer (null when unreachable)
+    // MC probe budget ran out. With achievedSuccessRate ≥ the target the answer
+    // clears but may be a little high; below it, no probed total cleared
+    // (the answer is the best probe — read it like boundHit).
+    stepUpCapHit: boolean;
+    boundHit: boolean;                 // even searchCap misses the bar (answer = best probe)
+    postRetirementSpend: number;       // the spending the savings were solved at
+    withdrawalStrategy: WithdrawalStrategy; // the answer's winning order
+    strategyChanged: boolean;
+    // Reported person's age when the 5th-percentile balance first hits ~0 after
+    // they retire (from today when already retired) at the answer, on their own
+    // clock — or null when money lasts the plan even in the worst 1-in-20 markets.
+    badMarketsAge: number | null;
+}
+
 export interface MeltdownResult {
     // Which objective produced this result. Drives both the UI rendering and
     // which fields applyMeltdownRecommendation carries over.
@@ -201,6 +313,9 @@ export interface MeltdownResult {
     // EarliestAgeResult.strategyChangeNeeded); false when the plan already works
     // at its own age as entered, or when there is no answer (unreachable /
     // unavailable). Either way the UI shows a muted state and hides Apply/Save.
+    // For savings-needed: true when an answer was found and it is MORE than
+    // the household has today (there is no Apply for this mode — balances are
+    // facts, not choices).
     improved: boolean;
 
     baselineInputs: SimulationInputs;
@@ -223,14 +338,20 @@ export interface MeltdownResult {
     recommendedSuccessRate: number | null;
     // estate only: set when the deterministic winner was kept despite a Monte
     // Carlo success rate materially (>1pt) below baseline and no safer runner-up
-    // qualified. Always false in max-spend and earliest-age modes (the MC
-    // step-down / step-up IS the guard).
+    // qualified. Always false in max-spend, earliest-age and savings-needed
+    // modes (the MC step-down / step-up IS the guard).
     mcWarning: boolean;
 
     // Present only when objective === 'max-spend'.
     maxSpend?: MaxSpendResult;
     // Present only when objective === 'earliest-age'.
     earliestAge?: EarliestAgeResult;
+    // Present only when objective === 'savings-needed'. The top-level fields
+    // then read: baseline* = the plan as entered at current savings
+    // (baselineSuccessRate is "your odds today"); recommended* = the answer
+    // (balances at neededSavings, the winning strategy); decisions = the
+    // strategy at the answer vs the plan's.
+    savingsNeeded?: SavingsNeededResult;
 }
 
 // --- Tunables ------------------------------------------------------------
@@ -269,6 +390,10 @@ const STEPDOWN_WARM_MIN_GAP = 20_000; // det-max must clear current spend by thi
 export const EARLIEST_AGE_MELT_STEPS = MAXSPEND_MELT_STEPS;
 const MAX_AGE_STEPUP_PROBES = DEFAULT_MAX_AGE_STEPUP_PROBES;
 const DEPLETION_THRESHOLD = SHORTFALL_TOL; // p5 balance at/below this counts as "run out"
+
+// savings-needed reuses earliest-age's inner check unchanged (same objective,
+// same cheap grid); its own search constants live in savingsSearch.ts.
+const MAX_SAVINGS_STEPUP_PROBES = DEFAULT_MAX_SAVINGS_STEPUP_PROBES;
 
 // --- Candidate builders (exported for testing) ---------------------------
 
@@ -979,6 +1104,7 @@ export async function optimizeMeltdown(
 ): Promise<MeltdownResult> {
     const mode = options.objective ?? 'estate';
     if (mode === 'earliest-age') return solveEarliestAge(baseInputs, options);
+    if (mode === 'savings-needed') return solveSavingsNeeded(baseInputs, options);
 
     const considerCppOas = options.considerCppOas ?? true;
     const mcIterations = options.mcIterations ?? 200;
@@ -1428,12 +1554,107 @@ const COULD_SPEND_WEIGHT = 2;
 const EXPECTED_COULD_SPEND_PROBES = 3;
 const EXPECTED_STEPUP_PROBES = 3;
 
-interface AgeCheck {
-    delta: number;
-    // Best strategy at this age: the largest net estate among feasible
+// --- Shared outer-loop plumbing (earliest-age and savings-needed) ---------
+//
+// Both outer searches move one plan input — the retirement-age shift Δ, or the
+// household savings total D — and ask the same two questions at each value:
+//   1. the inner check: does ANY strategy fund the plan on average returns?
+//      runStrategySearch with earliestAgeObjective (best estate among feasible
+//      candidates, least shortfall when none is), and
+//   2. on demand, the Monte Carlo success rate of that value's winning strategy.
+// Both are cached per value, so a value the deterministic phase checked costs
+// nothing when the MC phase or the result assembly revisits it.
+
+interface OuterCheck {
+    key: number; // the outer value (Δ or D)
+    // Best strategy at this value: the largest net estate among feasible
     // candidates, or — when none is feasible — the smallest shortfall.
     winner: Evaluated;
     feasible: boolean;
+}
+
+// runMonteCarlo with an abort check either side and an event-loop yield after
+// it (one MC run is long enough to starve the UI otherwise).
+function abortableMcRunner(mcIterations: number, signal?: AbortSignal) {
+    return async (inputs: SimulationInputs): Promise<MonteCarloResult> => {
+        if (signal?.aborted) throw abortError();
+        const mc = runMonteCarlo(inputs, mcIterations);
+        await yieldToEventLoop();
+        if (signal?.aborted) throw abortError();
+        return mc;
+    };
+}
+
+interface OuterProbe {
+    // The inner check at `key`. `onFraction` reports the search's progress
+    // (0-1) when it actually runs; a cached check reports nothing.
+    checkAt(key: number, onFraction?: (f: number) => void): Promise<OuterCheck>;
+    // MC on checkAt(key)'s winner. `onFraction` is passed to the check.
+    mcAt(key: number, onFraction?: (f: number) => void): Promise<MonteCarloResult>;
+    // Uncached MC on arbitrary inputs (the baseline), same abort handling.
+    runMc(inputs: SimulationInputs): Promise<MonteCarloResult>;
+}
+
+function createOuterProbe(args: {
+    inputsAt: (key: number) => SimulationInputs; // the plan with the outer input set to `key`
+    considerCppOas: boolean;
+    mcIterations: number;
+    signal?: AbortSignal;
+}): OuterProbe {
+    const { inputsAt, considerCppOas, mcIterations, signal } = args;
+    const objective = earliestAgeObjective();
+    const runMc = abortableMcRunner(mcIterations, signal);
+    const checks = new Map<number, OuterCheck>();
+    const mcs = new Map<number, MonteCarloResult>();
+
+    const checkAt = async (key: number, onFraction?: (f: number) => void): Promise<OuterCheck> => {
+        const hit = checks.get(key);
+        if (hit) return hit;
+        const at = inputsAt(key);
+        const grids = buildSearchGrids(at, objective, considerCppOas);
+        const est = Math.max(1, estimateSearchRuns(at, objective, grids));
+        let runs = 0;
+        const { winner } = await runStrategySearch({
+            base: at, objective, grids, signal,
+            onRuns: (n) => { runs += n; onFraction?.(Math.min(1, runs / est)); },
+        });
+        // rankInfeasible makes every scored candidate eligible, and the grids are
+        // never empty, so a winner always exists.
+        if (!winner) throw new Error('outer-loop inner check scored no candidates');
+        const check: OuterCheck = { key, winner, feasible: winner.feasible };
+        checks.set(key, check);
+        return check;
+    };
+
+    const mcAt = async (key: number, onFraction?: (f: number) => void): Promise<MonteCarloResult> => {
+        const hit = mcs.get(key);
+        if (hit) return hit;
+        const c = await checkAt(key, onFraction);
+        const mc = await runMc(c.winner.inputs);
+        mcs.set(key, mc);
+        return mc;
+    };
+
+    return { checkAt, mcAt, runMc };
+}
+
+// Bad-markets line: the first age the 5th-percentile balance hits ~0 once the
+// reported person has retired. The percentile rows run on the primary person's
+// clock (age = primary age today + years elapsed), so search from
+// `yearsToRetirement` years out on that clock, then report on the reported
+// person's own clock. null when money lasts the plan even in those markets.
+function badMarketsAgeAfter(
+    mc: MonteCarloResult,
+    base: SimulationInputs,
+    reported: Person,
+    yearsToRetirement: number,
+): number | null {
+    const depletionPrimaryAge = firstDepletionAge(
+        mc.percentiles, base.person.age + yearsToRetirement, DEPLETION_THRESHOLD,
+    );
+    return depletionPrimaryAge === null
+        ? null
+        : depletionPrimaryAge - base.person.age + reported.age;
 }
 
 function hasPension(p: Person): boolean {
@@ -1458,15 +1679,13 @@ async function solveEarliestAge(
     const baselineResults = runSimulation(base);
     const baselineMetrics = computeSummaryMetrics(baselineResults, base, false);
 
-    const runMc = async (inputs: SimulationInputs): Promise<MonteCarloResult> => {
-        if (signal?.aborted) throw abortError();
-        const mc = runMonteCarlo(inputs, mcIterations);
-        await yieldToEventLoop();
-        if (signal?.aborted) throw abortError();
-        return mc;
-    };
-
     const shift = planAgeShift(base);
+    // Inner check and MC, cached per Δ.
+    const probe = createOuterProbe({
+        inputsAt: (delta) => applyRetirementShift(base, shift, delta).inputs,
+        considerCppOas, mcIterations, signal,
+    });
+    const { checkAt, mcAt, runMc } = probe;
     const reported = personOf(base, shift.reportedWho);
     const pensionHeld = shift.shifted.some(w => hasPension(personOf(base, w)));
     const cppOverrideHeld = shift.shifted.some(w => personOf(base, w).cppAnnualOverride != null);
@@ -1540,28 +1759,6 @@ async function solveEarliestAge(
 
     if (!shift.available) return noAnswer('unavailable');
 
-    // --- Inner check, cached per Δ ---
-    const objective = earliestAgeObjective();
-    const checks = new Map<number, AgeCheck>();
-    const checkAt = async (delta: number, onFraction?: (f: number) => void): Promise<AgeCheck> => {
-        const hit = checks.get(delta);
-        if (hit) return hit;
-        const shifted = applyRetirementShift(base, shift, delta).inputs;
-        const grids = buildSearchGrids(shifted, objective, considerCppOas);
-        const est = Math.max(1, estimateSearchRuns(shifted, objective, grids));
-        let runs = 0;
-        const { winner } = await runStrategySearch({
-            base: shifted, objective, grids, signal,
-            onRuns: (n) => { runs += n; onFraction?.(Math.min(1, runs / est)); },
-        });
-        // rankInfeasible makes every scored candidate eligible, and the grids are
-        // never empty, so a winner always exists.
-        if (!winner) throw new Error('earliest-age inner check scored no candidates');
-        const check: AgeCheck = { delta, winner, feasible: winner.feasible };
-        checks.set(delta, check);
-        return check;
-    };
-
     // --- 1. Deterministic bisection over Δ ---
     const rangeSize = shift.maxDelta - shift.minDelta + 1;
     const estDetChecks = Math.ceil(Math.log2(rangeSize + 1)) + 1;
@@ -1579,16 +1776,6 @@ async function solveEarliestAge(
     progress.at(0, PROGRESS_DET_END, 1);
 
     // --- 2. Monte Carlo step-up from the deterministic answer ---
-    const mcByDelta = new Map<number, MonteCarloResult>();
-    const mcAt = async (delta: number): Promise<MonteCarloResult> => {
-        const hit = mcByDelta.get(delta);
-        if (hit) return hit;
-        const c = await checkAt(delta);
-        const mc = await runMc(c.winner.inputs);
-        mcByDelta.set(delta, mc);
-        return mc;
-    };
-
     const stepPlan = { target: mcSuccessTarget, start: detDelta, max: shift.maxDelta, maxProbes: MAX_AGE_STEPUP_PROBES };
     const mcProbes: AgeProbeResult[] = [];
     let step: AgeStepUpAction = planAgeStepUp(stepPlan, mcProbes);
@@ -1669,16 +1856,8 @@ async function solveEarliestAge(
     const recommendedInputs = winner.inputs;
     const answerAge = reported.retirementAge + answerDelta;
 
-    // Bad-markets line: the percentile rows run on the primary person's clock
-    // (age = primary age today + years elapsed). Search from the reported
-    // person's retirement onward, then report on the reported person's clock.
-    const yearsToRetirement = answerAge - reported.age;
-    const depletionPrimaryAge = firstDepletionAge(
-        answerMc.percentiles, base.person.age + yearsToRetirement, DEPLETION_THRESHOLD,
-    );
-    const badMarketsAge = depletionPrimaryAge === null
-        ? null
-        : depletionPrimaryAge - base.person.age + reported.age;
+    // Bad-markets line, from the reported person's (new) retirement onward.
+    const badMarketsAge = badMarketsAgeAfter(answerMc, base, reported, answerAge - reported.age);
 
     const decisions: PersonMeltdownDecision[] = [
         buildDecision('person', 'You', base.person, winner.a.person, recommendedInputs.person.retirementAge),
@@ -1750,6 +1929,229 @@ async function solveEarliestAge(
     };
 }
 
+// --- Savings-needed solve --------------------------------------------------
+//
+// Outer loop over the household savings total D, today's dollars (see
+// savingsSearch.ts for the allocation and the pure planners it drives):
+//   1. Deterministic search: the smallest D at which ANY strategy funds the
+//      plan on average returns — the current total first, then 0 or a ×2
+//      expansion, then bisection. Inner check = earliest-age's, cached per D.
+//   2. Monte Carlo step-up from there until the success bar clears, on each
+//      probed D's winning strategy.
+// Retirement ages and spending are held exactly as entered.
+
+const PROGRESS_SAVINGS_DET_END = 0.6; // deterministic search; the MC step-up takes the rest
+// Typical counts, progress only (the bar clamps at each phase's end).
+const EXPECTED_SAVINGS_DET_CHECKS = 8;
+const EXPECTED_SAVINGS_STEPUP_PROBES = 5;
+
+async function solveSavingsNeeded(
+    baseInputs: SimulationInputs,
+    options: OptimizeMeltdownOptions,
+): Promise<MeltdownResult> {
+    const considerCppOas = options.considerCppOas ?? true;
+    const mcIterations = options.mcIterations ?? 200;
+    const mcSuccessTarget = options.mcSuccessTarget ?? DEFAULT_MC_TARGET;
+    const { signal } = options;
+    const progress = phasedProgress(options.onProgress);
+
+    if (signal?.aborted) throw abortError();
+
+    const base = structuredClone(baseInputs);
+    const currentStrategy: WithdrawalStrategy = base.withdrawalStrategy ?? 'tax-efficient';
+    const baselineResults = runSimulation(base);
+    const baselineMetrics = computeSummaryMetrics(baselineResults, base, false);
+
+    const currentSavings = householdSavings(base);
+    const basis = savingsBasis(base);
+    const searchCap = options.savingsSearchCap ?? savingsSearchCap(base);
+    const scale = savingsSearchScale(base.postRetirementSpend);
+    const framing = planSavingsFraming(base);
+    const reported = personOf(base, framing.reportedWho);
+
+    // Inner check and MC, cached per D.
+    const probe = createOuterProbe({
+        inputsAt: (total) => allocateSavings(base, total).inputs,
+        considerCppOas, mcIterations, signal,
+    });
+
+    // Fields that read the same whatever the outcome.
+    const common = {
+        basis,
+        currentSavings,
+        searchCap,
+        stillWorking: framing.stillWorking,
+        reportedWho: framing.reportedWho,
+        currentAge: framing.currentAge,
+        retirementAge: framing.retirementAge,
+        mcSuccessTarget,
+        postRetirementSpend: base.postRetirementSpend,
+    };
+
+    // --- 1. Deterministic search over D ---
+    const bisectPlan = { start: currentSavings, cap: searchCap, expandFloor: scale };
+    const detProbes: SavingsFeasibilityProbe[] = [];
+    let bisect = planSavingsBisection(bisectPlan, detProbes);
+    while (bisect.kind === 'probe') {
+        const n = detProbes.length;
+        const c = await probe.checkAt(bisect.total,
+            f => progress.at(0, PROGRESS_SAVINGS_DET_END, (n + f) / EXPECTED_SAVINGS_DET_CHECKS));
+        detProbes.push({ total: bisect.total, feasible: c.feasible });
+        bisect = planSavingsBisection(bisectPlan, detProbes);
+    }
+
+    if (bisect.kind === 'unreachable') {
+        // Even the cap can't fund the spending on average returns. Report the
+        // plan unchanged (improved: false), with its own at-retirement total.
+        const baselineMonteCarlo = await probe.runMc(base);
+        progress.finish();
+        return {
+            objective: 'savings-needed',
+            improved: false,
+            baselineInputs: base,
+            recommendedInputs: structuredClone(base),
+            baselineResults,
+            recommendedResults: baselineResults,
+            baselineMetrics,
+            recommendedMetrics: baselineMetrics,
+            baselineMonteCarlo,
+            recommendedMonteCarlo: baselineMonteCarlo,
+            decisions: [],
+            netEstateDelta: 0,
+            lifetimeTaxDelta: 0,
+            baselineSuccessRate: baselineMonteCarlo.successRate,
+            recommendedSuccessRate: baselineMonteCarlo.successRate,
+            mcWarning: false,
+            savingsNeeded: {
+                ...common,
+                status: 'unreachable',
+                neededSavings: null,
+                deterministicSavings: null,
+                savingsGap: null,
+                haveEnough: false,
+                needIsZero: false,
+                strategyChangeNeeded: false,
+                neededAccounts: [],
+                neededAtRetirement: null,
+                currentAtRetirement: householdSavingsAtRetirement(baselineResults, framing.yearsToRetirement),
+                achievedSuccessRate: null,
+                stepUpCapHit: false,
+                boundHit: false,
+                withdrawalStrategy: currentStrategy,
+                strategyChanged: false,
+                badMarketsAge: null,
+            },
+        };
+    }
+    const deterministicSavings = bisect.total;
+    progress.at(0, PROGRESS_SAVINGS_DET_END, 1);
+
+    // --- 2. Monte Carlo step-up from the deterministic answer ---
+    const stepPlan = {
+        target: mcSuccessTarget, start: deterministicSavings, cap: searchCap,
+        minStepBase: scale, maxProbes: MAX_SAVINGS_STEPUP_PROBES,
+    };
+    const mcProbes: SavingsProbeResult[] = [];
+    let step: SavingsStepUpAction = planSavingsStepUp(stepPlan, mcProbes);
+    while (step.kind === 'probe') {
+        const n = mcProbes.length;
+        // A total the deterministic phase never checked costs a strategy search
+        // as well as the MC run: let the search move the bar most of the way.
+        const mc = await probe.mcAt(step.total, f => progress.at(
+            PROGRESS_SAVINGS_DET_END, 1, (n + 0.7 * f) / EXPECTED_SAVINGS_STEPUP_PROBES,
+        ));
+        mcProbes.push({ total: step.total, successRate: mc.successRate });
+        progress.at(PROGRESS_SAVINGS_DET_END, 1, mcProbes.length / EXPECTED_SAVINGS_STEPUP_PROBES);
+        step = planSavingsStepUp(stepPlan, mcProbes);
+    }
+    const neededSavings = step.total;
+    const stepUpCapHit = step.kind === 'capHit';
+    const boundHit = step.kind === 'boundHit';
+
+    // "Your odds today": the plan exactly as entered, at current savings.
+    const baselineMonteCarlo = await probe.runMc(base);
+
+    // --- Result assembly ---
+    const answerCheck = await probe.checkAt(neededSavings); // cached: the step-up probed it
+    const answerMc = await probe.mcAt(neededSavings);       // cached likewise
+    const winner = answerCheck.winner;
+    const recommendedInputs = winner.inputs;
+
+    // At-retirement pair. The current-savings side runs the ANSWER's strategy
+    // on the plan's own balances (one extra engine run), so it differs from
+    // the answer's run by savings alone — not by a strategy change too.
+    let neededAtRetirement: number | null = null;
+    let currentAtRetirement: number | null = null;
+    if (framing.yearsToRetirement !== null) {
+        neededAtRetirement = householdSavingsAtRetirement(winner.results, framing.yearsToRetirement);
+        const atCurrent = runSimulation(applyAssignment(base, winner.a));
+        currentAtRetirement = householdSavingsAtRetirement(atCurrent, framing.yearsToRetirement);
+    }
+
+    // Bad-markets line, from the reported person's retirement (or today, when
+    // everyone has already retired).
+    const badMarketsAge = badMarketsAgeAfter(answerMc, base, reported, framing.yearsToRetirement ?? 0);
+
+    // Decisions compare the answer's strategy with the plan's, judged at the
+    // answer's balances: hasRrsp must reflect the RRSP the answer holds (a
+    // default-mix answer gives an RRSP to someone who has none today).
+    const planAtAnswer = allocateSavings(base, neededSavings).inputs;
+    const decisions: PersonMeltdownDecision[] = [
+        buildDecision('person', 'You', planAtAnswer.person, winner.a.person),
+    ];
+    if (planAtAnswer.spouse && winner.a.spouse) {
+        decisions.push(buildDecision('spouse', 'Spouse', planAtAnswer.spouse, winner.a.spouse));
+    }
+
+    const haveEnough = neededSavings <= currentSavings;
+    const winningStrategy = winner.a.strategy;
+    // Same rule as earliest-age at the plan's own age: when the answer fits
+    // within current savings, a different strategy is a fix only if the plan
+    // as entered misses the bar.
+    const strategyChangeNeeded = haveEnough
+        && strategyDiffersFromPlan(decisions, currentStrategy, winningStrategy)
+        && baselineMonteCarlo.successRate < mcSuccessTarget;
+    progress.finish();
+
+    return {
+        objective: 'savings-needed',
+        improved: neededSavings > currentSavings,
+        baselineInputs: base,
+        recommendedInputs,
+        baselineResults,
+        recommendedResults: winner.results,
+        baselineMetrics,
+        recommendedMetrics: winner.metrics,
+        baselineMonteCarlo,
+        recommendedMonteCarlo: answerMc,
+        decisions,
+        netEstateDelta: winner.metrics.netEstateValue - baselineMetrics.netEstateValue,
+        lifetimeTaxDelta: winner.metrics.lifetimeTaxPaid - baselineMetrics.lifetimeTaxPaid,
+        baselineSuccessRate: baselineMonteCarlo.successRate,
+        recommendedSuccessRate: answerMc.successRate,
+        mcWarning: false, // the MC step-up is the guard in savings-needed mode
+        savingsNeeded: {
+            ...common,
+            status: 'found',
+            neededSavings,
+            deterministicSavings,
+            savingsGap: neededSavings - currentSavings,
+            haveEnough,
+            needIsZero: neededSavings === 0,
+            strategyChangeNeeded,
+            neededAccounts: savingsBreakdown(recommendedInputs),
+            neededAtRetirement,
+            currentAtRetirement,
+            achievedSuccessRate: answerMc.successRate,
+            stepUpCapHit,
+            boundHit,
+            withdrawalStrategy: winningStrategy,
+            strategyChanged: winningStrategy !== currentStrategy,
+            badMarketsAge,
+        },
+    };
+}
+
 // Merge only the fields the optimizer searched from `recommended` onto a fresh
 // clone of `current`. Everything else — balances, any edits made while the
 // optimizer was open — comes from `current`, so applying a stale recommendation
@@ -1763,7 +2165,10 @@ async function solveEarliestAge(
 // — the estate search leaves spending exactly as planned — so an estate apply
 // still never touches it. earliest-age additionally owns the retirement ages and
 // the CPP contribution years that follow them (an unmoved spouse's values come
-// across unchanged), and also leaves spending alone.
+// across unchanged), and also leaves spending alone. savings-needed carries the
+// strategy fields only, exactly like estate: its recommendedInputs hold the
+// balances at the needed savings, but balances are facts about the household,
+// not choices, so they NEVER come across (the UI offers no Apply for it anyway).
 export function applyMeltdownRecommendation(
     current: SimulationInputs,
     recommended: SimulationInputs,

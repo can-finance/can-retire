@@ -1,16 +1,18 @@
 /*
  * The Monte Carlo success bars a spending or retirement-age answer can be held
  * to, with their labels and one-line explanations. Shared by the in-app
- * optimizer and the /when-can-i-retire/ page so both offer the same choices in
- * the same words.
+ * optimizer and the /when-can-i-retire/ and /how-much-do-i-need-to-retire/
+ * pages so all of them offer the same choices in the same words.
  *
- * `blurb` is the spending framing (max-spend); `ageBlurb` the retirement-age one.
+ * `blurb` is the spending framing (max-spend); `ageBlurb` the retirement-age
+ * one; `savingsBlurb` the savings-needed one.
  */
 export interface SuccessTarget {
     value: number;
     label: string;
     blurb: string;
     ageBlurb: string;
+    savingsBlurb: string;
 }
 
 export const SUCCESS_TARGETS: SuccessTarget[] = [
@@ -18,16 +20,19 @@ export const SUCCESS_TARGETS: SuccessTarget[] = [
         value: 75, label: 'Some risk',
         blurb: 'Spend more, accept more risk of falling short.',
         ageBlurb: 'Retire sooner, accept more risk of falling short.',
+        savingsBlurb: 'Save less, accept more risk of falling short.',
     },
     {
         value: 85, label: 'Balanced',
         blurb: 'A sensible middle ground (recommended).',
         ageBlurb: 'A sensible middle ground (recommended).',
+        savingsBlurb: 'A sensible middle ground (recommended).',
     },
     {
         value: 95, label: 'Very safe',
         blurb: 'Spend less, stay funded in almost every scenario.',
         ageBlurb: 'Retire later, stay funded in almost every scenario.',
+        savingsBlurb: 'Save more, stay funded in almost every scenario.',
     },
 ];
 

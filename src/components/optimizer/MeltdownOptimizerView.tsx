@@ -7,7 +7,7 @@ import { optimizeMeltdown } from '../../utils/meltdownOptimizer';
 import type { MeltdownResult, OptimizerObjective, PersonMeltdownDecision } from '../../utils/meltdownOptimizer';
 import { planAgeShift } from '../../utils/retirementAgeSearch';
 import { PLAN_COLORS } from '../../constants/chartColors';
-import { formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyApprox, formatCurrencyCAD, roundCurrencyApprox } from '../../utils/formatters';
 import { Toggle } from '../ui/Toggle';
 import { Dialog } from '../ui/Dialog';
 import { HelpTooltip } from '../ui/HelpTooltip';
@@ -16,6 +16,8 @@ import { ComparisonSummaryCards } from '../comparison/ComparisonSummaryCards';
 import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
 import { EarliestAgeHeadline } from './EarliestAgeHeadline';
 import { EarliestAgeTable } from './EarliestAgeTable';
+import { SavingsNeededHeadline } from './SavingsNeededHeadline';
+import { savingsAnswerClears } from './savingsNeededSummary';
 import { describeStrategyChanges } from './strategySummary';
 import { SUCCESS_TARGETS, DEFAULT_SUCCESS_TARGET } from './successTargets';
 
@@ -34,14 +36,54 @@ interface MeltdownOptimizerViewProps {
 type Objective = OptimizerObjective;
 
 /*
- * What the search was solving for. Used both as the comparison run's label and
- * as the name of the plan if it gets saved — deliberately one function, so the
- * chart legend and the plan list can never call the same scenario two things.
+ * What the search was solving for. For the three strategy goals it is used
+ * both as the comparison run's label and as the name of the plan if it gets
+ * saved — deliberately one function, so the chart legend and the plan list can
+ * never call the same scenario two things.
+ *
+ * Savings Needed is the exception (see runLabel / savedPlanName): its
+ * second run isn't a strategy to adopt but the same plan at a different
+ * balance, so the legend says so, and a saved copy carries the amount.
  */
 function objectiveLabel(objective: Objective): string {
     if (objective === 'max-spend') return 'Maximize Spend';
     if (objective === 'earliest-age') return 'Earliest Retirement';
+    if (objective === 'savings-needed') return 'Savings Needed';
     return 'Maximize Estate';
+}
+
+// The comparison run's label: the goal, or for Savings Needed what the run
+// holds — never a name that reads as a better strategy.
+function runLabel(result: MeltdownResult): string {
+    const sn = result.savingsNeeded;
+    if (result.objective !== 'savings-needed' || !sn) return objectiveLabel(result.objective);
+    if (savingsAnswerClears(sn)) return 'With the savings needed';
+    // No amount clears the bar: the run is the best amount tried.
+    return sn.neededSavings !== null ? `With ${formatCurrencyApprox(sn.neededSavings)} saved` : 'Current plan';
+}
+
+// What Savings Needed's comparison run holds, for the line above the chart.
+function savingsComparisonPhrase(result: MeltdownResult): string {
+    const sn = result.savingsNeeded;
+    if (sn && !savingsAnswerClears(sn) && sn.neededSavings !== null) {
+        return `with ${formatCurrencyApprox(sn.neededSavings)} saved, the best amount tried`;
+    }
+    return 'with the savings needed';
+}
+
+// The saved plan's name: the goal, or for Savings Needed the headline's amount
+// — what you'd hold on the day you retire ("Needs $1.2M by 60"), or today's
+// when everyone is already retired — so two runs stay apart in the plan list.
+function savedPlanName(result: MeltdownResult): string {
+    const sn = result.savingsNeeded;
+    if (result.objective !== 'savings-needed' || !sn || sn.neededSavings === null) return objectiveLabel(result.objective);
+    if (sn.retirementAge !== null && sn.neededAtRetirement !== null) {
+        const amount = formatCurrencyApprox(sn.neededAtRetirement);
+        return sn.reportedWho === 'spouse'
+            ? `Needs ${amount} (spouse retires at ${sn.retirementAge})`
+            : `Needs ${amount} by ${sn.retirementAge}`;
+    }
+    return `Needs ${formatCurrencyApprox(sn.neededSavings)}`;
 }
 
 // Human labels for the household withdrawal strategy. Matches
@@ -198,7 +240,9 @@ export function MeltdownOptimizerView({
 
                     <div className="mt-6">
                         <p className="text-sm font-semibold text-slate-800">What should the optimizer aim for?</p>
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        {/* Two by two from sm up: four across in this max-w-4xl card
+                            would leave each title about 160px and wrap them unevenly. */}
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <ObjectiveCard
                                 selected={objective === 'estate'}
                                 onSelect={() => setObjective('estate')}
@@ -223,16 +267,22 @@ export function MeltdownOptimizerView({
                                         : 'Not available: everyone in this plan is already retired.')
                                     : undefined}
                             />
+                            <ObjectiveCard
+                                selected={objective === 'savings-needed'}
+                                onSelect={() => setObjective('savings-needed')}
+                                title="See how much you need"
+                                sub="Finds the savings your plan needs at your current spending and retirement age."
+                            />
                         </div>
                         {/* What the chosen goal changes, said once under the cards rather
-                            than in all three — it only matters for the one you pick. */}
+                            than in all four — it only matters for the one you pick. */}
                         <p className="mt-3 text-sm text-slate-600">{OBJECTIVE_CHANGES[objective]}</p>
                     </div>
 
-                    {(objective === 'max-spend' || objective === 'earliest-age') && (
+                    {(objective === 'max-spend' || objective === 'earliest-age' || objective === 'savings-needed') && (
                         <div className="mt-5">
                             <p className="text-sm font-semibold text-slate-800">
-                                {objective === 'earliest-age' ? 'How sure do you want to be?' : 'How safe should that spending be?'}
+                                {objective === 'max-spend' ? 'How safe should that spending be?' : 'How sure do you want to be?'}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
                                 The portion of market simulations in which your money must last to the end of the plan.
@@ -256,7 +306,9 @@ export function MeltdownOptimizerView({
                             <p className="mt-2 text-xs text-slate-500">
                                 {(() => {
                                     const t = SUCCESS_TARGETS.find(x => x.value === mcSuccessTarget);
-                                    return objective === 'earliest-age' ? t?.ageBlurb : t?.blurb;
+                                    if (objective === 'earliest-age') return t?.ageBlurb;
+                                    if (objective === 'savings-needed') return t?.savingsBlurb;
+                                    return t?.blurb;
                                 })()}
                             </p>
                         </div>
@@ -324,7 +376,9 @@ export function MeltdownOptimizerView({
                                     ? 'Find my highest spending'
                                     : objective === 'earliest-age'
                                         ? 'Find my earliest retirement age'
-                                        : 'Find my largest estate')
+                                        : objective === 'savings-needed'
+                                            ? 'Find how much I need'
+                                            : 'Find my largest estate')
                                 : 'Continue with sample numbers'}
                         </button>
                         <button onClick={onExit} className={secondaryBtn}>
@@ -347,7 +401,9 @@ export function MeltdownOptimizerView({
                             ? 'Searching for your highest spending…'
                             : objective === 'earliest-age'
                                 ? 'Searching for your earliest retirement age…'
-                                : 'Searching for your largest estate…'}
+                                : objective === 'savings-needed'
+                                    ? 'Finding how much you need…'
+                                    : 'Searching for your largest estate…'}
                     </p>
                     <div className="mt-4 h-2.5 w-full rounded-full bg-slate-100 overflow-hidden">
                         <div
@@ -397,7 +453,7 @@ export function MeltdownOptimizerView({
             onSave={() => {
                 // uniquePlanName appends " 2", " 3" on collision, so re-running
                 // the same objective stays readable in the plan list.
-                const baseName = objectiveLabel(phase.result.objective);
+                const baseName = savedPlanName(phase.result);
                 setSavedName(onSavePlan(baseName, phase.result.recommendedInputs));
                 setSaveDialogOpen(true);
             }}
@@ -463,7 +519,7 @@ function ResultsView({
             {
                 comparand: {
                     id: 'suggested',
-                    name: objectiveLabel(result.objective),
+                    name: runLabel(result),
                     inputs: result.recommendedInputs,
                 },
                 color: PLAN_COLORS[1],
@@ -481,6 +537,22 @@ function ResultsView({
 
     const secondary = secondaryBtn;
 
+    // Savings Needed has no Apply: the answer's balances are facts about the
+    // household, not settings to write into the plan. It can only be saved as
+    // a copy, and only when there is an amount that clears the bar and it is
+    // more than you have (a "you have enough" copy would just shrink your
+    // savings; a "no amount works" one would hold an amount that doesn't work).
+    const isSavings = result.objective === 'savings-needed';
+    const canApply = result.improved && !isSavings;
+    const canSave = isSavings
+        ? result.improved && !!result.savingsNeeded && savingsAnswerClears(result.savingsNeeded)
+        : result.improved;
+
+    // Savings Needed's comparison run is the plan at a different balance. When
+    // no amount can fund the spending even on average returns there is no such
+    // run (it is the plan as entered twice), so there is nothing to compare.
+    const showComparison = !(isSavings && result.savingsNeeded?.status === 'unreachable');
+
     /*
      * The caveat travels with the buttons — it describes what Apply overwrites,
      * so it has to be read before the button, not stranded elsewhere on the page.
@@ -494,7 +566,7 @@ function ResultsView({
      */
     const actions = (
         <>
-            {result.improved && (
+            {canApply && (
                 <p className="text-xs text-slate-500">
                     {result.objective === 'max-spend'
                         ? 'Applying changes your annual spending, RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'
@@ -503,9 +575,15 @@ function ResultsView({
                             : 'Applying changes the RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'}
                 </p>
             )}
+            {isSavings && canSave && (
+                <p className="text-xs text-slate-500">
+                    Save as new plan adds a copy of your plan with the savings needed and the strategy
+                    the amount assumes, so you can explore it year by year. Your current plan stays as it is.
+                </p>
+            )}
 
             <div className="flex flex-wrap items-center gap-3">
-                {result.improved && (
+                {canApply && (
                     <button
                         onClick={onApply}
                         disabled={applied}
@@ -516,7 +594,7 @@ function ResultsView({
                         {applied ? 'Applied ✓' : 'Apply to current plan'}
                     </button>
                 )}
-                {result.improved && (
+                {canSave && (
                     <button
                         onClick={onSave}
                         disabled={savedName !== null}
@@ -537,10 +615,12 @@ function ResultsView({
         </>
     );
 
-    // MaxSpendCard and EarliestAgeCard render `actions` themselves, between
-    // their boxes — don't render them a second time at view level.
+    // MaxSpendCard, EarliestAgeCard and SavingsNeededCard render `actions`
+    // themselves, between their boxes — don't render them a second time at
+    // view level.
     const actionsInCard = (result.objective === 'max-spend' && result.improved)
-        || result.objective === 'earliest-age';
+        || result.objective === 'earliest-age'
+        || result.objective === 'savings-needed';
 
     return (
         <div className="flex flex-col gap-6">
@@ -549,7 +629,12 @@ function ResultsView({
                 <span className="ml-2 inline-block bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded font-bold align-middle">BETA</span>
             </h2>
 
-            {result.objective === 'earliest-age' ? (
+            {/* Savings Needed first: its result must never reach the estate
+                branches below (RecommendationCard's net-estate and tax tiles
+                would read the change in savings as a gain from the strategy). */}
+            {result.objective === 'savings-needed' ? (
+                <SavingsNeededCard result={result} actions={actions} />
+            ) : result.objective === 'earliest-age' ? (
                 <EarliestAgeCard result={result} actions={actions} />
             ) : result.objective === 'max-spend' ? (
                 result.improved ? (
@@ -581,41 +666,53 @@ function ResultsView({
 
             {!actionsInCard && actions}
 
-            <div className="flex flex-wrap items-center justify-end gap-4 -mb-3">
-                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-                    {BAND_OPTIONS.map(opt => (
-                        <button
-                            key={opt.mode}
-                            onClick={() => onBandMode(opt.mode)}
-                            aria-pressed={bandMode === opt.mode}
-                            className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-                                bandMode === opt.mode
-                                    ? 'bg-brand-600 text-white shadow-sm'
-                                    : 'text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                            {opt.label}
-                        </button>
-                    ))}
-                </div>
+            {showComparison && (
+                <>
+                    {isSavings && (
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            The comparison below puts your plan as it is today next to the same plan{' '}
+                            {savingsComparisonPhrase(result)}. Differences in what’s left at the end and in
+                            tax come mostly from the different savings, not from a better strategy.
+                        </p>
+                    )}
 
-                <div className="w-full sm:w-auto sm:min-w-[16rem]">
-                    <Toggle
-                        checked={isInflationAdjusted}
-                        onChange={onToggleInflation}
-                        label="Show Today's Dollars (Inflation-Adjusted)"
+                    <div className="flex flex-wrap items-center justify-end gap-4 -mb-3">
+                        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+                            {BAND_OPTIONS.map(opt => (
+                                <button
+                                    key={opt.mode}
+                                    onClick={() => onBandMode(opt.mode)}
+                                    aria-pressed={bandMode === opt.mode}
+                                    className={`text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+                                        bandMode === opt.mode
+                                            ? 'bg-brand-600 text-white shadow-sm'
+                                            : 'text-slate-600 hover:bg-slate-100'
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="w-full sm:w-auto sm:min-w-[16rem]">
+                            <Toggle
+                                checked={isInflationAdjusted}
+                                onChange={onToggleInflation}
+                                label="Show Today's Dollars (Inflation-Adjusted)"
+                            />
+                        </div>
+                    </div>
+
+                    <ComparisonChart
+                        data={chartData}
+                        runs={runs}
+                        bandMode={bandMode}
+                        inflationAdjusted={isInflationAdjusted}
                     />
-                </div>
-            </div>
-
-            <ComparisonChart
-                data={chartData}
-                runs={runs}
-                bandMode={bandMode}
-                inflationAdjusted={isInflationAdjusted}
-            />
-            <ComparisonSummaryCards runs={runs} />
-            <ComparisonMetricsTable runs={runs} inflationAdjusted={isInflationAdjusted} />
+                    <ComparisonSummaryCards runs={runs} />
+                    <ComparisonMetricsTable runs={runs} inflationAdjusted={isInflationAdjusted} />
+                </>
+            )}
 
             <Dialog
                 open={saveDialogOpen}
@@ -730,7 +827,11 @@ function meltStartCell(amount: number, startAge: number): string {
     return amount <= 0 ? '—' : String(startAge);
 }
 
-function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDecision; showLabel: boolean }) {
+function DecisionTable({ decision: d, showLabel, suggestedLabel }: {
+    decision: PersonMeltdownDecision;
+    showLabel: boolean;
+    suggestedLabel?: string;
+}) {
     const currentMeltStart = meltStartCell(d.originalMeltAmount, d.originalMeltStartAge);
     const suggestedMeltStart = meltStartCell(d.meltAmount, d.meltStartAge);
 
@@ -765,7 +866,7 @@ function DecisionTable({ decision: d, showLabel }: { decision: PersonMeltdownDec
     // `rows` is already SimpleChangeTable's row shape, and the markup below the
     // title was byte-identical to it — so this delegates rather than keeping a
     // second copy of the same table in sync by hand.
-    return <SimpleChangeTable title={showLabel ? d.label : undefined} rows={rows} />;
+    return <SimpleChangeTable title={showLabel ? d.label : undefined} rows={rows} suggestedLabel={suggestedLabel} />;
 }
 
 function Headline({ label, value, tone }: { label: string; value: string; tone: 'good' | 'bad' | 'neutral' }) {
@@ -785,6 +886,7 @@ const OBJECTIVE_CHANGES: Record<Objective, string> = {
     'estate': 'Changes your RRSP meltdown, CPP/OAS start ages and withdrawal order. Your spending stays the same.',
     'max-spend': 'Changes your RRSP meltdown, CPP/OAS start ages and withdrawal order, plus your yearly spending.',
     'earliest-age': 'Changes your retirement age, RRSP meltdown, CPP/OAS start ages and withdrawal order. Your spending stays the same.',
+    'savings-needed': 'Changes your savings (keeping your mix of accounts), plus your RRSP meltdown, CPP/OAS start ages and withdrawal order, to show what it takes. Your retirement age and spending stay the same.',
 };
 
 // Two text levels only: title and one sentence. `note` is for a reason the
@@ -812,9 +914,15 @@ function ObjectiveCard({
 }
 
 // Generic current-vs-suggested table (household spending/strategy rows).
+// `suggestedLabel` renames the second column where "Suggested" would be wrong
+// (Savings Needed's amount is a finding, not a suggestion).
 function SimpleChangeTable({
-    title, rows,
-}: { title?: string; rows: { label: string; current: string; suggested: string; changed: boolean; tooltip?: string }[] }) {
+    title, rows, suggestedLabel = 'Suggested',
+}: {
+    title?: string;
+    rows: { label: string; current: string; suggested: string; changed: boolean; tooltip?: string }[];
+    suggestedLabel?: string;
+}) {
     return (
         <div>
             <div className="overflow-x-auto">
@@ -833,7 +941,7 @@ function SimpleChangeTable({
                                 Current plan
                             </th>
                             <th className="text-right font-medium text-slate-500 py-1.5 pl-4 whitespace-nowrap">
-                                Suggested
+                                {suggestedLabel}
                             </th>
                         </tr>
                     </thead>
@@ -931,6 +1039,64 @@ function EarliestAgeCard({ result, actions }: { result: MeltdownResult; actions:
                     <div className="mt-6 space-y-6">
                         {result.decisions.map(d => (
                             <DecisionTable key={d.who} decision={d} showLabel={result.decisions.length > 1} />
+                        ))}
+                    </div>
+
+                    <p className="mt-3 text-xs text-slate-500">
+                        The melt runs each year from retirement until age 71 (RRIF conversion) or until the RRSP is empty.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/*
+ * Savings-needed result: the answer box (shared with the landing page), the
+ * actions, then the detail behind the amount as the same current-vs-answer
+ * tables the other modes use. There is no Apply — balances are facts about the
+ * household, not settings — so the tables' second column says what it holds
+ * rather than "Suggested". Results with no amount that clears the bar stop
+ * after the answer box: there is no answer to tabulate.
+ */
+function SavingsNeededCard({ result, actions }: { result: MeltdownResult; actions: React.ReactNode }) {
+    const sn = result.savingsNeeded!;
+    const clears = savingsAnswerClears(sn);
+    const column = 'With savings needed';
+    const currentStrategy = result.baselineInputs.withdrawalStrategy ?? 'tax-efficient';
+    const neededToday = roundCurrencyApprox(sn.neededSavings ?? 0);
+    const householdRows = [
+        {
+            label: 'Savings today',
+            current: formatCurrencyCAD(sn.currentSavings),
+            suggested: formatCurrencyCAD(neededToday),
+            changed: neededToday !== sn.currentSavings,
+        },
+        {
+            label: 'Withdrawal order',
+            current: strategyLabel(currentStrategy),
+            suggested: strategyLabel(sn.withdrawalStrategy),
+            changed: sn.strategyChanged,
+        },
+    ];
+
+    return (
+        <div className="flex flex-col gap-6">
+            <SavingsNeededHeadline result={result} />
+
+            {actions}
+
+            {clears && (
+                <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900">{objectiveLabel(result.objective)}</h3>
+
+                    <div className="mt-4">
+                        <SimpleChangeTable title="Household" rows={householdRows} suggestedLabel={column} />
+                    </div>
+
+                    <div className="mt-6 space-y-6">
+                        {result.decisions.map(d => (
+                            <DecisionTable key={d.who} decision={d} showLabel={result.decisions.length > 1} suggestedLabel={column} />
                         ))}
                     </div>
 

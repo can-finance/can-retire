@@ -1,5 +1,6 @@
 // Build-time prerender for the standalone MPA pages (/how-it-works/,
-// /rrsp-withdrawal-strategy/, /when-can-i-retire/ and /cpp-calculator/).
+// /rrsp-withdrawal-strategy/, /when-can-i-retire/, /how-much-do-i-need-to-retire/
+// and /cpp-calculator/).
 //
 // Runs after `vite build` (client) and `vite build --config vite.config.ssr.ts`
 // (SSR). For each page it imports the SSR bundle and injects a schema.org
@@ -25,6 +26,7 @@ const PAGES = [
     { ssrModule: 'how-it-works-ssr.mjs', route: 'how-it-works' },
     { ssrModule: 'rrsp-withdrawal-strategy-ssr.mjs', route: 'rrsp-withdrawal-strategy' },
     { ssrModule: 'when-can-i-retire-ssr.mjs', route: 'when-can-i-retire' },
+    { ssrModule: 'how-much-do-i-need-ssr.mjs', route: 'how-much-do-i-need-to-retire' },
     { ssrModule: 'cpp-calculator-ssr.mjs', route: 'cpp-calculator' },
 ];
 
