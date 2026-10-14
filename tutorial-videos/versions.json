@@ -1,0 +1,184 @@
+{
+  "rrsp-optimizer": {
+    "joined": "2026-10-14T11:08:56-04:00",
+    "scenes": {
+      "title": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:24:00-04:00"
+      },
+      "intro": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:25:00-04:00"
+      },
+      "what": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:26:00-04:00"
+      },
+      "goals": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:27:00-04:00"
+      },
+      "results": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:28:00-04:00"
+      },
+      "compare": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:29:00-04:00"
+      },
+      "apply": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T10:30:00-04:00"
+      },
+      "end": {
+        "appVersion": "0.14.0",
+        "appCommit": "8b4ce8a",
+        "dirty": false,
+        "recordedAt": "2026-10-14T11:07:42-04:00"
+      }
+    }
+  },
+  "create-a-plan": {
+    "appVersion": null,
+    "appCommit": null,
+    "dirty": null,
+    "recordedAt": "2026-10-14T07:15:00-04:00",
+    "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+  },
+  "dashboard-tour": {
+    "joined": "2026-10-14T07:18:00-04:00",
+    "scenes": {
+      "title": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:15:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "networth": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:16:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "cashflow": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:16:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "surplus": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:17:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "table": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:17:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "end": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:18:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      }
+    }
+  },
+  "all-inputs": {
+    "joined": "2026-10-14T07:49:00-04:00",
+    "scenes": {
+      "title": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:18:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "intro": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:19:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "you": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:47:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "accounts": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:48:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "melt": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:21:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "spending": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:20:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "settings": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:22:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "returns": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:21:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "montecarlo": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:23:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      },
+      "end": {
+        "appVersion": null,
+        "appCommit": null,
+        "dirty": null,
+        "recordedAt": "2026-10-14T07:23:00-04:00",
+        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+      }
+    }
+  }
+}

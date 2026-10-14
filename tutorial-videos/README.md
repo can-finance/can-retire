@@ -16,10 +16,19 @@ Build the image once (and again after changing `Dockerfile`):
 docker build -t can-retire-tutorials tutorial-videos
 ```
 
-Record a tutorial (PowerShell, from the repo root):
+Record a tutorial (PowerShell, from anywhere; extra args go through to `node`):
 
 ```powershell
-docker run --rm --network container:can-retire-app-1 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node create-a-plan.mjs
+.\tutorial-videos\record.ps1 create-a-plan.mjs
+.\tutorial-videos\record.ps1 rrsp-optimizer.mjs --scene results
+```
+
+`record.ps1` finds the main checkout, passes its commit and dirty state into the
+container (`TUT_APP_COMMIT`, `TUT_APP_DIRTY`, for `versions.json`), and checks
+`can-retire-app-1` is running. The raw alternative:
+
+```powershell
+docker run --rm --network container:can-retire-app-1 -e TUT_APP_COMMIT=<sha> -e TUT_APP_DIRTY=0 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node create-a-plan.mjs
 ```
 
 From Git Bash, prefix with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)/tutorial-videos:/work/tutorials"`.
@@ -36,9 +45,9 @@ one scene instead of the whole video:
 
 ```powershell
 # everything (first run, or after a UI change)
-docker run --rm --network container:can-retire-app-1 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node dashboard-tour.mjs
+.\tutorial-videos\record.ps1 dashboard-tour.mjs
 # just these scenes, then re-join from the cached clips
-docker run --rm --network container:can-retire-app-1 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node dashboard-tour.mjs --scene cashflow
+.\tutorial-videos\record.ps1 dashboard-tour.mjs --scene cashflow
 # re-join only (no recording)
 docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node dashboard-tour.mjs --concat
 ```
@@ -68,6 +77,28 @@ docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials
 docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node frames.mjs create-a-plan 7.5,18.4,30.2
 ```
 
+## Which app version each video shows
+
+Videos show whatever the main checkout is serving, so they go stale as the app
+changes. `versions.json` (committed) records what each take was recorded against:
+`appVersion` (read from the app's footer), `appCommit` and `dirty` (from
+`TUT_APP_COMMIT` / `TUT_APP_DIRTY`, set by `record.ps1`) and `recordedAt`. Single
+takes have one record; scene videos have one per scene, since scenes are
+re-recorded individually and can differ, plus `joined` (last join; `--concat`
+updates only that). Missing version or commit is recorded as null with a warning,
+and a `dirty: true` record doesn't match its commit exactly. Pre-tracking entries
+are null with a `note`.
+
+To find stale videos, see what changed in the app since a video or scene was
+recorded, using its `appCommit`:
+
+```powershell
+git log --oneline <appCommit>..main -- src
+git diff --stat <appCommit>..main -- src
+```
+
+Commit `versions.json` along with the videos' scripts.
+
 ## Output format
 
 1280×720, 24 fps, H.264 at CRF 23, no audio. CRF 23 was chosen over 20 (about
@@ -83,6 +114,8 @@ and never upscales.
 - `lib/tutor.mjs` — human-paced actions: `move`, `moveTo`, `click`, `clickAt`, `type`, `select`, `caption`, `card`, `scroll`, `scrollToTop`, `pause`. Shared pacing lives in `PACE`.
 - `lib/recorder.mjs` — `record({ name, url, title, end, ready, run })`: one take from a fresh context (empty localStorage), title card over the page load, trim, MP4. `recordScenes({ name, url, storage, title, end, ready, scenes })`: the scene workflow above.
 - `lib/fixture.mjs` — `ensureFixture` (build or load a localStorage fixture) and `seedStorage`.
+- `lib/versions.mjs` — `versions.json` read/write helpers and the footer version reader; the recorder calls them after each take, scene and join.
+- `record.ps1` — the usual way to record: passes the main checkout's commit into the container.
 - `lib/app.mjs` — app-specific helpers: `field(scope, label)` for the unlabelled `FinancialInput`s, `guidedSetup(page)`, `quickStartPlan(page, persona)`, the pilot persona `ALEX`, and for the dashboard `chartCard(page, title)`, `chartPoint(card, age, yFrac)` (a point on a chart's age axis) and `yearDrawer(page)`.
 - `create-a-plan.mjs` — single-take tutorial. Copy it to start a short one.
 - `dashboard-tour.mjs` — scene-based tutorial starting from a saved plan. Copy it to start a long one.

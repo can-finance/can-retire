@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { addOverlay } from './overlay.mjs';
 import { seedStorage } from './fixture.mjs';
 import { Tutor } from './tutor.mjs';
+import { readAppVersion, saveJoined, saveScene, saveTake, versionRecord } from './versions.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const OUT_DIR = path.resolve(HERE, '..', 'out');
@@ -57,12 +58,14 @@ export async function record(o) {
     const tutor = new Tutor(page, start);
     let trimSec = 0;
     let ok = false;
+    let appVersion = null;
     try {
         await page.goto(new URL(o.url, BASE_URL).href, { waitUntil: 'domcontentloaded' });
         await page.waitForFunction(() => window.__tut && window.__tut.cardVisible());
         trimSec = Math.max(0, (Date.now() - t0) / 1000 - 0.05);
         tutor.videoStart = t0 + trimSec * 1000;
         await o.ready(tutor, page);
+        appVersion = await readAppVersion(page);
         await page.mouse.move(start.x, start.y); // park the cursor before it's revealed
         await tutor.pause(o.titleMs ?? 2000);
         await tutor.hideCard();
@@ -78,6 +81,7 @@ export async function record(o) {
             const webm = await video.path();
             const mp4 = path.join(OUT_DIR, `${o.name}${SUFFIX}.mp4`);
             toMp4(webm, mp4, trimSec);
+            saveTake(o.name, versionRecord(appVersion));
             const s = statSync(mp4);
             console.log(`wrote ${mp4}  ${(s.size / 1e6).toFixed(2)} MB  ${probeDuration(mp4).toFixed(1)} s  (trimmed ${trimSec.toFixed(2)} s)`);
         }
@@ -169,6 +173,7 @@ export async function recordScenes(o) {
     const clips = ids.map((id) => path.join(dir, `${id}.mp4`));
     const mp4 = path.join(OUT_DIR, `${o.name}${SUFFIX}.mp4`);
     const starts = concatClips(clips, mp4, fade);
+    saveJoined(o.name);
     const s = statSync(mp4);
     console.log(`wrote ${mp4}  ${(s.size / 1e6).toFixed(2)} MB  ${probeDuration(mp4).toFixed(1)} s`);
     ids.forEach((id, k) => console.log(`  ${starts[k].toFixed(2)}s  scene ${id}`));
@@ -197,9 +202,11 @@ async function recordScene(browser, o, scene, dir, startState) {
     const tutor = new Tutor(page, start);
     let wallTrim = 0;
     let ok = false;
+    let appVersion = null;
     try {
         await page.goto(new URL(o.url, BASE_URL).href, { waitUntil: 'domcontentloaded' });
         await o.ready(tutor, page);
+        appVersion = await readAppVersion(page); // under the black cover, before the scene's own actions
         if (startState?.scrollY) {
             // The sticky summary bar changes the layout once the page scrolls, so
             // the first jump can land a few px off: settle, then jump again.
@@ -236,6 +243,7 @@ async function recordScene(browser, o, scene, dir, startState) {
             const trim = black ?? Math.max(0, wallTrim - 0.05);
             const clip = path.join(dir, `${scene.id}.mp4`);
             encodeClip(webm, clip, trim);
+            saveScene(o.name, scene.id, versionRecord(appVersion));
             console.log(`scene ${scene.id}: ${probeDuration(clip).toFixed(1)} s (trimmed ${trim.toFixed(2)} s at ${black == null ? 'wall clock' : `end of black cover; wall clock said ${wallTrim.toFixed(2)}`})`);
             rmSync(rawDir, { recursive: true, force: true });
         }
