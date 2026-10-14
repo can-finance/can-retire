@@ -86,6 +86,7 @@ and never upscales.
 - `lib/app.mjs` — app-specific helpers: `field(scope, label)` for the unlabelled `FinancialInput`s, `guidedSetup(page)`, `quickStartPlan(page, persona)`, the pilot persona `ALEX`, and for the dashboard `chartCard(page, title)`, `chartPoint(card, age, yFrac)` (a point on a chart's age axis) and `yearDrawer(page)`.
 - `create-a-plan.mjs` — single-take tutorial. Copy it to start a short one.
 - `dashboard-tour.mjs` — scene-based tutorial starting from a saved plan. Copy it to start a long one.
+- `rrsp-optimizer.mjs` — scene-based optimizer walkthrough. Scenes that start inside the optimizer re-open it and re-run the search under the black cover; `Math.random` is seeded so Monte Carlo rates match across scenes, and the script stops if the recommendation it quotes changes.
 - `all-inputs.mjs` — scene-based walk through every dashboard input, one scene per input section. Captions use `{ pos: 'right' }` (bottom of the chart column) so they never cover the inputs, and it hides help tooltips except where it hovers one on purpose.
 
 ## Bug hunting
