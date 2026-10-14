@@ -346,7 +346,7 @@ export function MeltdownOptimizerView({
                                 checked={considerCppOas}
                                 onChange={setConsiderCppOas}
                                 label="Optimize CPP/OAS timing (recommended)"
-                                tooltip="Also tests CPP start ages from 60 to 70 and OAS from 65 to 70. Starting later raises your benefits for life and often pairs well with a meltdown. Turn this off to keep your current start ages."
+                                tooltip="Also tests starting CPP at 60, 65 or 70 and OAS at 65 or 70, as well as your current start ages. Starting later raises your benefits for life and often pairs well with a meltdown. Turn this off to keep your current start ages."
                             />
                         </div>
                         {/* One template string broke wherever it ran out of room, splitting
@@ -778,6 +778,11 @@ function ResultsView({
             )}
 
             <p className="text-xs text-slate-500">
+                Success rates come from random market simulations, so running the same plan
+                again can move them by a few points.
+            </p>
+
+            <p className="text-xs text-slate-500">
                 The Guaranteed Income Supplement (GIS) isn’t modelled. If your income in
                 retirement could be low enough to qualify, RRSP withdrawals and RRIF income can
                 reduce it, so check how these suggestions affect your GIS before acting on them.
@@ -849,7 +854,7 @@ function RecommendationCard({ result, netEstateDelta, lifetimeTaxDelta }: {
                     tone={netEstateDelta >= 0 ? 'good' : 'bad'}
                 />
                 <Headline
-                    label="Total tax paid"
+                    label="Lifetime tax paid"
                     value={`${lifetimeTaxDelta <= 0 ? '−' : '+'}${formatCurrencyCAD(Math.abs(lifetimeTaxDelta))}`}
                     tone={lifetimeTaxDelta <= 0 ? 'good' : 'bad'}
                 />
@@ -857,9 +862,12 @@ function RecommendationCard({ result, netEstateDelta, lifetimeTaxDelta }: {
                     label="Monte Carlo success"
                     value={
                         result.baselineSuccessRate !== null && result.recommendedSuccessRate !== null
-                            ? `${result.recommendedSuccessRate.toFixed(0)}% vs ${result.baselineSuccessRate.toFixed(0)}%`
+                            ? `${result.baselineSuccessRate.toFixed(0)}% → ${result.recommendedSuccessRate.toFixed(0)}%`
                             : '—'
                     }
+                    sub={result.baselineSuccessRate !== null && result.recommendedSuccessRate !== null
+                        ? 'Current plan → suggested'
+                        : undefined}
                     tone="neutral"
                 />
             </div>
@@ -944,12 +952,13 @@ function DecisionTable({ decision: d, showLabel, suggestedLabel }: {
     return <SimpleChangeTable title={showLabel ? d.label : undefined} rows={rows} suggestedLabel={suggestedLabel} />;
 }
 
-function Headline({ label, value, tone }: { label: string; value: string; tone: 'good' | 'bad' | 'neutral' }) {
+function Headline({ label, value, sub, tone }: { label: string; value: string; sub?: string; tone: 'good' | 'bad' | 'neutral' }) {
     const color = tone === 'good' ? 'text-emerald-600' : tone === 'bad' ? 'text-rose-600' : 'text-slate-900';
     return (
         <div className="rounded-xl bg-slate-50 p-4 border border-slate-100">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
             <p className={`mt-1.5 text-lg font-bold tabular-nums ${color}`}>{value}</p>
+            {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
         </div>
     );
 }
