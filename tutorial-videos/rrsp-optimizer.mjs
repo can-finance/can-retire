@@ -12,8 +12,8 @@
 // inside the optimizer re-open it (and re-run the search, about a second) in
 // `before`, under the black cover, and jump to where the previous scene ended.
 //
-// Don't toggle Show Today's Dollars here: the result's delta tiles stay
-// nominal while the comparison table follows the toggle.
+// Don't toggle Show Today's Dollars here: the captions quote the nominal
+// figures, and the delta tiles and comparison table both follow the toggle.
 
 import { recordScenes, BASE_URL, SIZE } from './lib/recorder.mjs';
 import { ALEX, field, guidedSetup, quickStartPlan } from './lib/app.mjs';
@@ -261,13 +261,13 @@ await recordScenes({
                 const tile = (label) => page.getByText(label, { exact: true }).first();
                 await explain(t, tile('Net estate'),
                     'Net estate: $400,002 more left for heirs, after tax at death.', { dx: 0.85, dy: 1.6 });
-                await explain(t, tile('Total tax paid'),
-                    'Total tax paid, including at death: $293,175 less over the plan.', { dx: 0.85, dy: 1.6 });
+                await explain(t, tile('Lifetime tax paid'),
+                    'Lifetime tax paid, including at death: $293,175 less over the plan.', { dx: 0.85, dy: 1.6 });
                 // Monte Carlo is random: the rates move a point or two between runs.
-                const mc = (await tile('Monte Carlo success').locator('xpath=following-sibling::p[1]').innerText()).match(/(\d+)% vs (\d+)%/);
+                const mc = (await tile('Monte Carlo success').locator('xpath=following-sibling::p[1]').innerText()).match(/(\d+)% → (\d+)%/);
                 if (!mc) throw new Error('Monte Carlo tile not found');
                 await explain(t, tile('Monte Carlo success'),
-                    `Monte Carlo success: ${mc[1]}% of market simulations, against ${mc[2]}% now.`, { dx: 0.85, dy: 1.6 });
+                    `Monte Carlo success: ${mc[2]}% of market simulations, against ${mc[1]}% now.`, { dx: 0.85, dy: 1.6 });
                 await t.hideCaption();
                 await t.move(MARGIN_X + 60, 520, { ms: 600 });
             },
