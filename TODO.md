@@ -273,9 +273,9 @@ signed off.**
 3. **All inputs explained (done).** Walk through every input and explain what
    each one does. Includes changing the retirement age to show the plan rerun,
    which is why the separate "Edit your info" video was dropped (2026-10-14).
-4. **RRSP optimizer.** Open the meltdown optimizer, pick a goal, run it, explain
+4. **RRSP optimizer (done).** Open the meltdown optimizer, pick a goal, run it, explain
    the suggested drawdown.
-5. **CPP calculator.** Enter earnings / start age and compare starting at 60, 65
+5. **CPP calculator (done).** Enter earnings / start age and compare starting at 60, 65
    and 70.
 6. **When can I retire.** Enter a spending target and read the earliest-age
    table, including "could spend".
