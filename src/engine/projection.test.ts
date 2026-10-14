@@ -198,6 +198,81 @@ describe('netIncome is cash-basis (Total Spend column)', () => {
     });
 });
 
+// The withdrawal solvers must price each draw on the tax function the year is
+// assessed with, credits included. When they omitted the dividend, pension and
+// payroll credits they overstated the draw's tax wherever a credit would otherwise
+// be floored away, drew too much, and the year ended with unspent cash — several
+// hundred dollars a year on the default plan. What remains is the searches' own
+// $1 tolerance.
+describe('withdrawal solvers price draws with the assessed credits', () => {
+    // Every funded year with a top-up draw lands on its spending target.
+    const expectOnTarget = (res: SimulationResult[], label: string) => {
+        let drawYears = 0;
+        for (const r of res) {
+            if (r.shortfall > 0) continue;
+            if (r.totalRRSPWithdrawal < 1 && r.totalNonRegWithdrawal < 1) continue;
+            drawYears++;
+            // netIncome is already net of tax, payroll and anything reinvested
+            const residual = r.netIncome - r.spending;
+            expect(Math.abs(residual), `${label} age ${r.age}: cash available − target`).toBeLessThan(2);
+        }
+        expect(drawYears, `${label}: expected solver-sized draw years`).toBeGreaterThan(0);
+    };
+
+    // Low-income early retirement living on Canadian dividends: the dividend tax
+    // credit is worth more than the tax on the dividends themselves, so the credit
+    // shelters part of every RRSP dollar the solver adds on top.
+    const dividendYears = (withdrawalStrategy: SimulationInputs['withdrawalStrategy'], acb: number) => inputs({
+        withdrawalStrategy,
+        person: person({
+            age: 60, retirementAge: 60, lifeExpectancy: 66,
+            rrsp: { type: 'RRSP', balance: 900_000 },
+            nonRegisteredAccounts: [nonReg({
+                balance: 600_000, adjustedCostBase: acb,
+                assetMix: { bonds: 0, cash: 0, dividend: 1, capitalGain: 0 }
+            })]
+        }),
+        postRetirementSpend: 55_000,
+        returnRates: { bondReturn: 0, cashInterest: 0, dividend: 0.04, capitalGrowth: 0 }
+    });
+
+    // The credit-blind estimate overshot these two by up to ~$6.2k and ~$2.9k a year.
+    it('RRSP top-ups on top of Canadian dividends land on the spending target', () => {
+        const res = runSimulation(dividendYears('rrsp-first', 600_000));
+        expect(res[0].totalRRSPWithdrawal).toBeGreaterThan(10_000);
+        expectOnTarget(res, 'rrsp-first dividends');
+    });
+
+    it('non-registered sales realizing gains on top of Canadian dividends land on the target', () => {
+        // ACB well below balance, so every sale goes through the gain-pricing search
+        const res = runSimulation(dividendYears('tax-efficient', 150_000));
+        expect(res[0].totalNonRegWithdrawal).toBeGreaterThan(10_000);
+        expect(res[0].totalRealizedCapGains).toBeGreaterThan(5_000);
+        expectOnTarget(res, 'tax-efficient dividends');
+    });
+
+    it('RRSP top-ups beside a DB pension and RRIF minimums at 65+ land on the target', () => {
+        // A modest DB pension plus RRIF minimums, no OAS: base income sits near the
+        // zero-tax floor, so the pension credit decides how much of each top-up
+        // dollar is taxed. The credit covers the DB income and the RRIF minimum
+        // (72+); the top-up draw itself is ordinary income and never qualifies.
+        // The credit-blind estimate overshot this plan by up to ~$370 a year.
+        const res = runSimulation(inputs({
+            withdrawalStrategy: 'rrsp-first',
+            person: person({
+                age: 72, lifeExpectancy: 78, oasStartAge: 99,
+                rrsp: { type: 'RRSP', balance: 250_000 },
+                nonRegisteredAccounts: [],
+                pension: { annualAmount: 10_000, startAge: 65, indexedToInflation: true }
+            }),
+            postRetirementSpend: 33_000
+        }));
+        expect(res[0].rrifMinimumWithdrawal).toBeGreaterThan(0);
+        expect(res[0].totalRRSPWithdrawal).toBeGreaterThan(res[0].rrifMinimumWithdrawal + 1_000);
+        expectOnTarget(res, 'pension + RRIF');
+    });
+});
+
 describe('shortfall reporting', () => {
     it('unfundable spending is reported, not silently dropped', () => {
         const res = runSimulation(inputs({

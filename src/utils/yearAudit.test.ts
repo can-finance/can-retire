@@ -134,20 +134,21 @@ const SURPLUS = inputs({
  * Per-scenario cash-flow tolerance.
  *
  * Every section except `cashFlow` reconciles exactly (< $1). `cashFlow` carries an
- * ENGINE-INHERENT residual: Step 3 sizes each gross-up from a marginal-tax estimate
- * that is not the tax the year is finally assessed at, so the cash the household
- * ends up with misses the spending target slightly. Two causes, both in
- * projection.ts and neither fixable from this file:
+ * ENGINE-INHERENT residual: Step 3 sizes each gross-up with a binary search that
+ * stops once the draw's net is within $1 of its target, so the cash the household
+ * ends up with can miss the spending target by that much per search. A year can
+ * run several searches (`withdrawNonReg` makes two passes over two spouses'
+ * accounts, then the RRSP draw and its fallback), so a couple's worst year can sit
+ * a little over $1 while a single's stays under it.
  *
- *  1. `solveGrossWithdrawal` and `sellNonReg` call `calculateTotalTax` without the
- *     pension/dividend/payroll credit arguments `getFinalStats` uses, so the solver
- *     prices the draw at a marginal rate the year is never assessed at. (The solver
- *     used to compound this by passing the person's SIMULATION-START age, which made
- *     INITIAL_INPUTS drift by ~$1k a year from 65 on; it now uses the current-year
- *     age, which is what dropped that scenario's worst year to ~$275.)
- *  2. The binary searches stop at a $1 tolerance, up to four calls per year.
+ * The searches price each draw on the SAME tax function the year is assessed with —
+ * current-year age and the pension/dividend/payroll credits (`yearCredits` in
+ * projection.ts) — so the estimate itself no longer misses. Before 2026-10-14 the
+ * solvers omitted those credits, which left INITIAL_INPUTS up to $924 a year
+ * over target; a fence that has to rise far above $2 again means a solver
+ * estimate has drifted from `getFinalStats`, not that a bigger fence is needed.
  *
- * The pension-splitting saving is NOT a third source. Step 5.5 re-prices the bill
+ * The pension-splitting saving is NOT a second source. Step 5.5 re-prices the bill
  * after Step 3 sized withdrawals, but it then sweeps the saving into the
  * transferor's non-registered account, so it leaves through `reinvestedNonReg`
  * (the audit's "Surplus reinvested") like any other unspent cash. It can only
@@ -159,47 +160,19 @@ const SURPLUS = inputs({
  * regression fence on engine drift, not a licence for it to grow.
  */
 const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
-    // Worst year is age 64 ($238.30) — a DB pension plus dividends the solver's tax
-    // estimate does not credit, not an age-amount error. Moving the default melt
-    // start from 55 to 60 shifted this by pennies ($274.28 -> $274.16, same year):
-    // the melt is not what the solver mis-prices. Giving the non-registered dividend
-    // slice price appreciation moved it again ($274.16 -> $238.30, still age 64):
-    // the year's larger non-registered balance shifts the funding mix, not the
-    // solver's pricing of it. Moving the base tax year 2025 -> 2026 widened it again
-    // ($238.30 -> $325.44, still age 64): the credits the solver's estimate omits are
-    // simply worth more under the 2026 amounts, so the same omission costs more.
-    // Dropping the sample $20k/$10k meltdown from the default plan widened it
-    // again ($325.44 -> $923.87) and moved it to age 60, the retirement year:
-    // with no melt, that year's whole RRSP draw is a solver-sized top-up, so
-    // more of it is priced at the credit-blind marginal estimate. Same known
-    // solver limitation, larger exposure — not a new defect.
-    ['INITIAL_INPUTS', INITIAL_INPUTS, 924],
-    // No credit-argument gap in these two fixtures, so only the binary-search
-    // tolerance survives. Measured worsts under the 2026 constants: 0.6405 (single,
-    // age 68) and 1.6024 (widowed, age 70).
-    ['single', SINGLE, 1],
-    // Indexing employment income (it is a today's-dollars input) grew the couple's
-    // balances through the working years, so the early-retirement non-registered
-    // sales are larger: the worst year moved from age 69 ($0.8235) to age 66
-    // ($1.7083, a $40k sale). `withdrawNonReg` makes two passes over two spouses'
-    // accounts, so up to four $1-tolerance binary searches land in one year — still
-    // purely search noise, with no RRSP draw and no credit gap in that year. Dividend
-    // price appreciation then reshuffled which year is worst (age 66 -> age 70) and
-    // shrank it to $0.9362. Moving the base tax year to 2026 then jumped it an order
-    // of magnitude (age 70 -> age 67, $8.5783), and that is NO LONGER search noise:
-    // four $1-tolerance searches cannot exceed ~$4. Raising CPP/OAS to the 2026
-    // amounts (cpp.ts) pushes this couple's age-67 income high enough to earn the
-    // age and pension credits, so the same omitted-credit gap that dominates
-    // INITIAL_INPUTS now reaches this fixture too — a bigger instance of a known
-    // solver limitation, not a new defect. Still trivial in dollar terms, but it is
-    // the second scenario to cross into credit-gap territory; if a third appears,
-    // fix the solver's estimate rather than raising fences again.
-    ['couple', COUPLE, 9],
+    // Measured worsts, all binary-search noise: INITIAL_INPUTS $0.6780 (age 62;
+    // was $923.87 at age 60 before the 2026-10-14 credit fix — its draw years
+    // carry Canadian dividends), single $0.6405 (age 68), couple $1.5701 (age 65,
+    // several searches in one year; was $8.58 from the same credit gap), widowed
+    // $1.6024 (age 70, two spouses' searches).
+    ['INITIAL_INPUTS', INITIAL_INPUTS, 0.9],
+    ['single', SINGLE, 0.9],
+    ['couple', COUPLE, 1.7],
     ['widowed', WIDOWED, 1.7],
     // Every year is fully unfunded or TFSA-only — no gross-up, no drift.
     ['shortfall', SHORTFALL, 0.01],
-    // Measured worsts under the 2026 constants: 0.7949 (one-time, age 70) and
-    // 0.5448 (surplus, age 68) — both still pure binary-search noise.
+    // Measured worsts: 0.7949 (one-time, age 70), 0.6104 (indexed, age 65) and
+    // 0.5448 (surplus, age 68) — pure binary-search noise.
     ['one-time events', ONE_TIME, 0.9],
     ['one-time events, indexed', ONE_TIME_INDEXED, 0.9],
     ['surplus', SURPLUS, 0.9]
@@ -224,7 +197,6 @@ describe('buildYearAudit — reconciliation across every year of every scenario'
         it(`${name}: cashFlow reconciles — the only section whose identity can genuinely miss`, () => {
             const results = runSimulation(ins);
             expect(results.length).toBeGreaterThan(0);
-
             for (let i = 0; i < results.length; i++) {
                 const audit = buildYearAudit(ins, results, i);
                 const where = `${name} year index ${i} (age ${results[i].age})`;
@@ -323,7 +295,7 @@ describe('cash-flow identity: what the residual is made of', () => {
             // reinvestedNonReg instead of inflating netIncome past funded spending.
             expect(r.unallocatedSplitSaving ?? 0).toBe(0);
             expect(r.reinvestedNonReg).toBeGreaterThanOrEqual(saving - 0.01);
-            // Only the solver's own gross-up drift is left (see CASH_FLOW_TOLERANCE).
+            // Only the withdrawal searches' $1 tolerance is left (see CASH_FLOW_TOLERANCE).
             expect(Math.abs(r.netIncome - (r.spending - r.shortfall))).toBeLessThan(1);
         }
         expect(splitYears).toBeGreaterThan(0);
@@ -361,9 +333,9 @@ describe('cash-flow identity: what the residual is made of', () => {
         const line = section.lines.find(l => l.label.includes('left unallocated'))!;
         expect(line.amount).toBeCloseTo(-results[i].unallocatedSplitSaving!, 6);
         // ...and naming it is what keeps the reconciliation honest: what is left is
-        // the solver's own gross-up drift (this fixture pairs a DB pension with RRSP
-        // draws, like INITIAL_INPUTS), orders of magnitude below the saving itself.
-        expect(Math.abs(section.check!.residual)).toBeLessThan(100);
+        // the withdrawal searches' $1 tolerance. This fixture pairs a DB pension with
+        // RRSP draws, so it also guards the solvers pricing the pension credit.
+        expect(Math.abs(section.check!.residual)).toBeLessThan(2);
         expect(Math.abs(section.check!.residual)).toBeLessThan(results[i].unallocatedSplitSaving! / 10);
     });
 

@@ -16,18 +16,13 @@ step-down (gap-scaled steps, baseline-rate warm start, upward search so a low
 warm start can't understate the answer), with the planner logic kept pure and
 unit-tested MC-free.
 
-- **Phase 3 — "When can I retire?" (built 2026-10-09, unreleased).** Optimizer
+- **Phase 3 — "When can I retire?" (shipped in 0.13.0).** Optimizer
   mode + /when-can-i-retire/ page. Follow-ups: MC-test the top few feasible
   strategies per age instead of only the estate-best one (on the default couple
   this may cost a year — weak evidence, best-of-many MC noise).
   (Checked 2026-10-12: the Cloudflare beacon's `location`/`referrer` don't
   carry the #start= hash.)
-- **Meltdown optimizer delta tiles ignore the today's-dollars toggle (noted
-  2026-10-12).** The "Net estate change" / "Lifetime tax change" tiles in
-  `MeltdownOptimizerView` show nominal `netEstateDelta`/`lifetimeTaxDelta`,
-  while the comparison table beneath them follows the toggle. The
-  earliest-age table was switched to today's dollars; these were left as-is.
-- **Phase 3b — "How much do I need to retire?" (built 2026-10-13, unreleased).**
+- **Phase 3b — "How much do I need to retire?" (shipped in 0.14.0).**
   Optimizer mode `savings-needed` + /how-much-do-i-need-to-retire/ page; pure
   planners in `src/utils/savingsSearch.ts`. Lump sum, plus the per-year
   framing (lower `preRetirementSpend`, the surplus sweep saves it) and a table
@@ -35,8 +30,8 @@ unit-tested MC-free.
   Follow-ups: a per-year column in the age table (another R search + MC
   step-up per row, roughly doubling its cost); the headline moves ~±7% between
   runs at 200 MC iterations — consider more iterations if repeat runs bother
-  users; the no-savings default mix uses the TFSA limit table and ignores any
-  `tfsa.contributionRoom` entered. `TFSA_ANNUAL_LIMITS` holds the last
+  users; the no-savings default mix estimates TFSA room from the limit table
+  (there's no TFSA-room input to use instead). `TFSA_ANNUAL_LIMITS` holds the last
   published year flat — add each new year's limit when CRA announces it.
 - **Phase 4 — the engine phase.** See spec below.
 
@@ -221,13 +216,9 @@ alongside Phase 3, which moves the retirement age the stream is keyed to.
 ### Year audit view — Phase 2
 V1 shipped in v0.11.0; full plan in `docs/year-audit-plan.md`. Remaining:
 Phase 2 "show the tax math" — re-run the pure `tax.ts` functions per year for a
-bracket-by-bracket display. Known residual to fix or disclose: the withdrawal
-solver's tax estimate still omits the pension/dividend/payroll credit arguments
-`getFinalStats` uses (~$325 worst-year cash-flow residual in the default scenario
-under the 2026 constants). The `couple` fixture crossed into the same
-credit-omission territory with the 2026 update ($8.58, up from $1.61) — a third
-scenario doing so is the signal to fix the solver's estimate rather than the
-fences.
+bracket-by-bracket display. (The withdrawal solvers now price draws with the
+assessed credits — fixed 2026-10-14 — so the cash-flow residual is down to the
+$1 binary-search tolerance.)
 
 ### Monte Carlo realism — class-specific volatility (from 2026-07-18 discussion)
 Current model: a single `volatility` drives one lognormal draw applied identically
@@ -272,31 +263,30 @@ signed off.**
 1. **Create a plan (done, pilot approved 2026-10-13).** Guided Setup Quick start for a
    fictional persona through to the dashboard. Province step carries a caption
    that the province's tax rates are used for accurate calculations.
-2. **Dashboard guided tour.** Explain:
+2. **Dashboard guided tour (done).** Explain:
    - the Projected Net Worth chart — how it simulates saving up to retirement and
      withdrawing after;
    - Annual Cash Flow — where money flows in and out each year, including
      clicking a bar for that year's full breakdown;
    - how surplus in retirement works;
    - the detailed year-by-year breakdown.
-3. **All inputs explained.** Walk through every input and explain what each one
-   does.
-4. **Edit your info.** Change an input (e.g. retirement age) and show the
-   results update.
-5. **RRSP optimizer.** Open the meltdown optimizer, pick a goal, run it, explain
+3. **All inputs explained (done).** Walk through every input and explain what
+   each one does. Includes changing the retirement age to show the plan rerun,
+   which is why the separate "Edit your info" video was dropped (2026-10-14).
+4. **RRSP optimizer.** Open the meltdown optimizer, pick a goal, run it, explain
    the suggested drawdown.
-6. **CPP calculator.** Enter earnings / start age and compare starting at 60, 65
+5. **CPP calculator.** Enter earnings / start age and compare starting at 60, 65
    and 70.
-7. **When can I retire.** Enter a spending target and read the earliest-age
+6. **When can I retire.** Enter a spending target and read the earliest-age
    table, including "could spend".
-8. **How much do I need.** Enter target spending and age and read the required
-   savings. Wait until that page is committed and final.
-9. **Compare plans.** Duplicate a plan, change one thing (e.g. retire at 60
+7. **How much do I need.** Enter target spending and age and read the required
+   savings.
+8. **Compare plans.** Duplicate a plan, change one thing (e.g. retire at 60
    instead of 62) and compare the two side by side.
-10. **Planning as a couple.** Turn on the spouse/partner toggle and show how the
-    partner's age, CPP and accounts feed into the plan, and how Pension Income
-    Splitting shares eligible pension income to cut tax. Both were left out of
-    "All inputs explained" on purpose, so this video carries them.
+9. **Planning as a couple.** Turn on the spouse/partner toggle and show how the
+   partner's age, CPP and accounts feed into the plan, and how Pension Income
+   Splitting shares eligible pension income to cut tax. Both were left out of
+   "All inputs explained" on purpose, so this video carries them.
 
 ### App issues found while scripting the videos (2026-10-13)
 
@@ -310,12 +300,6 @@ Pension Income Splitting hidden without a spouse, missing tooltips). Still open:
   only ~$13k of today's bracket 17 years out. Now disclosed in the tooltip and
   How It Works; the engine change is deferred to the Phase 4 melt-to-threshold
   work, since indexing moves every melt plan and every optimizer result.
-- **Withdrawal solver under-estimates tax in the first retirement year.** It
-  sizes the RRSP draw without the age and pension credits, leaving a gap between
-  cash available and target spending. With the default melt now 0, the default
-  plan's gap at 60 grew from $325 to $924 and the year-audit test's limit was
-  raised to match (`src/utils/yearAudit.test.ts`); that file says the fix
-  belongs in the solver, not the limit.
 
 **Where the videos go (decided 2026-10-13).** Nothing autoplays and no video sits inline
 next to a tool, because the pages *are* the tool and a playing video competes
@@ -365,13 +349,6 @@ contract stays intact; storage is never half-written). If wanted: persist the dr
 screen/step under a `retirement_onboarding_draft_v1` key on step transitions, offer
 "Continue where you left off?" on the intro, delete the key on Save/Skip. Decided
 2026-07-17 to ship without it and see whether anyone misses it.
-
-### GIS not modeled — blind spot to disclose in the UI
-For low-income households, pre-65 meltdown is often about protecting GIS
-eligibility, and the optimizer's recommendations can't capture that. A footnote
-near the optimizer results is probably enough; silence is not. The
-`/rrsp-withdrawal-strategy/` page already carries a GIS caution, so the gap is
-specifically the results view.
 
 ### Pre-existing mobile horizontal overflow
 The year-by-year breakdown table (~1000px min width) forces horizontal scroll on
