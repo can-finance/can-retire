@@ -708,7 +708,7 @@ export function CppCalculator() {
                                 <span>
                                     <strong className="text-slate-800">Contributory period.</strong>{' '}
                                     Every year from age 18 until your pension starts counts — for you,{' '}
-                                    <strong className="text-slate-800">{firstContribYear}–{lastContribYear}</strong> ({result.contributoryYears} years).
+                                    <strong className="text-slate-800">{firstContribYear}–{lastContribYear}</strong> ({result.contributoryYears} years).{' '}
                                     {/* Simple mode builds the yearly earnings from an average salary
                                         and working ages, so nothing was "entered" year by year. */}
                                     {state.mode === 'simple' ? (
