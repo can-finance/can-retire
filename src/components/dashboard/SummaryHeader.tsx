@@ -1,6 +1,6 @@
 import type { MonteCarloResult } from '../../engine/types';
 import type { SummaryMetrics } from '../../utils/summaryMetrics';
-import { formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyCAD, formatSuccessRate } from '../../utils/formatters';
 
 interface SummaryHeaderProps {
     metrics: SummaryMetrics;
@@ -48,7 +48,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                         {monteCarlo && (
                             <p className="text-xs text-slate-500 mt-1.5">
                                 Success rate{' '}
-                                <span className="font-mono font-bold text-slate-700">{monteCarlo.successRate.toFixed(1)}%</span>
+                                <span className="font-mono font-bold text-slate-700">{formatSuccessRate(monteCarlo.successRate)}</span>
                             </p>
                         )}
                     </div>

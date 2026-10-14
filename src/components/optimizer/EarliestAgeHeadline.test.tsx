@@ -199,7 +199,7 @@ describe('success rates never contradict the target', () => {
         const rows = tableText(r);
         expect(rows).toHaveLength(5);
         expect(rows[0]).toContain('60');
-        expect(rows[1].trim()).toBe('⋯');
+        expect(rows[1].trim()).toBe('61–62 not shown');
         expect(rows[2]).toContain('63');
     });
 });

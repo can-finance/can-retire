@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatSuccessRate } from './formatters';
+import { formatSuccessRate, wholeSuccessRate } from './formatters';
 
 // Pass/fail marks compare the unrounded rate with the target (rate >= target),
 // so the shown percent must land on the same side of the target.
@@ -38,5 +38,13 @@ describe('formatSuccessRate', () => {
         expect(formatSuccessRate(0)).toBe('0%');
         expect(formatSuccessRate(100)).toBe('100%');
         expect(formatSuccessRate(null)).toBe('—');
+    });
+});
+
+describe('wholeSuccessRate', () => {
+    it('is the number formatSuccessRate shows without a target', () => {
+        for (const rate of [0, 28.999999999999996, 86.1, 93.5, 93.9, 99.99, 100]) {
+            expect(`${wholeSuccessRate(rate)}%`).toBe(formatSuccessRate(rate));
+        }
     });
 });

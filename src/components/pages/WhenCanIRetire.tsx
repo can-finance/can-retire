@@ -19,7 +19,8 @@ import {
 } from './calculatorParts';
 import type { RunStatus } from './calculatorParts';
 import { WHEN_CAN_I_RETIRE_FAQ_ITEMS } from './when-can-i-retire-faq';
-import { buildRetireInputs, initialRetireForm, retireFormErrors } from './when-can-i-retire-inputs';
+import { buildRetireInputs, initialRetireForm, retireFormErrors, targetAgeError } from './when-can-i-retire-inputs';
+import { MAX_SEARCH_RETIREMENT_AGE } from '../../utils/retirementAgeSearch';
 import type { RetireForm } from './when-can-i-retire-inputs';
 
 /*
@@ -52,19 +53,27 @@ interface Answer {
 
 const inputClass =
     'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-1 focus:border-brand-500 focus:ring-brand-500';
+// Added to inputClass while a field's value can't be used; amber like the error
+// list above the button. Marked important so it beats the slate border and
+// white background in inputClass (Tailwind ignores class order).
+const inputErrorClass = '!border-amber-500 !bg-amber-50';
 
 /*
  * An age field that may be left blank. FinancialInput always shows a number,
  * so the optional target gets its own small field with the same look and the
  * same whole-number rule (digits only, committed on blur or Enter).
  */
-function OptionalAgeInput({ id, label, hint, value, onChange }: {
+function OptionalAgeInput({ id, label, hint, error, value, onChange }: {
     id: string;
     label: string;
     hint: string;
+    /** Shown under the field, which is marked invalid, while set. */
+    error?: string | null;
     value: number | null;
     onChange: (v: number | null) => void;
 }) {
+    const hintId = `${id}-hint`;
+    const errorId = `${id}-error`;
     const [text, setText] = useState(value === null ? '' : String(value));
 
     const commit = () => {
@@ -87,9 +96,12 @@ function OptionalAgeInput({ id, label, hint, value, onChange }: {
                 onChange={(e) => { if (/^[0-9]*$/.test(e.target.value)) setText(e.target.value); }}
                 onBlur={commit}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-                className={inputClass}
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? `${hintId} ${errorId}` : hintId}
+                className={error ? `${inputClass} ${inputErrorClass}` : inputClass}
             />
-            <p className="text-xs text-slate-500">{hint}</p>
+            <p id={hintId} className="text-xs text-slate-500">{hint}</p>
+            {error && <p id={errorId} className="text-xs font-medium text-amber-800">{error}</p>}
         </div>
     );
 }
@@ -236,7 +248,8 @@ export function WhenCanIRetire() {
                         <OptionalAgeInput
                             id="wcir-target"
                             label="Your target retirement age (to compare)"
-                            hint="Leave blank if you don't have one."
+                            hint={`Up to ${MAX_SEARCH_RETIREMENT_AGE}. Leave blank if you don't have one.`}
+                            error={targetAgeError(form)}
                             value={form.targetAge}
                             onChange={(v) => update({ targetAge: v })}
                         />

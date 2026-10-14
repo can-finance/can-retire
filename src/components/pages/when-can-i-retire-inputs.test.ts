@@ -4,6 +4,7 @@ import {
     initialRetireForm,
     planRetirementAge,
     retireFormErrors,
+    targetAgeError,
     DEFAULT_PLAN_RETIREMENT_AGE,
 } from './when-can-i-retire-inputs';
 import type { RetireForm } from './when-can-i-retire-inputs';
@@ -138,6 +139,16 @@ describe('/when-can-i-retire/ form → plan', () => {
             expect(errs).toHaveLength(1);
             expect(errs[0]).toContain(`only be compared up to ${max}`);
             expect(retireFormErrors(form({ age: max, targetAge: null }))).toEqual([]);
+        });
+
+        it('gives the field the same target message the list shows, and nothing else', () => {
+            const max = MAX_SEARCH_RETIREMENT_AGE;
+            const bad = form({ age: 50, targetAge: max + 1 });
+            expect(targetAgeError(bad)).toBe(retireFormErrors(bad)[0]);
+            expect(targetAgeError(form({ age: 50, targetAge: null }))).toBeNull();
+            expect(targetAgeError(form({ age: 50, targetAge: max }))).toBeNull();
+            // Another field's problem is not the target's.
+            expect(targetAgeError(form({ age: 17, targetAge: null }))).toBeNull();
         });
 
         it('uses onboarding’s age checks for you and your spouse', () => {

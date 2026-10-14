@@ -165,17 +165,24 @@ export function calculatorFormErrors(form: CalculatorForm, retirementAge: number
     return [...person, ...spouse];
 }
 
+/**
+ * What's wrong with the target retirement age, or null when it is fine (or
+ * blank). It must be later than today, not just "not earlier", and no later
+ * than the latest age the search tries: past that the table could never show a
+ * row for it to compare with. Shown under the field and in the error list.
+ */
+export function targetAgeError(form: Pick<RetireForm, 'age' | 'targetAge'>): string | null {
+    const max = MAX_SEARCH_RETIREMENT_AGE;
+    if (form.targetAge === null || (form.targetAge > form.age && form.targetAge <= max)) return null;
+    return form.age + 1 > max
+        ? `A target retirement age can only be compared up to ${max}. Leave it blank to see your earliest age.`
+        : `Your target retirement age must be between ${form.age + 1} and ${max}`;
+}
+
 /** Problems that stop the search from running, in plain words. Empty = OK. */
 export function retireFormErrors(form: RetireForm): string[] {
-    // The target is checked separately below (it must be later than today, not
-    // just "not earlier"), and no later than the latest age the search tries:
-    // past that the table could never show a row for it to compare with.
     const out = calculatorFormErrors(form, planRetirementAge(form));
-    const max = MAX_SEARCH_RETIREMENT_AGE;
-    if (form.targetAge !== null && (form.targetAge <= form.age || form.targetAge > max)) {
-        out.push(form.age + 1 > max
-            ? `A target retirement age can only be compared up to ${max}. Leave it blank to see your earliest age.`
-            : `Your target retirement age must be between ${form.age + 1} and ${max}`);
-    }
+    const target = targetAgeError(form);
+    if (target) out.push(target);
     return out;
 }

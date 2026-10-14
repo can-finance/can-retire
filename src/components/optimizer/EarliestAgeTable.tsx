@@ -12,6 +12,9 @@ import { HelpTooltip } from '../ui/HelpTooltip';
  * The table scrolls sideways inside its own box on narrow screens (min width on
  * the table, overflow on the wrapper), so the page itself never scrolls.
  */
+/** "59" or "59–60": the retirement ages a gap row stands for. */
+const skippedAges = (from: number, to: number): string => (from === to ? `${from}` : `${from}–${to}`);
+
 export function EarliestAgeTable({
     result, planLabel = 'your plan',
 }: {
@@ -56,11 +59,11 @@ export function EarliestAgeTable({
                         {rows.map((r, i) => (
                             <Fragment key={r.delta}>
                             {/* The plan's own age can sit apart from the rows around
-                                the answer; mark the ages skipped in between. */}
+                                the answer; say which ages are skipped in between. */}
                             {i > 0 && r.delta - rows[i - 1].delta > 1 && (
-                                <tr className="border-b border-slate-100 text-slate-400">
-                                    <td colSpan={showOther ? 6 : 5} className="py-1 pl-2 text-left text-xs">
-                                        ⋯
+                                <tr className="border-b border-slate-100">
+                                    <td colSpan={showOther ? 6 : 5} className="py-1 pl-2 text-left text-xs italic text-slate-500">
+                                        {skippedAges(rows[i - 1].retirementAge + 1, r.retirementAge - 1)} not shown
                                     </td>
                                 </tr>
                             )}
