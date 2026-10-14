@@ -3,7 +3,7 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 import { Dialog, dialogSecondaryBtn, dialogDestructiveBtn } from '../ui/Dialog';
 import { clearAllAppData } from '../../utils/clearAllData';
 
-export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy' | 'when-can-i-retire' | 'how-much-do-i-need-to-retire';
+export type PageId = 'dashboard' | 'cpp-calculator' | 'how-it-works' | 'rrsp-withdrawal-strategy' | 'when-can-i-retire' | 'how-much-do-i-need-to-retire' | 'tutorials';
 
 // Single source for the tool pages, shared by the header "Tools" menu and the
 // footer links. Adding a tool is one entry here. Order is display order.
@@ -22,6 +22,7 @@ const NAV_ITEMS: ({ kind: 'link'; id: PageId; label: string; href: string } | { 
     { kind: 'link', id: 'dashboard', label: 'Dashboard', href: '/' },
     { kind: 'tools', label: 'Tools' },
     { kind: 'link', id: 'how-it-works', label: 'How It Works', href: '/how-it-works/' },
+    { kind: 'link', id: 'tutorials', label: 'Tutorials', href: '/tutorials/' },
 ];
 
 // Shared active/inactive look for the nav links and the Tools button.

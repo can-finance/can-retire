@@ -7,6 +7,15 @@ export function HowItWorks() {
             <section className="text-center space-y-2">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Canadian Retirement Asset Planning tool</p>
                 <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight">How it works</h1>
+                <p className="text-sm text-slate-500">
+                    Prefer to watch?{' '}
+                    <a
+                        href="/tutorials/"
+                        className="font-medium text-brand-700 underline decoration-dotted underline-offset-2 hover:text-brand-600 transition-colors"
+                    >
+                        See the video tutorials
+                    </a>
+                </p>
             </section>
 
             {/* Opening Section */}

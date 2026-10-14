@@ -25,3 +25,9 @@ dist-ssr
 
 # Claude
 .claude/
+
+# Tutorial video output
+tutorial-videos/out/
+
+# Per-worktree dev settings (e.g. DEV_PORT)
+.env

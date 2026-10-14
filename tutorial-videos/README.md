@@ -1,0 +1,108 @@
+# Tutorial videos
+
+Scripted, silent screen recordings of the app with a fake cursor, click ripples,
+captions and title/end cards. Playwright, Chromium and ffmpeg all live in a
+Docker image; nothing is installed on the host or in this folder.
+
+## Run
+
+The dev server container (`can-retire-app-1`) must be running. The recorder
+joins its network namespace, so it reaches Vite at `http://localhost:5173`
+without tripping Vite's Host-header check.
+
+Build the image once (and again after changing `Dockerfile`):
+
+```powershell
+docker build -t can-retire-tutorials tutorial-videos
+```
+
+Record a tutorial (PowerShell, from the repo root):
+
+```powershell
+docker run --rm --network container:can-retire-app-1 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node create-a-plan.mjs
+```
+
+From Git Bash, prefix with `MSYS_NO_PATHCONV=1` and use `"$(pwd -W)/tutorial-videos:/work/tutorials"`.
+
+Output: `out/<name>.mp4` (H.264, yuv420p, faststart, 1280x720). The raw
+Playwright WebM is kept under `out/raw/<name>/`. If a run fails, a screenshot of
+the failing moment goes to `out/<name>-failure.png`.
+
+### Tutorials recorded as scenes
+
+Longer tutorials (`dashboard-tour.mjs`) are split into scenes, each recorded as its
+own clip and then joined with short crossfades, so changing one caption re-records
+one scene instead of the whole video:
+
+```powershell
+# everything (first run, or after a UI change)
+docker run --rm --network container:can-retire-app-1 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node dashboard-tour.mjs
+# just these scenes, then re-join from the cached clips
+docker run --rm --network container:can-retire-app-1 -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node dashboard-tour.mjs --scene cashflow
+# re-join only (no recording)
+docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node dashboard-tour.mjs --concat
+```
+
+Scene ids are in the script; `title` and `end` are added by the recorder. Clips
+are cached in `out/raw/<name>/scenes/<id>.mp4`, and the run prints where each scene
+starts in the joined video. Each scene starts from a fresh page load with the
+fixture's saved plan, under a black cover that is lifted once the page is ready;
+the clip is trimmed where the black ends. It also starts at the scroll position and
+cursor position the previous scene ended on (cached as `<id>.json`), so the joins
+line up. Scenes should therefore end in a clean state (drawer closed, no tooltip
+up). If you change where a scene ends, re-record the scene after it too.
+
+### Starting from a saved plan (fixtures)
+
+A tutorial that should open on the dashboard rather than in Guided Setup loads a
+localStorage fixture from `fixtures/<name>.json` before the first paint. It is
+built on first use by driving Guided Setup's Quick start (`quickStartPlan` in
+`lib/app.mjs`) with no video, and then reused. Rebuild it after the app's storage
+shape changes, by deleting the file or passing `--refresh-fixture`. The fixture
+includes the onboarding-done flag, so no first-run prompt appears.
+
+Check frames (no network needed):
+
+```powershell
+docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node frames.mjs create-a-plan 12
+docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node frames.mjs create-a-plan 7.5,18.4,30.2
+```
+
+## Output format
+
+1280×720, 24 fps, H.264 at CRF 23, no audio. CRF 23 was chosen over 20 (about
+twice the size, no visible gain) and 26 (half the size again, but smears during
+caption fades and scrolling). To trial other settings without overwriting the
+real output, pass `-e TUT_FPS=30 -e TUT_CRF=20 -e TUT_SUFFIX=-trial` to
+`docker run`. 720p is a hard limit: Playwright records at the viewport's CSS size
+and never upscales.
+
+## Layout
+
+- `lib/overlay.mjs` — the in-page layer (cursor, ripple, highlight, caption, cards), injected with `addInitScript`. Nothing in `src/` is touched.
+- `lib/tutor.mjs` — human-paced actions: `move`, `moveTo`, `click`, `clickAt`, `type`, `select`, `caption`, `card`, `scroll`, `scrollToTop`, `pause`. Shared pacing lives in `PACE`.
+- `lib/recorder.mjs` — `record({ name, url, title, end, ready, run })`: one take from a fresh context (empty localStorage), title card over the page load, trim, MP4. `recordScenes({ name, url, storage, title, end, ready, scenes })`: the scene workflow above.
+- `lib/fixture.mjs` — `ensureFixture` (build or load a localStorage fixture) and `seedStorage`.
+- `lib/app.mjs` — app-specific helpers: `field(scope, label)` for the unlabelled `FinancialInput`s, `guidedSetup(page)`, `quickStartPlan(page, persona)`, the pilot persona `ALEX`, and for the dashboard `chartCard(page, title)`, `chartPoint(card, age, yFrac)` (a point on a chart's age axis) and `yearDrawer(page)`.
+- `create-a-plan.mjs` — single-take tutorial. Copy it to start a short one.
+- `dashboard-tour.mjs` — scene-based tutorial starting from a saved plan. Copy it to start a long one.
+- `all-inputs.mjs` — scene-based walk through every dashboard input, one scene per input section. Captions use `{ pos: 'right' }` (bottom of the chart column) so they never cover the inputs, and it hides help tooltips except where it hovers one on purpose.
+
+## Notes for new tutorials
+
+- The run prints each click and caption with an approximate timestamp in the final
+  video. Under load the recorded video runs somewhat longer than wall-clock time,
+  so later timestamps drift early; use them to find frames, not as exact cues.
+- Native `<select>` popups don't appear in recordings; use `t.select()`, which shows
+  the click and sets the value directly.
+- Captions sit bottom-centre. Hide them before clicking anything in the bottom ~100px
+  (the wizard's Next/Save buttons live there at 720p). On the dashboard, pass
+  `{ pos: 'top' }` to put the caption over the sticky summary bar instead of over a
+  chart, or `{ pos: 'left' }` to centre it on the left half while the year drawer
+  covers the right. `{ pos: 'right' }` centres it at the bottom of the chart column, clear of the
+  inputs column.
+- Hovering a chart's plot pops its tooltip. To point at a series without one
+  covering the bars, point at its legend entry, and move the cursor off the plot
+  before a scene ends.
+- On the dashboard the summary bar turns sticky once scrolled and covers ~220px of the
+  top, so scroll by small amounts when showing a chart.

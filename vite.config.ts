@@ -33,6 +33,7 @@ export default defineConfig({
         'rrsp-withdrawal-strategy': fileURLToPath(new URL('./rrsp-withdrawal-strategy/index.html', import.meta.url)),
         'when-can-i-retire': fileURLToPath(new URL('./when-can-i-retire/index.html', import.meta.url)),
         'how-much-do-i-need-to-retire': fileURLToPath(new URL('./how-much-do-i-need-to-retire/index.html', import.meta.url)),
+        'tutorials': fileURLToPath(new URL('./tutorials/index.html', import.meta.url)),
       },
       output: {
         manualChunks: {
