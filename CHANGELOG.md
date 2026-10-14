@@ -19,9 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about a dollar. Previously computed projections change slightly: withdrawals
   and tax are a little lower in affected years and balances a little higher
   (the default plan's after-tax estate rises by about $10,000).
-- **The RRSP optimizer's "Net estate" and "Total tax paid" tiles now follow the
+- **The RRSP optimizer's "Net estate" and "Lifetime tax paid" tiles now follow the
   Today's Dollars toggle,** matching the comparison table below them. They
-  previously always showed future dollars.
+  previously always showed future dollars. The tax tile was renamed from "Total
+  tax paid" to match the table, since it counts tax over your whole life (not the
+  dashboard's retirement-plus-estate total), and the success tile now reads
+  current plan → suggested.
+- Leaving the optimizer or plan comparison returns you to where you were on the
+  dashboard, and opening either starts at the top, instead of keeping a leftover
+  scroll position.
+- The optimizer's CPP/OAS timing tip now says which start ages it actually
+  tries (CPP at 60, 65 or 70 and OAS at 65 or 70, plus your current ages), and
+  the dashboard's optimizer tips mention all four goals.
 
 ### Added
 - The RRSP optimizer's results note that the Guaranteed Income Supplement isn't

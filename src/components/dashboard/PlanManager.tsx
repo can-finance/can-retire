@@ -240,7 +240,7 @@ export function PlanManager({
                     schedule. Always available (works on a single plan). */}
                 <button
                     onClick={onOptimize}
-                    title="Find the RRSP meltdown plan that leaves the largest estate or lets you spend the most each year"
+                    title="Find the RRSP meltdown plan that leaves the largest estate or lets you spend the most, or find how early you can retire and how much you need to save"
                     className="mt-2 w-full flex items-center justify-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-2.5 rounded-lg hover:bg-emerald-100 transition-colors font-medium border border-emerald-100 text-sm"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

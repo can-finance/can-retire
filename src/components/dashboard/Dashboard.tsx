@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { useMemo, useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import LZString from 'lz-string';
 import { usePersistentState } from '../../hooks/usePersistentState';
 import { useHistoryOverlay } from '../../hooks/useHistoryOverlay';
@@ -126,6 +126,30 @@ export function Dashboard() {
     // consume the pushed entry without needing to know the hook exists.
     useHistoryOverlay(isComparing, () => setIsComparing(false), 'compare');
     useHistoryOverlay(isOptimizing, () => setIsOptimizing(false), 'optimizer');
+
+    // The optimizer and comparison replace the dashboard in place, so without
+    // this the window kept whatever scroll the last page left: an overlay
+    // opened partway down, and closing one landed wherever its own page was
+    // scrolled. Opening starts at the top; closing (any path — exit button,
+    // browser Back) returns to where you were when you opened it, which is
+    // also next to the inputs an Apply just changed. The position is captured
+    // in the openers, before the swap shrinks the page and clamps scrollY.
+    const dashboardScrollRef = useRef(0);
+    const openOptimizer = useCallback(() => {
+        dashboardScrollRef.current = window.scrollY;
+        setIsOptimizing(true);
+    }, []);
+    const openComparison = useCallback(() => {
+        dashboardScrollRef.current = window.scrollY;
+        setIsComparing(true);
+    }, []);
+    const overlayOpen = isComparing || isOptimizing;
+    const prevOverlayOpenRef = useRef(overlayOpen);
+    useLayoutEffect(() => {
+        if (prevOverlayOpenRef.current === overlayOpen) return;
+        prevOverlayOpenRef.current = overlayOpen;
+        window.scrollTo(0, overlayOpen ? 0 : dashboardScrollRef.current);
+    }, [overlayOpen]);
 
     const simulationResults = useMemo(() => {
         return runSimulation(inputs);
@@ -381,8 +405,8 @@ export function Dashboard() {
                         onNewPlanGuided={handleNewPlanGuided}
                         onActivate={handleActivate}
                         onDelete={handleDelete}
-                        onCompare={() => setIsComparing(true)}
-                        onOptimize={() => setIsOptimizing(true)}
+                        onCompare={openComparison}
+                        onOptimize={openOptimizer}
                     />
 
                     {/* Person 1 Profile */}
@@ -394,7 +418,7 @@ export function Dashboard() {
                         onNonRegChange={(accounts) => updateNonRegAccounts('person', accounts)}
                         nonRegDriftSummary={driftSummaries.person}
                         colorTheme="blue"
-                        onOpenOptimizer={() => setIsOptimizing(true)}
+                        onOpenOptimizer={openOptimizer}
                     />
 
                     {/* Spouse Toggle & Profile */}
@@ -409,7 +433,7 @@ export function Dashboard() {
                             showRemove
                             onRemove={toggleSpouse}
                             colorTheme="purple"
-                            onOpenOptimizer={() => setIsOptimizing(true)}
+                            onOpenOptimizer={openOptimizer}
                         />
                     ) : (
                         <button

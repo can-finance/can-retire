@@ -169,7 +169,7 @@ export function PersonSection({
                     labels={MELTDOWN_LABELS} />
 
                 {onOpenOptimizer && (
-                    <HelpTooltip text="Tries different RRSP withdrawal amounts, CPP/OAS start ages and withdrawal orders to find what leaves the largest estate or lets you spend the most each year. You can then apply the result to this plan.">
+                    <HelpTooltip text="Tries different RRSP withdrawal amounts, CPP/OAS start ages and withdrawal orders to find what leaves the largest estate or lets you spend the most each year. It can also find how early you can retire or how much you need to save. You can then apply the result to this plan.">
                         <button
                             type="button"
                             onClick={onOpenOptimizer}
