@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { OneTimeEvent } from '../../engine/types';
+import { HelpTooltip } from '../ui/HelpTooltip';
 
 interface Props {
     expenses: OneTimeEvent[];
@@ -67,11 +68,12 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
             )}
 
             {/* Add New Form */}
-            <div className="grid grid-cols-12 gap-2 items-end bg-slate-50 p-3 rounded-lg border border-slate-200">
-                <div className="col-span-3">
+            <div className="space-y-2 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div className="grid grid-cols-[7rem_1fr] gap-2">
+                <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1">Type</label>
                     <select
-                        className="w-full rounded border-slate-300 text-sm px-1 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
+                        className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
                         value={newType}
                         onChange={(e) => setNewType(e.target.value as 'expense' | 'inflow')}
                     >
@@ -79,7 +81,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         <option value="inflow">Inflow</option>
                     </select>
                 </div>
-                <div className="col-span-3">
+                <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-1">Description</label>
                     <input
                         type="text"
@@ -89,8 +91,12 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         onChange={(e) => setNewName(e.target.value)}
                     />
                 </div>
-                <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Age</label>
+              </div>
+              <div className="grid grid-cols-3 gap-2 items-end">
+                <div>
+                    <HelpTooltip text="The first person's age in the year it happens. It still happens at that age if they've died and their spouse is alive." className="w-fit">
+                        <label className="block text-sm font-semibold text-slate-700 mb-1 cursor-help border-b border-dashed border-slate-300 w-fit">Your age</label>
+                    </HelpTooltip>
                     <input
                         type="number"
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
@@ -100,8 +106,10 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         step={1}
                     />
                 </div>
-                <div className="col-span-2">
-                    <label className="block text-sm font-semibold text-slate-700 mb-1">Amount</label>
+                <div>
+                    <HelpTooltip text="In today's dollars, like your other amounts. It grows with inflation to the year it happens." className="w-fit">
+                        <label className="block text-sm font-semibold text-slate-700 mb-1 cursor-help border-b border-dashed border-slate-300 w-fit">Amount</label>
+                    </HelpTooltip>
                     <input
                         type="number"
                         className="w-full rounded border-slate-300 text-sm px-2 py-1.5 focus:ring-emerald-500 focus:border-emerald-500"
@@ -110,7 +118,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         placeholder="$"
                     />
                 </div>
-                <div className="col-span-2">
+                <div>
                     <button
                         onClick={handleAdd}
                         disabled={!newName || newAmount <= 0}
@@ -119,6 +127,7 @@ export function OneTimeSpendingInput({ expenses, onChange }: Props) {
                         Add
                     </button>
                 </div>
+              </div>
             </div>
         </div>
     );

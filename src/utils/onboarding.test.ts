@@ -16,6 +16,7 @@ import {
     type SimpleAnswers,
 } from '../components/onboarding/simplePathMapping';
 import type { SimulationInputs } from '../engine/types';
+import { runSimulation } from '../engine/projection';
 
 // --- lightweight localStorage + hash stubs (vitest runs in a Node env) --------
 
@@ -224,7 +225,8 @@ describe('mergeSimpleAnswers', () => {
         const out = mergeSimpleAnswers(baseDraft(), { ...baseAnswers, age: 67, retirementAge: 60 });
         expect(out.person.retirementAge).toBe(67); // max(retire, age)
         expect(out.person.lifeExpectancy).toBe(90); // max(seeded 90, 90, 72)
-        expect(out.person.rrspMeltStartAge).toBe(67); // max(seeded 60, 60, age)
+        // Unset melt start follows the (clamped) retirement age in the engine.
+        expect(out.person.rrspMeltStartAge).toBeUndefined();
     });
 
     it('lifeExpectancy uses retirementAge+5 when that exceeds 90', () => {
@@ -240,12 +242,62 @@ describe('mergeSimpleAnswers', () => {
         expect(out.person.lifeExpectancy).toBe(95); // max(95, 90, retire+5) stays 95
     });
 
-    it('never lowers a seeded rrspMeltStartAge', () => {
+    it('keeps an explicit rrspMeltStartAge the user chose', () => {
         const seed = baseDraft();
         seed.person.age = 40;
         seed.person.rrspMeltStartAge = 62;
-        const out = mergeSimpleAnswers(seed, seedToSimpleAnswers(seed));
-        expect(out.person.rrspMeltStartAge).toBe(62); // max(62, 60, 40) stays 62
+        const out = mergeSimpleAnswers(seed, { ...seedToSimpleAnswers(seed), retirementAge: 58 });
+        expect(out.person.rrspMeltStartAge).toBe(62);
+    });
+
+    it('raises an explicit rrspMeltStartAge to the current age, never lower', () => {
+        const seed = baseDraft();
+        seed.person.rrspMeltStartAge = 62;
+        const out = mergeSimpleAnswers(seed, { ...seedToSimpleAnswers(seed), age: 64, retirementAge: 66 });
+        expect(out.person.rrspMeltStartAge).toBe(64);
+    });
+
+    it('leaves the melt start unset so it follows the retirement age', () => {
+        expect(createDefaultPerson().rrspMeltStartAge).toBeUndefined();
+        expect(createDefaultPerson(true).rrspMeltStartAge).toBeUndefined();
+        const out = mergeSimpleAnswers(baseDraft(), { ...baseAnswers, retirementAge: 62 });
+        expect(out.person.rrspMeltStartAge).toBeUndefined();
+    });
+
+    it('treats a stored melt start equal to the old retirement age as following it', () => {
+        // Plans saved under the old default store rrspMeltStartAge 60 == retirementAge 60.
+        const seed = baseDraft();
+        seed.person.retirementAge = 60;
+        seed.person.rrspMeltStartAge = 60;
+        const out = mergeSimpleAnswers(seed, { ...seedToSimpleAnswers(seed), retirementAge: 62 });
+        expect(out.person.retirementAge).toBe(62);
+        expect(out.person.rrspMeltStartAge).toBeUndefined();
+    });
+
+    describe('melt starts at retirement in the projection (quick start)', () => {
+        // Household melt draw by the person's age.
+        const meltByAge = (retirementAge: number) => {
+            // The default plan has no melt, so configure one (with the melt start
+            // left unset) to test where it starts.
+            const seed = baseDraft();
+            seed.person.rrspMeltAmount = 20_000;
+            const plan = mergeSimpleAnswers(seed, { ...baseAnswers, age: 50, retirementAge });
+            expect(plan.person.rrspMeltAmount).toBeGreaterThan(0); // precondition: a melt is configured
+            return new Map(runSimulation(plan).map((r) => [r.age, r.voluntaryMeltWithdrawal]));
+        };
+
+        it('retiring at 62 melts from 62, not 60', () => {
+            const melt = meltByAge(62);
+            expect(melt.get(60)).toBe(0);
+            expect(melt.get(61)).toBe(0);
+            expect(melt.get(62)).toBeGreaterThan(0);
+        });
+
+        it('retiring at 55 melts from 55', () => {
+            const melt = meltByAge(55);
+            expect(melt.get(54)).toBe(0);
+            expect(melt.get(55)).toBeGreaterThan(0);
+        });
     });
 
     it('merges into an existing spouse rather than replacing it, preserving uncollected fields', () => {

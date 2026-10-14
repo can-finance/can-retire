@@ -39,7 +39,8 @@ export function AboutFields({
             <FinancialInput label={labels.age} prefix="" value={person.age}
                 onChange={(e) => onPatch({ age: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
             <FinancialInput label={labels.retirementAge} prefix="" value={person.retirementAge}
-                onChange={(e) => onPatch({ retirementAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
+                onChange={(e) => onPatch({ retirementAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
+                tooltip="The age you stop working. Your salary stops, and once everyone has retired, post-retirement spending takes over. Whole numbers only." />
             <FinancialInput label={labels.lifeExpectancy} prefix="" value={person.lifeExpectancy}
                 onChange={(e) => onPatch({ lifeExpectancy: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
                 tooltip="The plan runs to this age, then works out the tax owed on what's left. Whole numbers only." />
@@ -106,9 +107,11 @@ export function AccountsFields({
         <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
                 <FinancialInput label="RRSP" value={person.rrsp.balance} accentColor={rrspColor}
-                    onChange={(e) => onPatch({ rrsp: { ...person.rrsp, balance: Number(e.target.value) } })} />
+                    onChange={(e) => onPatch({ rrsp: { ...person.rrsp, balance: Number(e.target.value) } })}
+                    tooltip="Your RRSP balance today. It becomes a RRIF at 71, with minimum withdrawals required from 72." />
                 <FinancialInput label="TFSA" value={person.tfsa.balance} accentColor={tfsaColor}
-                    onChange={(e) => onPatch({ tfsa: { ...person.tfsa, balance: Number(e.target.value) } })} />
+                    onChange={(e) => onPatch({ tfsa: { ...person.tfsa, balance: Number(e.target.value) } })}
+                    tooltip="Your TFSA balance today. Growth and withdrawals are tax-free." />
             </div>
             <NonRegAccountsInput
                 accounts={person.nonRegisteredAccounts}
@@ -146,7 +149,7 @@ export function MeltdownFields({
             <FinancialInput label={labels.meltAmount} accentColor={rrspColor}
                 value={person.rrspMeltAmount || 0}
                 onChange={(e) => onPatch({ rrspMeltAmount: Number(e.target.value) })}
-                tooltip="Annual amount to withdraw from RRSP from the start age until age 71." />
+                tooltip="Annual amount to withdraw from RRSP from the start age until age 71. It's a fixed dollar amount each year, not adjusted for inflation." />
         </div>
     );
 }
@@ -211,13 +214,15 @@ export function PensionFields({
                     onChange={(e) => patchPension({ annualAmount: Number(e.target.value) })}
                     tooltip="Gross annual defined-benefit pension from a former employer, in today's dollars. Indexed pensions keep pace with inflation; non-indexed pensions pay a fixed dollar amount that loses purchasing power over time." />
                 <FinancialInput label={labels.startAge} prefix="" value={pension?.startAge ?? person.retirementAge}
-                    onChange={(e) => patchPension({ startAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric" />
+                    onChange={(e) => patchPension({ startAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
+                    tooltip="The age the pension starts paying, between 40 and 80. Whole numbers only." />
             </div>
 
             <Toggle
                 checked={pension?.indexedToInflation ?? true}
                 onChange={(val) => patchPension({ indexedToInflation: val })}
                 label={labels.indexed}
+                tooltip="On: the pension rises with inflation each year. Off: it pays the same dollar amount every year from its start age."
             />
 
             <div className="grid grid-cols-2 gap-3">
@@ -226,7 +231,8 @@ export function PensionFields({
                     tooltip="Extra yearly amount on top of the pension, paid from the pension start age until the bridge end age. Many plans end it at 65, when CPP and OAS normally start." />
                 <FinancialInput label={labels.bridgeEndAge} prefix="" value={pension?.bridgeEndAge ?? 65}
                     onChange={(e) => patchPension({ bridgeEndAge: Math.round(Number(e.target.value)) })} maxFractionDigits={0} inputMode="numeric"
-                    disabled={!hasBridge} />
+                    disabled={!hasBridge}
+                    tooltip="The age the bridge benefit stops, between 55 and 75. Many plans end it at 65. Whole numbers only." />
             </div>
         </>
     );

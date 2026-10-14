@@ -259,6 +259,76 @@ What remains is per-class sigma, not per-class price growth:
 - Yield-only volatility (shocking `returnRates.interest`/`dividend`) was considered
   and rejected — barely widens the fan, models the wrong risk.
 
+## Tutorial videos
+
+Silent screen recordings with a scripted cursor, click ripples and captions,
+produced by Playwright in Docker (`tutorial-videos/`, see its README). Each video is a
+script copied from `tutorial-videos/create-a-plan.mjs`; re-run a script to re-record
+after UI changes. Every video ends on the same end card (headline "Canadian
+Retirement Asset Planning Tool", subheading "100% free, private and secure", then
+the URL). **Order: refine the pilot first; don't start the rest until it's
+signed off.**
+
+1. **Create a plan (done, pilot approved 2026-10-13).** Guided Setup Quick start for a
+   fictional persona through to the dashboard. Province step carries a caption
+   that the province's tax rates are used for accurate calculations.
+2. **Dashboard guided tour.** Explain:
+   - the Projected Net Worth chart — how it simulates saving up to retirement and
+     withdrawing after;
+   - Annual Cash Flow — where money flows in and out each year, including
+     clicking a bar for that year's full breakdown;
+   - how surplus in retirement works;
+   - the detailed year-by-year breakdown.
+3. **All inputs explained.** Walk through every input and explain what each one
+   does.
+4. **Edit your info.** Change an input (e.g. retirement age) and show the
+   results update.
+5. **RRSP optimizer.** Open the meltdown optimizer, pick a goal, run it, explain
+   the suggested drawdown.
+6. **CPP calculator.** Enter earnings / start age and compare starting at 60, 65
+   and 70.
+7. **When can I retire.** Enter a spending target and read the earliest-age
+   table, including "could spend".
+8. **How much do I need.** Enter target spending and age and read the required
+   savings. Wait until that page is committed and final.
+9. **Compare plans.** Duplicate a plan, change one thing (e.g. retire at 60
+   instead of 62) and compare the two side by side.
+10. **Planning as a couple.** Turn on the spouse/partner toggle and show how the
+    partner's age, CPP and accounts feed into the plan, and how Pension Income
+    Splitting shares eligible pension income to cut tax. Both were left out of
+    "All inputs explained" on purpose, so this video carries them.
+
+### App issues found while scripting the videos (2026-10-13)
+
+Fixed 2026-10-14 (see CHANGELOG): one-time events indexed to inflation, default
+RRSP melt is 0, the optimizer's melt ceiling uses the projected balance, and the
+UI items (duplicate withdrawal-rate sentence, cramped One-Time Events form,
+Pension Income Splitting hidden without a spouse, missing tooltips). Still open:
+
+- **RRSP Melt Amount is a fixed nominal amount, not indexed**
+  (`projection.ts` ~326–329). Tax brackets are indexed, so a $20k melt fills
+  only ~$13k of today's bracket 17 years out. Now disclosed in the tooltip and
+  How It Works; the engine change is deferred to the Phase 4 melt-to-threshold
+  work, since indexing moves every melt plan and every optimizer result.
+- **Withdrawal solver under-estimates tax in the first retirement year.** It
+  sizes the RRSP draw without the age and pension credits, leaving a gap between
+  cash available and target spending. With the default melt now 0, the default
+  plan's gap at 60 grew from $325 to $924 and the year-audit test's limit was
+  raised to match (`src/utils/yearAudit.test.ts`); that file says the fix
+  belongs in the solver, not the limit.
+
+**Where the videos go (decided 2026-10-13).** Nothing autoplays and no video sits inline
+next to a tool, because the pages *are* the tool and a playing video competes
+with it.
+- A dedicated **/tutorials/** page listing every video in order with a sentence
+  each, prerendered like the other standalone pages so it can rank in search.
+  Linked from the nav and from How It Works (which stays about methodology).
+- A small **"▶ 1-min tour"** link on each calculator page (CPP, When can I
+  retire, How much do I need) that opens that page's video in a pop-up window.
+- Offer the dashboard tour (#2) on Guided Setup's "You're set." screen.
+- Also upload to **YouTube**, mainly to be found in search. The site can embed
+  from there or serve its own files.
+
 ## Low priority / deferred
 
 Deferred items, none blocking release. Context for the onboarding ones below: the

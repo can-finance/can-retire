@@ -487,10 +487,11 @@ describe('RRSP/RRIF withdrawal breakdown sub-lines', () => {
     // Default plan with a spouse added via createDefaultPerson(true): at the
     // primary's age 72 the (younger) spouse is still running their own
     // configured meltdown alongside the primary's freshly-triggered RRIF
-    // minimum, so both sub-lines render together.
+    // minimum, so both sub-lines render together. The default plan no longer
+    // melts, so the old sample melts are set explicitly.
     const SPOUSE_PLAN: SimulationInputs = {
-        person: createDefaultPerson(),
-        spouse: createDefaultPerson(true),
+        person: { ...createDefaultPerson(), rrspMeltAmount: 20_000 },
+        spouse: { ...createDefaultPerson(true), rrspMeltAmount: 10_000 },
         province: 'ON', inflationRate: 0.025,
         preRetirementSpend: 60_000, postRetirementSpend: 55_000,
         oneTimeExpenses: [], withdrawalStrategy: 'rrsp-first', useIncomeSplitting: true,

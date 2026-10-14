@@ -34,6 +34,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plan (e.g. "Retire at 60, save $14k/yr more"). It is in the **Tools** menu,
   and it and "When can I retire?" link to each other.
 
+### Changed
+- **The optimizer now considers larger RRSP meltdowns when retirement is years
+  away.** It used to size the meltdown amounts it tries from your RRSP balance
+  today, which for someone still working is a fraction of what they'll hold by
+  retirement, so it could only recommend a token amount. It now sizes them from
+  the balance you're projected to have when the meltdown starts, each person on
+  their own clock (so a younger spouse's RRSP is sized for when they retire), and
+  tries a few larger amounts when the best one it finds is the largest. For
+  example, a 35-year-old retiring at 60 with $150,000 in an RRSP was recommended
+  about $20,000 a year and is now recommended about $47,500, leaving roughly
+  $34,000 (today's dollars) more in the estate. Recommendations change for plans
+  like these, in every optimizer goal; plans already at retirement rarely change.
+- **New plans no longer include a sample RRSP meltdown.** The starting plan used
+  to withdraw $20,000 a year from your RRSP from retirement to 71 (and $10,000
+  for a spouse) whether you asked for it or not. It now starts at $0; set an
+  RRSP Melt Amount yourself, or let the RRSP Meltdown Optimizer suggest one.
+  Plans you've already saved keep their amount. **Projections change for new
+  plans and plans set up through Guided Setup.**
+
+### Fixed
+- **One-time expenses and inflows now grow with inflation.** Like every other
+  amount in the plan, they are in today's dollars, but they used to be counted
+  at face value in the year they happen, so an event far in the future counted
+  for much less than entered: $50,000 at 75 for someone now 45 (2.5% inflation)
+  counted as about $23,800 in today's money, and now counts as the full $50,000
+  ($104,900 in that year's dollars). The One-Time Events form now says the
+  amounts are in today's dollars and the age is yours (the first person's).
+  **Projections change for plans with one-time events more than a year away.**
+- **The RRSP meltdown now starts when you retire.** It always started at 60, so
+  a plan retiring at 62 drew from the RRSP for two years on top of a full salary,
+  taxed at the highest rate, and one retiring at 55 waited five years. New plans,
+  Guided Setup and the "When can I retire?" page now start it at your retirement
+  age, and it moves with your retirement age until you set a melt start age
+  yourself. **Projections change for plans set up with a retirement age other
+  than 60.** Plans you've already saved keep their stored melt start age; going
+  through Guided Setup again moves a melt start that matched the old retirement
+  age to the new one.
+- **The One-Time Events form no longer squashes its fields** on narrower screens,
+  and **Pension Income Splitting only shows once you've added a spouse**, since it
+  has no effect without one.
+
 ## [0.13.0] - 2026-10-12
 
 ### Added

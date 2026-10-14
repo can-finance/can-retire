@@ -48,14 +48,17 @@ export function SettingsFields({ inputs, onChange }: {
                 maxFractionDigits={1}
                 value={Number((inputs.inflationRate * 100).toFixed(1))}
                 onChange={(e) => onChange({ inflationRate: Number(e.target.value) / 100 })}
+                tooltip="How fast prices rise each year. It raises your spending, income, CPP and OAS, indexed pensions and the tax brackets."
             />
 
-            <Toggle
-                checked={inputs.useIncomeSplitting ?? true}
-                onChange={(val) => onChange({ useIncomeSplitting: val })}
-                label="Pension Income Splitting"
-                tooltip={'ON = the engine calculates the optimal pension income split of up to 50%.\nOFF = each spouse is taxed on their own income with no splitting.'}
-            />
+            {inputs.spouse && (
+                <Toggle
+                    checked={inputs.useIncomeSplitting ?? true}
+                    onChange={(val) => onChange({ useIncomeSplitting: val })}
+                    label="Pension Income Splitting"
+                    tooltip={'ON = the engine calculates the optimal pension income split of up to 50%.\nOFF = each spouse is taxed on their own income with no splitting.'}
+                />
+            )}
 
             <Toggle
                 checked={inputs.withdrawalStrategy === 'rrsp-first'}

@@ -311,12 +311,15 @@ describe('OnboardingFlow', () => {
         });
 
         // Regression: gating each step on the whole person's errors trapped the
-        // user on "About you" — a current age past the default melt start age
-        // (55) tripped a check whose field lives on the meltdown step, which
-        // couldn't be reached because Next was blocked.
+        // user on "About you" — a current age past a stored melt start age
+        // tripped a check whose field lives on the meltdown step, which
+        // couldn't be reached because Next was blocked. (New plans leave the melt
+        // start unset, so the seed stores one explicitly.)
         it('detailed path: a current age of 70 does not strand the user on "About you"', async () => {
             const user = userEvent.setup();
-            render(<OnboardingFlow seed={freshSeed()} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
+            const seed = freshSeed();
+            seed.person.rrspMeltStartAge = 60;
+            render(<OnboardingFlow seed={seed} onDone={vi.fn()} onOpenPrivacy={vi.fn()} />);
 
             await user.click(screen.getByRole('button', { name: /Full setup/ }));
             await setFinancialInput(user, fieldFor('Current age'), '70');

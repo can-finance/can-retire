@@ -103,6 +103,19 @@ const ONE_TIME = inputs({
     ]
 });
 
+// The same events with inflation on: their today's-dollar amounts are scaled by
+// the year's inflation factor in the engine, and the audit must scale them the
+// same way for the year to reconcile.
+const ONE_TIME_INDEXED = inputs({
+    ...ONE_TIME,
+    inflationRate: 0.025,
+    oneTimeExpenses: [
+        { id: 'a', name: 'Roof', amount: 50_000, age: 66, type: 'expense' },
+        { id: 'b', name: 'Inheritance', amount: 120_000, age: 67, type: 'inflow' },
+        { id: 'c', name: 'Car', amount: 40_000, age: 69, type: 'expense' }
+    ]
+});
+
 // Working years with income well above spending: reinvestment lines active, no
 // withdrawals to gross up
 const SURPLUS = inputs({
@@ -155,7 +168,12 @@ const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
     // solver's pricing of it. Moving the base tax year 2025 -> 2026 widened it again
     // ($238.30 -> $325.44, still age 64): the credits the solver's estimate omits are
     // simply worth more under the 2026 amounts, so the same omission costs more.
-    ['INITIAL_INPUTS', INITIAL_INPUTS, 326],
+    // Dropping the sample $20k/$10k meltdown from the default plan widened it
+    // again ($325.44 -> $923.87) and moved it to age 60, the retirement year:
+    // with no melt, that year's whole RRSP draw is a solver-sized top-up, so
+    // more of it is priced at the credit-blind marginal estimate. Same known
+    // solver limitation, larger exposure — not a new defect.
+    ['INITIAL_INPUTS', INITIAL_INPUTS, 924],
     // No credit-argument gap in these two fixtures, so only the binary-search
     // tolerance survives. Measured worsts under the 2026 constants: 0.6405 (single,
     // age 68) and 1.6024 (widowed, age 70).
@@ -183,6 +201,7 @@ const CASH_FLOW_TOLERANCE: Array<[string, SimulationInputs, number]> = [
     // Measured worsts under the 2026 constants: 0.7949 (one-time, age 70) and
     // 0.5448 (surplus, age 68) — both still pure binary-search noise.
     ['one-time events', ONE_TIME, 0.9],
+    ['one-time events, indexed', ONE_TIME_INDEXED, 0.9],
     ['surplus', SURPLUS, 0.9]
 ];
 
@@ -192,9 +211,11 @@ const SCENARIOS = CASH_FLOW_TOLERANCE;
 
 const sectionOf = (audit: YearAudit, key: AuditSectionKey) => audit.sections.find(s => s.key === key);
 
+// Event amounts are today's dollars, indexed to the year they land (keyed on the
+// primary person's age, like the engine).
 const oneTimeInflow = (ins: SimulationInputs, age: number) =>
     (ins.oneTimeExpenses ?? []).filter(e => e.age === age && e.type === 'inflow')
-        .reduce((sum, e) => sum + e.amount, 0);
+        .reduce((sum, e) => sum + e.amount * Math.pow(1 + ins.inflationRate, age - Math.round(ins.person.age)), 0);
 
 // --- Tests -------------------------------------------------------------------
 
@@ -1078,6 +1099,31 @@ describe('one-time expense info lines (cashFlow)', () => {
     });
 });
 
+describe('indexed one-time events in the audit', () => {
+    it('event lines carry the inflated amount and the year still reconciles', () => {
+        const results = runSimulation(ONE_TIME_INDEXED);
+        // Roof at 66 (t=1), Inheritance at 67 (t=2), Car at 69 (t=4)
+        const at = (age: number) => {
+            const i = results.findIndex(r => r.age === age);
+            return buildYearAudit(ONE_TIME_INDEXED, results, i);
+        };
+
+        const roofCash = sectionOf(at(66), 'cashFlow')!;
+        const roof = roofCash.lines.find(l => l.label === 'Includes one-time: Roof')!;
+        expect(roof.amount).toBeCloseTo(50_000 * 1.025, 6);
+        expect(Math.abs(roofCash.check!.residual)).toBeLessThan(0.9);
+
+        const income = sectionOf(at(67), 'incomeSources')!;
+        expect(income.lines.find(l => l.label === 'One-time inflows')!.amount).toBeCloseTo(120_000 * 1.025 ** 2, 6);
+        expect(income.lines.find(l => l.label === 'Includes one-time: Inheritance')!.amount).toBeCloseTo(120_000 * 1.025 ** 2, 6);
+        expect(Math.abs(sectionOf(at(67), 'cashFlow')!.check!.residual)).toBeLessThan(0.9);
+
+        const carCash = sectionOf(at(69), 'cashFlow')!;
+        expect(carCash.lines.find(l => l.label === 'Includes one-time: Car')!.amount).toBeCloseTo(40_000 * 1.025 ** 4, 6);
+        expect(Math.abs(carCash.check!.residual)).toBeLessThan(0.9);
+    });
+});
+
 describe('one-time inflow naming (incomeSources)', () => {
     it('the summed addend line is untouched, and a named info line sits alongside it', () => {
         const results = runSimulation(ONE_TIME);
@@ -1160,10 +1206,11 @@ describe('RRSP/RRIF withdrawal breakdown (incomeSources)', () => {
     // createDefaultPerson(true), per the task's suggested fixture: the spouse is
     // 3 years younger, so at the primary's age 72 the spouse (69) is still
     // running their own configured meltdown while the primary's RRIF minimum has
-    // just kicked in — two nonzero components, no top-up, in the same year.
+    // just kicked in — two nonzero components, no top-up, in the same year. The
+    // default plan no longer melts, so the old sample melts are set explicitly.
     const SPOUSE_PLAN: SimulationInputs = {
-        person: createDefaultPerson(),
-        spouse: createDefaultPerson(true),
+        person: { ...createDefaultPerson(), rrspMeltAmount: 20_000 },
+        spouse: { ...createDefaultPerson(true), rrspMeltAmount: 10_000 },
         province: 'ON', inflationRate: 0.025,
         preRetirementSpend: 60_000, postRetirementSpend: 55_000,
         oneTimeExpenses: [], withdrawalStrategy: 'rrsp-first', useIncomeSplitting: true,

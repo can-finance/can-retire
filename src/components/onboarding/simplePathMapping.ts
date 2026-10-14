@@ -140,10 +140,14 @@ function mergePerson(base: Person, opts: MergeOpts): Person {
     const retirementAge = Math.max(opts.retirementAge, age);
     // lifeExpectancy ≥ max(90, retirementAge + 5), but never lower a seeded value.
     const lifeExpectancy = Math.max(base.lifeExpectancy, 90, retirementAge + 5);
-    // rrspMeltStartAge ≥ max(60, age), without lowering a seeded value. The 60
-    // floor tracks the default melt start (createDefaultPerson) — melting earlier
-    // than that means drawing an RRSP down while still on a full salary.
-    const rrspMeltStartAge = Math.max(base.rrspMeltStartAge ?? 0, 60, age);
+    // The melt starts at retirement unless the user chose otherwise: an unset
+    // melt start follows retirementAge in the engine, so it stays unset. A melt
+    // start equal to the old retirement age is indistinguishable from that on
+    // screen (the field shows the retirement age when unset) — and is what plans
+    // saved under the old default store — so it follows the new retirement age
+    // too. Any other explicit value is kept, but never before the current age.
+    const meltStart = base.rrspMeltStartAge;
+    const rrspMeltStartAge = !meltStart || meltStart === base.retirementAge ? undefined : Math.max(meltStart, age);
 
     return {
         ...base,

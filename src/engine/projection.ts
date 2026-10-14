@@ -500,17 +500,20 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
         const isRetired = (pAlive ? pAge >= p.retirementAge : true) &&
             (sAlive && sAge ? sAge >= s.retirementAge : true);
 
-        // One-time expenses for this year
+        // One-time events for this year, keyed to the primary person's age (they
+        // keep firing after the primary's death while the spouse lives). Amounts
+        // are in today's dollars, like every other input, so they grow with
+        // inflation to the year they land. yearAudit applies the same scaling.
         const annualOneTimeEvents = (inputs.oneTimeExpenses || [])
             .filter(e => e.age === pAge);
 
         const annualOneTimeExpenses = annualOneTimeEvents
             .filter(e => e.type !== 'inflow')
-            .reduce((sum, e) => sum + e.amount, 0);
+            .reduce((sum, e) => sum + e.amount * inflationFactor, 0);
 
         const annualOneTimeInflows = annualOneTimeEvents
             .filter(e => e.type === 'inflow')
-            .reduce((sum, e) => sum + e.amount, 0);
+            .reduce((sum, e) => sum + e.amount * inflationFactor, 0);
 
         const targetSpend = ((isRetired ? postRetirementSpend : preRetirementSpend) * inflationFactor) + annualOneTimeExpenses;
 

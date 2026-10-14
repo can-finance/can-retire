@@ -433,11 +433,13 @@ export function Dashboard() {
                                 label="Pre-Retirement"
                                 value={inputs.preRetirementSpend}
                                 onChange={(e) => updateInputs({ ...inputs, preRetirementSpend: Number(e.target.value) })}
+                                tooltip="What your household spends each year after tax, in today's dollars, while anyone is still working. It rises with inflation."
                             />
                             <FinancialInput
                                 label="Post-Retirement"
                                 value={inputs.postRetirementSpend}
                                 onChange={(e) => updateInputs({ ...inputs, postRetirementSpend: Number(e.target.value) })}
+                                tooltip="What your household spends each year after tax, in today's dollars, once everyone has retired. It rises with inflation. One-time events are added on top."
                             />
                         </div>
 

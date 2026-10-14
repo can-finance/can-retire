@@ -25,6 +25,27 @@ describe('sanitizeSimulationInputs', () => {
         expect(result.oneTimeExpenses).toEqual([]);
     });
 
+    it('defaults the RRSP melt amount to 0 for the person and the spouse', () => {
+        expect(createDefaultPerson().rrspMeltAmount).toBe(0);
+        expect(createDefaultPerson(true).rrspMeltAmount).toBe(0);
+        expect(INITIAL_INPUTS.person.rrspMeltAmount).toBe(0);
+        const result = sanitizeSimulationInputs({ person: {}, spouse: {} })!;
+        expect(result.person.rrspMeltAmount).toBe(0);
+        expect(result.spouse!.rrspMeltAmount).toBe(0);
+    });
+
+    it('preserves a stored RRSP melt amount, including the old sample defaults', () => {
+        const result = sanitizeSimulationInputs({
+            person: { rrspMeltAmount: 20_000 },
+            spouse: { rrspMeltAmount: 10_000 }
+        })!;
+        expect(result.person.rrspMeltAmount).toBe(20_000);
+        expect(result.spouse!.rrspMeltAmount).toBe(10_000);
+        // An explicit 0 stays 0; junk falls back to the (zero) default
+        expect(sanitizeSimulationInputs({ person: { rrspMeltAmount: 0 } })!.person.rrspMeltAmount).toBe(0);
+        expect(sanitizeSimulationInputs({ person: { rrspMeltAmount: 'x' } })!.person.rrspMeltAmount).toBe(0);
+    });
+
     it('keeps valid fields and defaults the rest (truncated share link case)', () => {
         const result = sanitizeSimulationInputs({
             person: { age: 52, retirementAge: 61 },
@@ -445,7 +466,16 @@ describe('sanitizeSimulationInputs', () => {
         });
         expect(once.oneTimeExpenses![0].age).toBe(70);
 
+        // Unset (or junk) stays unset — the engine then melts from retirementAge;
+        // nothing re-injects a fixed default age.
         const noMelt = sanitizeSimulationInputs({ person: { rrspMeltStartAge: 'x' } })!;
-        expect(noMelt.person.rrspMeltStartAge).toBe(createDefaultPerson().rrspMeltStartAge);
+        expect(noMelt.person.rrspMeltStartAge).toBeUndefined();
+        expect(once.person.rrspMeltStartAge).toBeUndefined();
+        expect(once.spouse!.rrspMeltStartAge).toBeUndefined();
+        expect(twice.person.rrspMeltStartAge).toBeUndefined();
+        expect(JSON.stringify(once)).not.toContain('rrspMeltStartAge');
+        // A stored value round-trips unchanged.
+        const kept = sanitizeSimulationInputs({ person: { rrspMeltStartAge: 63 } })!;
+        expect(sanitizeSimulationInputs(JSON.parse(JSON.stringify(kept)))!.person.rrspMeltStartAge).toBe(63);
     });
 });

@@ -134,11 +134,11 @@ function toSimpleAnswers(form: CalculatorForm, retirementAge: number): SimpleAns
  * The plan a search runs on, with the person retiring at `retirementAge` (the
  * spouse's follows from it, see spouseRetirementAge; `retirementAge` may equal
  * the current age, which means retiring now). Built like onboarding's Quick
- * start (merged onto a fresh copy of the default plan), with one deliberate
- * difference: no early RRSP withdrawals to start from. The search tries a range
- * of them anyway, and starting from none means the "To get there" line
- * describes what the search adds rather than changing a sample amount the
- * visitor never chose.
+ * start (merged onto a fresh copy of the default plan), with no early RRSP
+ * withdrawals to start from. The default plan already has none; the explicit
+ * zeroing below pins that here, because the search tries a range of them
+ * anyway and starting from none means the "To get there" line describes what
+ * the search adds rather than changing a sample amount the visitor never chose.
  */
 export function buildPlanInputs(form: CalculatorForm, retirementAge: number): SimulationInputs {
     const draft = JSON.parse(JSON.stringify(INITIAL_INPUTS)) as SimulationInputs;

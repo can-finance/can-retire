@@ -1668,3 +1668,69 @@ describe('fractional ages are rounded to whole years', () => {
         expect(last.age).toBe(95); // primary's scale: 65 + (90 - 60)
     });
 });
+
+// One-time amounts are in today's dollars, like every other input, so they grow
+// with inflation to the year they land (they used to be added at face value).
+describe('one-time events are indexed to inflation', () => {
+    const INFL = 0.03;
+    const indexed = (over: Partial<SimulationInputs> = {}) => inputs({
+        person: person({ tfsa: { type: 'TFSA', balance: 2_000_000 } }),
+        postRetirementSpend: 50_000,
+        inflationRate: INFL,
+        ...over
+    });
+
+    it('an expense at t>0 is scaled by that year\'s inflation factor', () => {
+        const res = runSimulation(indexed({
+            oneTimeExpenses: [{ id: 'roof', name: 'Roof', amount: 30_000, age: 68, type: 'expense' }]
+        }));
+        const at68 = res.find(r => r.age === 68)!;
+        const at67 = res.find(r => r.age === 67)!;
+        expect(at68.spending).toBeCloseTo((50_000 + 30_000) * Math.pow(1 + INFL, 3), 6);
+        expect(at67.spending).toBeCloseTo(50_000 * Math.pow(1 + INFL, 2), 6);
+    });
+
+    it('an inflow at t>0 is scaled by the inflation factor and stays untaxed', () => {
+        const amount = 20_000;
+        const withEvent = runSimulation(indexed({
+            oneTimeExpenses: [{ id: 'gift', name: 'Gift', amount, age: 67, type: 'inflow' }]
+        }));
+        const without = runSimulation(indexed());
+        const y = withEvent.find(r => r.age === 67)!;
+        const y0 = without.find(r => r.age === 67)!;
+        const f = Math.pow(1 + INFL, 2);
+        // TFSA-only funding: no tax with or without the inflow
+        expect(y.taxPaid).toBe(0);
+        expect(y0.taxPaid).toBe(0);
+        // The indexed inflow replaces exactly that much TFSA draw
+        expect(y0.totalTFSAWithdrawal - y.totalTFSAWithdrawal).toBeCloseTo(amount * f, 4);
+        expect(y.netIncome).toBeCloseTo(50_000 * f, 4);
+    });
+
+    it('a year-0 event is unchanged (inflation factor 1)', () => {
+        const res = runSimulation(indexed({
+            oneTimeExpenses: [
+                { id: 'roof', name: 'Roof', amount: 30_000, age: 65, type: 'expense' },
+                { id: 'gift', name: 'Gift', amount: 10_000, age: 65, type: 'inflow' }
+            ]
+        }));
+        expect(res[0].spending).toBeCloseTo(80_000, 6);
+        expect(res[0].totalTFSAWithdrawal).toBeCloseTo(70_000, 4);
+    });
+
+    it('fires on the primary\'s age even after the primary has died, while the spouse lives', () => {
+        // Documents current behaviour: events are keyed to the primary person's age.
+        const couple = (events: SimulationInputs['oneTimeExpenses']) => indexed({
+            person: person({ age: 65, lifeExpectancy: 67, tfsa: { type: 'TFSA', balance: 1_000_000 } }),
+            spouse: person({ age: 65, lifeExpectancy: 75, tfsa: { type: 'TFSA', balance: 1_000_000 } }),
+            oneTimeExpenses: events
+        });
+        const withEvent = runSimulation(couple([{ id: 'car', name: 'Car', amount: 30_000, age: 70, type: 'expense' }]));
+        const without = runSimulation(couple([]));
+        const y = withEvent.find(r => r.age === 70)!;
+        const y0 = without.find(r => r.age === 70)!;
+        expect(y).toBeDefined();
+        expect(y.age > 67).toBe(true); // primary already dead
+        expect(y.spending - y0.spending).toBeCloseTo(30_000 * Math.pow(1 + INFL, 5), 4);
+    });
+});

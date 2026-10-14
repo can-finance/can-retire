@@ -30,12 +30,14 @@ export const createDefaultPerson = (isSpouse = false): Person => ({
     cppStartAge: 65,
     cppContributedYears: 35,
     oasStartAge: 65,
-    // Melt at retirement, not before it. A meltdown is only worth doing in the
-    // low-income window between retiring and CPP/OAS starting — starting it while
-    // a full salary is still coming in taxes the draw at a peak marginal rate on
-    // money the household does not need.
-    rrspMeltStartAge: 60, // == retirementAge above
-    rrspMeltAmount: isSpouse ? 10000 : 20000,
+    // No meltdown by default: a voluntary RRSP draw is a strategy the user opts
+    // into (or the Meltdown Optimizer recommends), not a baseline assumption.
+    // rrspMeltStartAge is left unset so that once a melt amount is entered the
+    // engine starts it at retirementAge — the low-income window before CPP/OAS,
+    // not while a full salary is still taxed at a peak marginal rate — and keeps
+    // following it when the retirement age changes, until the user sets a melt
+    // start of their own.
+    rrspMeltAmount: 0,
     rrsp: { type: AccountTypeVals.RRSP, balance: isSpouse ? 300000 : 500000 },
     tfsa: { type: AccountTypeVals.TFSA, balance: isSpouse ? 100000 : 150000 },
     nonRegisteredAccounts: [createNonRegAccount({

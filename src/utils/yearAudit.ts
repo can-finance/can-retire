@@ -677,8 +677,15 @@ export function buildYearAudit(
     const start = index > 0 ? householdBalances(results[index - 1]) : inputBalances(inputs);
     const end = householdBalances(r);
 
-    // The engine matches one-time events on the PRIMARY person's age only.
-    const events = (inputs.oneTimeExpenses ?? []).filter(e => e.age === r.age);
+    // The engine matches one-time events on the PRIMARY person's age only, and
+    // scales their today's-dollar amounts by the year's inflation factor
+    // (projection.ts). Do the same here so every event line, and the inflow
+    // addend, is in the same nominal dollars as the rest of the row.
+    const yearOffset = r.age - Math.round(inputs.person.age);
+    const inflationFactor = Math.pow(1 + inputs.inflationRate, yearOffset);
+    const events = (inputs.oneTimeExpenses ?? [])
+        .filter(e => e.age === r.age)
+        .map(e => ({ ...e, amount: e.amount * inflationFactor }));
     // Same partition the engine itself uses in projection.ts (expense = anything
     // not explicitly typed 'inflow').
     const inflowEvents = events.filter(e => e.type === 'inflow');

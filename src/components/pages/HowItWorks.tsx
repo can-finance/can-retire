@@ -128,7 +128,7 @@ export function HowItWorks() {
                         The engine performs a <strong>year-by-year cash flow simulation</strong> from your current age until your projected life expectancy (or your spouse's, whichever is later). Each year, the engine looks at:
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
-                        <li><strong>Inflow:</strong> employment, CPP, OAS, mandatory RRIF minimums, optional RRSP melt withdrawals, investment income from non-registered accounts, and any one-time inflows.</li>
+                        <li><strong>Inflow:</strong> employment, CPP, OAS, mandatory RRIF minimums, optional RRSP melt withdrawals, investment income from non-registered accounts, and any one-time inflows. One-time inflows and expenses happen in the year you (the first person) reach the age you set, and their amounts are in today's dollars, so they grow with inflation to that year.</li>
                         <li><strong>Gap analysis:</strong> compares net cash to your "Target Spend".</li>
                         <li><strong>Drawdown:</strong> pulls from accounts per your selected strategy if there's a deficit.</li>
                         <li><strong>Reinvestment:</strong> fills TFSA room, then RRSP room, then invests the rest in your designated non-registered surplus account.</li>
@@ -159,7 +159,7 @@ export function HowItWorks() {
                         Neither order always wins. Paying less tax over your lifetime doesn't guarantee a bigger estate — in our test plans, the order with the lowest total tax sometimes left less behind. The <strong>RRSP Meltdown Optimizer</strong> tries both on your own numbers.
                     </p>
                     <p>
-                        These two options only set which account pays for your spending first. You change it with the <strong>Fund spending from RRSP first</strong> switch in Settings. They are not the RRSP meltdown. The meltdown is the separate <strong>RRSP Melt Amount</strong> for each person: a fixed withdrawal every year from its start age to 71, whether you need the money or not. You can use both. The meltdown comes out first, and anything still needed for spending is drawn in the order you picked.
+                        These two options only set which account pays for your spending first. You change it with the <strong>Fund spending from RRSP first</strong> switch in Settings. They are not the RRSP meltdown. The meltdown is the separate <strong>RRSP Melt Amount</strong> for each person: a fixed withdrawal every year from its start age to 71, whether you need the money or not. It is the same dollar amount each year and is not adjusted for inflation. You can use both. The meltdown comes out first, and anything still needed for spending is drawn in the order you picked.
                     </p>
                 </div>
             </details>

@@ -12,7 +12,10 @@ import {
     stepDownStepForGap,
     planStepDownProbe,
     initialStepDownSpend,
+    projectedMeltStartBalances,
+    buildHouseholdMeltGrids,
 } from './meltdownOptimizer';
+import { INITIAL_INPUTS, createDefaultPerson, DEFAULT_SPEND } from './inputSanitizer';
 import type { StepDownProbeResult } from './meltdownOptimizer';
 
 // --- Fixtures (mirror engine test helpers) --------------------------------
@@ -997,4 +1000,163 @@ describe('applyMeltdownRecommendation', () => {
 
         expect(applyMeltdownRecommendation(current, recommended).withdrawalStrategy).toBe('rrsp-first');
     });
+});
+
+// --- Melt grid ceiling: projected balance at melt start + edge expansion -----
+//
+// The coarse melt grid used to anchor on TODAY's RRSP balance. For someone
+// decades from retirement that is a fraction of what they hold when the melt
+// starts, so every candidate was too small and the search settled on a token
+// melt (measured: 35 → 60 with $150k picked $20k; the best is near $48k). The
+// grid now anchors on the balance projected for melt start, and a winner on
+// the grid's top value triggers a few steps beyond it.
+
+const NET = (i: SimulationInputs) => computeSummaryMetrics(runSimulation(i), i, false).netEstateValue;
+const withMelt = (i: SimulationInputs, who: 'person' | 'spouse', melt: number): SimulationInputs => {
+    const t = structuredClone(i);
+    const p = who === 'person' ? t.person : t.spouse!;
+    p.rrspMeltAmount = melt;
+    p.rrspMeltStartAge = undefined;
+    return t;
+};
+const gridTop = (g: number[]) => Math.max(...g);
+
+// Default single plan, but 35 today with $150k in the RRSP: a 25-year runway.
+const longRunwaySingle = (): SimulationInputs => {
+    const b = structuredClone(INITIAL_INPUTS);
+    b.person.age = 35;
+    b.person.retirementAge = 60;
+    b.person.rrsp.balance = 150_000;
+    return b;
+};
+
+// The default couple: 48/45, both retiring at 60, RRSPs $500k / $300k. The
+// spouse's melt starts 15 years out on their own clock.
+const defaultCouple = (): SimulationInputs => ({
+    ...structuredClone(INITIAL_INPUTS),
+    spouse: createDefaultPerson(true),
+    preRetirementSpend: DEFAULT_SPEND.couple.pre,
+    postRetirementSpend: DEFAULT_SPEND.couple.post,
+});
+
+describe('melt grid ceiling follows the projected RRSP at melt start', () => {
+    it('anchors a pre-retiree on the projected balance, well above today', () => {
+        // No contributions, no pre-retirement draws: the RRSP just compounds
+        // at 5% for 25 years, ~3.4× today's balance.
+        const base = inputs({
+            person: person({ age: 35, retirementAge: 60, rrsp: { type: 'RRSP', balance: 150_000 } }),
+        });
+        const projected = projectedMeltStartBalances(base).person;
+        expect(projected).toBeGreaterThan(3 * 150_000);
+        expect(projected).toBeLessThan(4 * 150_000);
+
+        const grid = buildHouseholdMeltGrids(base).person;
+        const oldGrid = buildMeltGrid(base.person);
+        expect(grid).toEqual(buildMeltGrid(base.person, undefined, projected));
+        // Same number of candidates, ~3.4× the ceiling.
+        expect(grid.length).toBe(oldGrid.length);
+        expect(gridTop(grid)).toBeGreaterThan(3 * gridTop(oldGrid));
+        // 1.5 × even depletion over the 12-year window (60 → 72), to $500.
+        expect(Math.abs(gridTop(grid) - (1.5 * projected) / 12)).toBeLessThanOrEqual(250);
+    });
+
+    it('is unchanged for someone already at melt start', () => {
+        const base = inputs({
+            person: person({ age: 65, retirementAge: 65, rrsp: { type: 'RRSP', balance: 600_000 } }),
+        });
+        expect(projectedMeltStartBalances(base).person).toBe(600_000);
+        expect(buildHouseholdMeltGrids(base).person).toEqual(buildMeltGrid(base.person));
+    });
+
+    it('never anchors below today\'s balance', () => {
+        // Spending before retirement drains the RRSP (no other money): the
+        // projection falls below today's balance, which is used instead.
+        const base = inputs({
+            person: person({
+                age: 55, retirementAge: 60, rrsp: { type: 'RRSP', balance: 300_000 },
+                nonRegisteredAccounts: [nonReg({ balance: 0 })],
+            }),
+            preRetirementSpend: 50_000,
+        });
+        expect(projectedMeltStartBalances(base).person).toBe(300_000);
+        expect(buildHouseholdMeltGrids(base).person).toEqual(buildMeltGrid(base.person));
+    });
+
+    it('long runway: recommends a melt beyond the old grid that beats every old-grid melt', async () => {
+        const base = longRunwaySingle();
+        const oldGrid = buildMeltGrid(base.person);
+        const res = await optimizeMeltdown(base, OPTS);
+        const rec = res.recommendedInputs;
+
+        expect(res.improved).toBe(true);
+        expect(rec.person.rrspMeltAmount!).toBeGreaterThan(gridTop(oldGrid));
+        // Holding the recommendation's other levers, no melt the old grid could
+        // offer comes within $10k of the estate the new answer leaves.
+        const bestOld = Math.max(...oldGrid.map(m => NET(withMelt(rec, 'person', m))));
+        expect(res.recommendedMetrics.netEstateValue).toBeGreaterThan(bestOld + 10_000);
+    }, 60_000);
+
+    it('couple: the younger spouse\'s melt is no longer pinned at the old ceiling', async () => {
+        const base = defaultCouple();
+        const oldSpouseTop = gridTop(buildMeltGrid(base.spouse!));
+        const grids = buildHouseholdMeltGrids(base);
+        expect(gridTop(grids.spouse)).toBeGreaterThan(1.5 * oldSpouseTop);
+
+        const res = await optimizeMeltdown(base, OPTS);
+        const rec = res.recommendedInputs;
+        expect(rec.spouse!.rrspMeltAmount!).toBeGreaterThan(oldSpouseTop);
+        // And the larger spouse melt is worth having: capping it back at the old
+        // ceiling (everything else held) leaves a smaller estate.
+        expect(res.recommendedMetrics.netEstateValue)
+            .toBeGreaterThan(NET(withMelt(rec, 'spouse', oldSpouseTop)) + 1_000);
+    }, 60_000);
+});
+
+describe('melt grid edge expansion', () => {
+    // Retired at 60 with an RRSP that loses 3% a year while the non-registered
+    // account compounds at 9%: draining the RRSP fast keeps paying until well
+    // past the grid's 1.5×-even-depletion ceiling (~$75k). Measured estates
+    // (nominal) at grid top + k steps of $9.5k: k=4 $2.98M, k=6 $3.03M, k=8
+    // $3.04M — still rising beyond what the capped expansion reaches.
+    const slowRrsp = (): SimulationInputs => inputs({
+        person: person({
+            rrsp: { type: 'RRSP', balance: 600_000 },
+            nonRegisteredAccounts: [nonReg({ balance: 100_000, adjustedCostBase: 100_000 })],
+        }),
+        postRetirementSpend: 30_000,
+        returnRates: {
+            bondReturn: 0.03, cashInterest: 0.02, dividend: 0.03,
+            capitalGrowth: 0.09, rrspGrowth: -0.03, tfsaGrowth: 0.05, volatility: 0.02,
+        },
+    });
+
+    it('steps past the grid top when the best melt is on it, and stops at the cap', async () => {
+        const base = slowRrsp();
+        const grid = buildHouseholdMeltGrids(base).person;
+        const top = gridTop(grid);
+        const step = top - [...grid].sort((a, b) => a - b)[grid.length - 2];
+
+        const res = await optimizeMeltdown(base, { ...OPTS, considerCppOas: false });
+        const melt = res.recommendedInputs.person.rrspMeltAmount!;
+
+        // Triggered: the answer is beyond the coarse grid, and better than its top.
+        expect(melt).toBeGreaterThan(top);
+        expect(res.recommendedMetrics.netEstateValue).toBeGreaterThan(NET(withMelt(res.recommendedInputs, 'person', top)));
+        // Capped: 4 steps out, plus at most one step from refining around an
+        // off-grid winner carried into the second withdrawal-order arm.
+        expect(melt).toBeLessThanOrEqual(top + 5 * step);
+        // ...even though a larger melt would still have helped (so the cap,
+        // not the surface, is what stopped it).
+        expect(NET(withMelt(res.recommendedInputs, 'person', top + 6 * step)))
+            .toBeGreaterThan(res.recommendedMetrics.netEstateValue);
+    }, 60_000);
+
+    it('does not expand when the winner is inside the grid', async () => {
+        // The classic at-retirement meltdown candidate: its best melt is an
+        // interior grid point (or a refinement of one), never past the top.
+        const base = bigRrspInputs();
+        const top = gridTop(buildHouseholdMeltGrids(base).person);
+        const res = await optimizeMeltdown(base, OPTS);
+        expect(res.recommendedInputs.person.rrspMeltAmount!).toBeLessThan(top);
+    }, 30_000);
 });

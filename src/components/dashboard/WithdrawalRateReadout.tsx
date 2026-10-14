@@ -74,7 +74,6 @@ export function WithdrawalRateReadout({ rate }: { rate: number }) {
             </div>
 
             <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                Withdrawals in your first year of retirement as a share of savings at the start of that year.
                 Your withdrawals in your first year of retirement, as a percentage of your savings at the start of that year. The common 4% guideline is marked for comparison only; it isn't a recommendation for you.
             </p>
         </div>

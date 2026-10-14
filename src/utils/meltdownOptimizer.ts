@@ -508,6 +508,7 @@ const COARSE_STEPS = 8;       // ~8 nonzero melt values in the estate coarse gri
 const MAX_SWEEPS = 3;         // coordinate-descent sweep cap for couples
 const MAX_PATTERN_STEPS = 8;  // diagonal steps per sweep (grid is 9 long, so this spans it)
 const PATTERN_EST = 8;        // progress-estimate allowance for the pattern phase
+const MAX_EDGE_STEPS = 4;     // melt steps past the grid's top tried when the winner sits on it
 const BATCH = 10;             // engine runs between event-loop yields
 const MC_WARN_MARGIN = 1;     // pp the winner may trail baseline before warning
 
@@ -569,8 +570,15 @@ export function buildOasCandidates(person: Person, considerCppOas: boolean): num
 // the estate mode's density; max-spend passes a much smaller count because the
 // voluntary melt amount barely moves the sustainable spend (deficit-driven
 // withdrawals drain the RRSP anyway — melt mostly reorders taxes).
-export function buildMeltGrid(person: Person, steps: number = COARSE_STEPS): number[] {
-    const balance = person.rrsp.balance;
+//
+// `balanceAtStart` is the RRSP balance projected for the year the melt starts
+// (see projectedMeltStartBalances). Someone years from retirement holds far more
+// then than today — 25 years of growth and contributions — and anchoring on
+// today's balance left the right melt off the grid entirely. The larger of the
+// two is used. The melt is a fixed nominal amount, so a nominal projection is
+// the matching basis.
+export function buildMeltGrid(person: Person, steps: number = COARSE_STEPS, balanceAtStart?: number): number[] {
+    const balance = Math.max(person.rrsp.balance, balanceAtStart ?? 0);
     if (balance <= 0) return [0];
     const startAge = Math.max(person.retirementAge, person.age);
     const meltYears = 72 - startAge; // melt runs while age < 72
@@ -583,6 +591,42 @@ export function buildMeltGrid(person: Person, steps: number = COARSE_STEPS): num
         grid.push(roundTo((max * i) / steps, 500));
     }
     return dedupe(grid);
+}
+
+// The RRSP balance each person is projected to hold when their melt starts
+// (end of the year before), from one engine run of the plan with no melt, each
+// person on their own clock. A person already at or past their melt start — or
+// one the projection doesn't reach — gets today's balance.
+export function projectedMeltStartBalances(base: SimulationInputs): { person: number; spouse: number } {
+    const startOf = (p: Person) => Math.round(Math.max(p.retirementAge, p.age));
+    const before = (p: Person) => startOf(p) > Math.round(p.age);
+    const out = { person: base.person.rrsp.balance, spouse: base.spouse?.rrsp.balance ?? 0 };
+    if (!before(base.person) && !(base.spouse && before(base.spouse))) return out; // no run needed
+
+    const noMelt = structuredClone(base);
+    noMelt.person.rrspMeltAmount = 0;
+    if (noMelt.spouse) noMelt.spouse.rrspMeltAmount = 0;
+    const results = runSimulation(noMelt);
+
+    if (before(base.person)) {
+        const row = results.find(r => r.age === startOf(base.person) - 1);
+        if (row) out.person = Math.max(out.person, row.accounts.rrsp);
+    }
+    if (base.spouse && before(base.spouse)) {
+        const row = results.find(r => r.spouseAge === startOf(base.spouse!) - 1);
+        if (row?.spouseAccounts) out.spouse = Math.max(out.spouse, row.spouseAccounts.rrsp);
+    }
+    return out;
+}
+
+// Both people's coarse melt grids, anchored on their projected melt-start
+// balances (one engine run). Spouse grid is [] for a single.
+export function buildHouseholdMeltGrids(base: SimulationInputs, steps: number = COARSE_STEPS): { person: number[]; spouse: number[] } {
+    const at = projectedMeltStartBalances(base);
+    return {
+        person: buildMeltGrid(base.person, steps, at.person),
+        spouse: base.spouse ? buildMeltGrid(base.spouse, steps, at.spouse) : [],
+    };
 }
 
 // Finer melt values around the coarse winner: subdivide the interval between the
@@ -1035,11 +1079,12 @@ interface SearchGrids {
 
 function buildSearchGrids(base: SimulationInputs, objective: Objective, considerCppOas: boolean): SearchGrids {
     const hasSpouse = !!base.spouse;
+    const melt = buildHouseholdMeltGrids(base, objective.meltSteps);
     return {
-        p1Melt: buildMeltGrid(base.person, objective.meltSteps),
+        p1Melt: melt.person,
         p1Cpp: buildCppCandidates(base.person, considerCppOas),
         p1Oas: buildOasCandidates(base.person, considerCppOas),
-        p2Melt: hasSpouse ? buildMeltGrid(base.spouse!, objective.meltSteps) : [],
+        p2Melt: melt.spouse,
         p2Cpp: hasSpouse ? buildCppCandidates(base.spouse!, considerCppOas) : [],
         p2Oas: hasSpouse ? buildOasCandidates(base.spouse!, considerCppOas) : [],
     };
@@ -1133,12 +1178,43 @@ async function runStrategySearch(args: StrategySearchArgs): Promise<StrategySear
     // first arm's coordinates and lets it stop early when it can't beat them.
     const runDescent = async (strategy: WithdrawalStrategy): Promise<void> => {
         const tag = (a: UntaggedAssignment): Assignment => ({ ...a, strategy });
+        // The coarse grids plus any values edge expansion tried, so refinement
+        // finds the right neighbours around an expanded winner.
+        const p1Ext = [...p1Melt];
+        const p2Ext = [...p2Melt];
+
+        // --- Edge expansion ----------------------------------------------
+        // A winner on the grid's top value means the best melt may lie beyond
+        // it. Keep stepping that person's melt up one grid step (other levers
+        // held at the incumbent) while it keeps winning, up to MAX_EDGE_STEPS.
+        const expandEdge = async (who: 'person' | 'spouse'): Promise<void> => {
+            const grid = who === 'person' ? p1Melt : p2Melt;
+            const ext = who === 'person' ? p1Ext : p2Ext;
+            const sorted = [...grid].sort((a, b) => a - b);
+            if (sorted.length < 2) return;
+            const top = sorted[sorted.length - 1];
+            const step = top - sorted[sorted.length - 2];
+            if (top <= 0 || step <= 0) return;
+            for (let k = 1; k <= MAX_EDGE_STEPS; k++) {
+                const cur = bestRef.current;
+                if (!cur) return;
+                const curMelt = who === 'person' ? cur.a.person.melt : cur.a.spouse?.melt;
+                if (curMelt !== top + (k - 1) * step) return; // not (or no longer) on the edge
+                const next = top + k * step;
+                ext.push(next);
+                await evaluate(who === 'person'
+                    ? tag({ person: { ...cur.a.person, melt: next }, spouse: cur.a.spouse })
+                    : tag({ person: cur.a.person, spouse: { ...cur.a.spouse!, melt: next } }));
+                if (bestRef.current?.sig === cur.sig) return; // the step up didn't help
+            }
+        };
 
         if (!hasSpouse) {
             await evalList(personChoices(p1Melt, p1Cpp, p1Oas).map(pc => tag({ person: pc })));
+            await expandEdge('person');
             const winnerSoFar = bestRef.current;
             if (objective.refine && winnerSoFar) {
-                const refined = refineMeltGrid(winnerSoFar.a.person.melt, p1Melt);
+                const refined = refineMeltGrid(winnerSoFar.a.person.melt, p1Ext);
                 await evalList(refined.map(m => tag({ person: { ...winnerSoFar.a.person, melt: m } })));
             }
         } else {
@@ -1210,14 +1286,17 @@ async function runStrategySearch(args: StrategySearchArgs): Promise<StrategySear
                 sweeps++;
             }
 
+            await expandEdge('person');
+            await expandEdge('spouse');
+
             if (objective.refine) {
                 const bp = bestRef.current;
                 if (bp) {
-                    const refP = refineMeltGrid(bp.a.person.melt, p1Melt);
+                    const refP = refineMeltGrid(bp.a.person.melt, p1Ext);
                     await evalList(refP.map(m => tag({ person: { ...bp.a.person, melt: m }, spouse: bp.a.spouse })));
 
                     const bs = bestRef.current!;
-                    const refS = refineMeltGrid(bs.a.spouse!.melt, p2Melt);
+                    const refS = refineMeltGrid(bs.a.spouse!.melt, p2Ext);
                     await evalList(refS.map(m => tag({ person: bs.a.person, spouse: { ...bs.a.spouse!, melt: m } })));
                 }
             }

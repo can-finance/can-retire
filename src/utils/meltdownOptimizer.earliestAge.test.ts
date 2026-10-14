@@ -15,7 +15,7 @@ import { computeSummaryMetrics } from './summaryMetrics';
 import { INITIAL_INPUTS, createDefaultPerson, DEFAULT_SPEND } from './inputSanitizer';
 import {
     optimizeMeltdown,
-    buildMeltGrid,
+    buildHouseholdMeltGrids,
     buildCppCandidates,
     buildOasCandidates,
     EARLIEST_AGE_MELT_STEPS,
@@ -104,9 +104,11 @@ const shortfallOf = (i: SimulationInputs): number =>
 // optimizer's private applyChoice so the oracle stays independent of it.
 function anyStrategyFeasible(base: SimulationInputs, considerCppOas: boolean): boolean {
     type Choice = { melt: number; cpp: number; oas: number };
-    const choicesFor = (p: Person): Choice[] => {
+    // Melt grids anchor on each person's projected balance at melt start.
+    const meltGrids = buildHouseholdMeltGrids(base, EARLIEST_AGE_MELT_STEPS);
+    const choicesFor = (p: Person, meltGrid: number[]): Choice[] => {
         const out: Choice[] = [];
-        for (const melt of buildMeltGrid(p, EARLIEST_AGE_MELT_STEPS)) {
+        for (const melt of meltGrid) {
             for (const cpp of buildCppCandidates(p, considerCppOas)) {
                 for (const oas of buildOasCandidates(p, considerCppOas)) out.push({ melt, cpp, oas });
             }
@@ -119,8 +121,8 @@ function anyStrategyFeasible(base: SimulationInputs, considerCppOas: boolean): b
         p.cppStartAge = c.cpp;
         p.oasStartAge = c.oas;
     };
-    const pcs = choicesFor(base.person);
-    const scs: (Choice | null)[] = base.spouse ? choicesFor(base.spouse) : [null];
+    const pcs = choicesFor(base.person, meltGrids.person);
+    const scs: (Choice | null)[] = base.spouse ? choicesFor(base.spouse, meltGrids.spouse) : [null];
     for (const strategy of ['tax-efficient', 'rrsp-first'] as const) {
         for (const pc of pcs) {
             for (const sc of scs) {
