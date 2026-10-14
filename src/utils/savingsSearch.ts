@@ -214,6 +214,10 @@ function ceilTo(value: number, step: number): number {
     return Math.ceil(value / step) * step;
 }
 
+function floorTo(value: number, step: number): number {
+    return Math.floor(value / step) * step;
+}
+
 function roundTo(value: number, step: number): number {
     return Math.round(value / step) * step;
 }
@@ -322,8 +326,14 @@ export interface SavingsProbeResult { total: number; successRate: number; }
 
 export interface SavingsStepUpPlan {
     target: number;        // MC success rate the total must clear
-    start: number;         // first total to probe (the deterministic answer)
+    start: number;         // first total to probe (the deterministic answer); never goes below it
     cap: number;           // largest total the search may propose
+    // Optional guess at the answer (≥ start), probed first instead of the
+    // start, and again later while it still lies inside the bracket. A clear
+    // there makes the search step DOWN toward the start; a miss steps up from
+    // it. The age rows pass their neighbour's MC/deterministic ratio × their
+    // own deterministic answer. Rounded up to the granularity.
+    firstProbe?: number;
     // Floor of the step's base: a step adds max(total, minStepBase) × the gap
     // fraction, so a deterministic answer of 0 still steps up (see
     // savingsSearchScale).
@@ -338,6 +348,9 @@ export type SavingsStepUpAction =
     | { kind: 'probe'; total: number }
     // The lowest probed total that clears, with a miss within precision below
     // it (or it is the start — the search never goes below the deterministic answer).
+    // A caller may hand in a probe it already measured (the age rows' MC at
+    // current savings) as long as its total is ≥ the start: a miss there steps
+    // up from it; a clear there steps down toward the start (see below).
     | { kind: 'done'; total: number; successRate: number }
     // Even the cap misses the bar: report the best probe found.
     | { kind: 'boundHit'; total: number; successRate: number }
@@ -361,8 +374,13 @@ export function planSavingsStepUp(plan: SavingsStepUpPlan, probes: SavingsProbeR
     const precisionAbs = plan.precisionAbs ?? SAVINGS_MC_PRECISION_ABS;
     const precisionRel = plan.precisionRel ?? SAVINGS_MC_PRECISION_REL;
     const granularity = plan.granularity ?? SAVINGS_GRANULARITY;
+    const start = Math.min(cap, Math.max(0, plan.start));
+    const hint = plan.firstProbe === undefined
+        ? null
+        : Math.min(cap, Math.max(start, ceilTo(plan.firstProbe, granularity)));
+    const probed = (total: number) => probes.some(p => p.total === total);
 
-    if (probes.length === 0) return { kind: 'probe', total: Math.min(cap, Math.max(0, plan.start)) };
+    if (probes.length === 0) return { kind: 'probe', total: hint ?? start };
 
     let highestMiss: SavingsProbeResult | null = null;
     for (const p of probes) {
@@ -377,8 +395,29 @@ export function planSavingsStepUp(plan: SavingsStepUpPlan, probes: SavingsProbeR
         if (!lowestClear || p.total < lowestClear.total) lowestClear = p;
     }
 
+    // The hint, while it still lies strictly inside the bracket (seeded probes
+    // can come before it).
+    if (hint !== null && !probed(hint) && probes.length < maxProbes
+        && (!highestMiss || hint > highestMiss.total) && (!lowestClear || hint < lowestClear.total)) {
+        return { kind: 'probe', total: hint };
+    }
+
     if (lowestClear) {
         const done: SavingsStepUpAction = { kind: 'done', total: lowestClear.total, successRate: lowestClear.successRate };
+        // Clears only, above an unprobed start (a hint or a handed-in probe
+        // cleared): a clear says nothing about the totals below it, so step
+        // DOWN toward the start — gap-scaled by how far above the bar it sits —
+        // until something misses or the start itself is probed. A search that
+        // began at the start has always probed it, so never gets here.
+        if (!highestMiss && lowestClear.total > start && !probed(start)) {
+            if (probes.length >= maxProbes) {
+                return { kind: 'capHit', total: lowestClear.total, successRate: lowestClear.successRate, cleared: true };
+            }
+            const step = Math.max(lowestClear.total, plan.minStepBase)
+                * savingsStepFractionForGap(lowestClear.successRate - target);
+            const next = Math.max(start, floorTo(lowestClear.total - step, granularity));
+            return { kind: 'probe', total: next };
+        }
         if (!highestMiss) return done;
         const width = lowestClear.total - highestMiss.total;
         if (width <= Math.max(precisionAbs, precisionRel * lowestClear.total)) return done;
@@ -452,4 +491,249 @@ export function householdSavingsAtRetirement(
     const row = results[yearsToRetirement - 1];
     if (!row) return null;
     return row.totalAssets / row.inflationFactor;
+}
+
+// --- Per-year framing: "spend $R less a year and save the difference" ------
+//
+// The engine has no contribution lever: before retirement, saving IS the
+// surplus of after-tax income over preRetirementSpend, swept into accounts
+// every year (projection.ts, Step 4). So "save $R more a year" is modelled as
+// preRetirementSpend lowered by R — today's dollars, indexed by the engine
+// like any spending — on the plan as entered, at today's balances. What the
+// engine then does with R, as read from projection.ts:
+//
+//  - WHICH YEARS. preRetirementSpend is charged in every year the household is
+//    not "retired", and the household only counts as retired once EVERY living
+//    person has reached their retirementAge. So the lever runs from this year
+//    until the last earner retires: for a couple it can run past the reported
+//    person's own retirement, and it covers years when one spouse has retired
+//    and the other still works (preRetirementSpendYears counts them).
+//  - WHERE IT GOES. A surplus year's surplus fills each person's TFSA (the
+//    indexed $7,000 limit, the primary first), then RRSP room for each person
+//    still working, under 71 and not melting (18% of the indexed salary, capped
+//    at the indexed $31,000) — the deduction's tax refund is swept into that
+//    person's non-registered surplus account the same year, so an RRSP dollar
+//    saves a little more than a dollar — then the non-registered surplus
+//    accounts, split evenly between the two people. The extra therefore lands
+//    wherever the plan's own surplus doesn't already fill: TFSA and RRSP room
+//    first, then non-registered — a different mix from the lump sum's, which
+//    scales the household's current mix. A person with no non-registered
+//    account at all has nowhere for surplus past their TFSA/RRSP room (the
+//    engine leaves it unsaved), so the lever stops helping there.
+//  - DEFICIT YEARS. In a pre-retirement year that already spends more than it
+//    takes in (a spouse retired and drawing, say), R comes off that year's
+//    withdrawals instead of being swept in — worth at least as much as saving it.
+
+// Probed R values are rounded to this ($/yr): the answer reads as a tidy
+// figure, and the planners' first probes (R = 0, and the MC phase's start at
+// the deterministic answer) are exempt as for the lump sum.
+export const PER_YEAR_GRANULARITY = 100;
+// The MC phase refines R to max($500, 2.5% of the lowest clear): a few hundred
+// dollars a year is below what the copy ("about $R a year") or the simulations
+// can claim, and the relative term keeps the probe count flat. The
+// deterministic answer is only the MC phase's floor, so (as for the lump sum)
+// it stops at a looser max($1,000, 5% of the upper bracket).
+export const PER_YEAR_PRECISION_ABS = 500;
+export const PER_YEAR_PRECISION_REL = 0.025;
+export const PER_YEAR_DET_PRECISION_ABS = 1_000;
+export const PER_YEAR_DET_PRECISION_REL = 0.05;
+// Floor of the per-year scale (see savingsPerYearScale).
+export const PER_YEAR_SCALE_MIN = 1_000;
+
+// Years the engine charges preRetirementSpend, counted from this year: those in
+// which some living person is still short of their retirement age. 0 when
+// everyone has retired. (Nobody dies before retiring: the engine refuses a
+// retirement age past life expectancy.)
+export function preRetirementSpendYears(inputs: SimulationInputs): number {
+    const working = (p: Person): number => Math.max(0, p.retirementAge - p.age);
+    return Math.max(working(inputs.person), inputs.spouse ? working(inputs.spouse) : 0);
+}
+
+// Rough size of R: the at-retirement gap (today's dollars) spread evenly over
+// the years to retirement. Growth on the contributions is ignored, so it errs
+// high — the right side to err on for the deterministic search's first step
+// out of R = 0, which then bisects down from it. Also the floor of the MC
+// step's base. Rounded up to the granularity, within [PER_YEAR_SCALE_MIN, cap].
+export function savingsPerYearScale(gapAtRetirement: number, yearsToRetirement: number, cap: number): number {
+    const top = Math.max(0, cap);
+    if (yearsToRetirement < 1) return top;
+    const raw = ceilTo(Math.max(0, gapAtRetirement) / yearsToRetirement, PER_YEAR_GRANULARITY);
+    return Math.min(top, Math.max(PER_YEAR_SCALE_MIN, raw));
+}
+
+// The deterministic search over R: from R = 0 (the plan as entered, which the
+// lump-sum search has already checked), expanding ×2 from the scale up to
+// spending nothing before retirement, then bisecting.
+export function savingsPerYearBisectionPlan(preRetirementSpend: number, scale: number): SavingsBisectionPlan {
+    return {
+        start: 0,
+        cap: Math.max(0, preRetirementSpend),
+        expandFloor: scale,
+        precisionAbs: PER_YEAR_DET_PRECISION_ABS,
+        precisionRel: PER_YEAR_DET_PRECISION_REL,
+        granularity: PER_YEAR_GRANULARITY,
+    };
+}
+
+// A guess at the MC answer for R: the R whose effect on savings at retirement
+// matches the lump sum's at-retirement gap, given `slope` — the extra savings
+// at retirement (today's $) per $1/yr of R, measured on average returns. It
+// tends to run a little high (dollars saved year by year meet less of the
+// pre-retirement market risk than a lump sum held all along, so they need to
+// add up to less), which the step-up corrects by stepping down. null when
+// there is no usable slope (the extra isn't being saved anywhere).
+export function savingsPerYearHint(gapAtRetirement: number, slope: number, cap: number): number | null {
+    if (!(slope > 0) || !(gapAtRetirement > 0)) return null;
+    return Math.min(Math.max(0, cap), gapAtRetirement / slope);
+}
+
+// The MC step-up over R, from the deterministic answer (first probing the
+// hint, when there is one).
+export function savingsPerYearStepUpPlan(
+    target: number,
+    deterministicExtra: number,
+    preRetirementSpend: number,
+    scale: number,
+    hint: number | null = null,
+): SavingsStepUpPlan {
+    return {
+        target,
+        start: deterministicExtra,
+        cap: Math.max(0, preRetirementSpend),
+        minStepBase: scale,
+        firstProbe: hint ?? undefined,
+        precisionAbs: PER_YEAR_PRECISION_ABS,
+        precisionRel: PER_YEAR_PRECISION_REL,
+        granularity: PER_YEAR_GRANULARITY,
+    };
+}
+
+// --- Savings needed at each retirement age ---------------------------------
+//
+// Rows for the plan's retirement age moved by Δ = −3 … +3 (every still-working
+// person by the same Δ, as in the earliest-age search). A full savings solve
+// per row would repeat the strategy search at every probed total, so each row
+// other than the plan's own is an ESTIMATE, like the earliest-age "could
+// spend" column: the headline answer's strategy held fixed, a deterministic
+// search on D with engine runs only, then the MC step-up. The plan's own row
+// (Δ = 0) is the headline answer itself, never re-estimated.
+
+export const SAVINGS_AGE_ROW_SPAN = 3;
+// Rows refine more coarsely than the headline (5% vs 2%) within a smaller
+// probe budget, which roughly halves their MC runs: they are estimates on a
+// held strategy, and at the usual iteration counts one MC run's wobble is
+// already worth a few percent of savings, so a tighter bracket would mostly
+// measure noise. (Each row also starts from a guess — see firstProbe.)
+export const SAVINGS_ROW_MC_PRECISION_ABS = 5_000;
+export const SAVINGS_ROW_MC_PRECISION_REL = 0.05;
+export const SAVINGS_ROW_MAX_STEPUP_PROBES = 6;
+
+// Δs for the rows: −SPAN … +SPAN clamped to the age-shift bounds, plus the
+// plan's own Δ = 0 even when the bounds exclude it (a retirement age entered
+// past 75 or past life expectancy − 1): the plan row is the headline answer.
+export function savingsAgeRowDeltas(minDelta: number, maxDelta: number): number[] {
+    const out: number[] = [];
+    for (let d = Math.max(minDelta, -SAVINGS_AGE_ROW_SPAN); d <= Math.min(maxDelta, SAVINGS_AGE_ROW_SPAN); d++) out.push(d);
+    if (!out.includes(0)) {
+        out.push(0);
+        out.sort((a, b) => a - b);
+    }
+    return out;
+}
+
+// What a row says about the amount, before and after reconciliation.
+export interface SavingsRowNeed {
+    status: 'found' | 'unreachable'; // unreachable: even the cap fails on average returns
+    neededSavings: number | null;    // null when unreachable
+    clears: boolean;                 // neededSavings clears the success bar
+    stepUpCapHit: boolean;
+    boundHit: boolean;
+}
+
+// The smallest total on the grid strictly above `value`.
+function gridAbove(value: number, granularity: number): number {
+    return Math.floor(value / granularity) * granularity + granularity;
+}
+
+// A row's own MC at current savings is the authoritative measurement of
+// "retiring at this age with what you have" — the step-up's answer comes from
+// separate, unseeded runs — so keep the two consistent (the counterpart of
+// reconcileCouldSpend): a row that clears at current savings needs no more
+// than current (and clears there, whatever the step-up managed); a row that
+// misses at current needs more than current, at least one grid step.
+export function reconcileRowNeed<T extends SavingsRowNeed>(
+    row: T,
+    currentSavings: number,
+    clearsAtCurrent: boolean,
+    granularity: number = SAVINGS_GRANULARITY,
+): T {
+    if (clearsAtCurrent) {
+        if (row.clears && row.neededSavings !== null && row.neededSavings <= currentSavings) return row;
+        return { ...row, status: 'found', neededSavings: currentSavings, clears: true, stepUpCapHit: false, boundHit: false };
+    }
+    if (row.neededSavings !== null && row.neededSavings <= currentSavings) {
+        return { ...row, neededSavings: gridAbove(currentSavings, granularity) };
+    }
+    return row;
+}
+
+export interface SavingsRowDraft extends SavingsRowNeed {
+    delta: number;
+    isPlan: boolean;
+    clearsAtCurrent: boolean;
+    // The held strategy's deterministic answer at this age (computed for the
+    // plan row too, on the same held strategy, so the shape compares like with
+    // like). null when unreachable.
+    heldDeterministic: number | null;
+}
+
+// Whether two adjacent rows' deterministic answers agree that the later age
+// needs no more, to within the deterministic search's precision.
+function laterNeedsNoMore(earlierDet: number | null, laterDet: number | null): boolean {
+    if (earlierDet === null || laterDet === null) return false;
+    const tolerance = Math.max(SAVINGS_DET_PRECISION_ABS, SAVINGS_DET_PRECISION_REL * Math.max(earlierDet, laterDet));
+    return laterDet <= earlierDet + tolerance;
+}
+
+// Reconcile the rows (sorted by Δ, exactly one isPlan), in three passes:
+//  1. each estimated row against its own MC at current savings (reconcileRowNeed);
+//  2. smooth MC wobble so a later retirement needs no more than an earlier one,
+//     outward from the plan row (which never moves, so the table agrees with
+//     the headline) — but only between adjacent rows that both clear AND whose
+//     deterministic answers agree on the direction. Later is usually cheaper
+//     (more saving years, a shorter retirement, more CPP years), but not
+//     always: a household spending more than it earns before retiring needs
+//     MORE for every extra working year, and smoothing would hide exactly that;
+//     the deterministic answers carry no MC noise, so they decide;
+//  3. pass 1 again: a row's own measurement outranks its neighbour's, so a row
+//     that misses at current savings is never smoothed into "have enough".
+// Pure: returns new row objects.
+export function reconcileSavingsAgeRows<T extends SavingsRowDraft>(
+    rows: T[],
+    currentSavings: number,
+    granularity: number = SAVINGS_GRANULARITY,
+): T[] {
+    const own = (r: T): T => (r.isPlan ? r : reconcileRowNeed(r, currentSavings, r.clearsAtCurrent, granularity));
+    const out = rows.map(own);
+    const p = out.findIndex(r => r.isPlan);
+    if (p < 0) return out;
+
+    const smoothable = (earlier: T, later: T): boolean =>
+        earlier.clears && later.clears && earlier.neededSavings !== null && later.neededSavings !== null
+        && laterNeedsNoMore(earlier.heldDeterministic, later.heldDeterministic);
+    for (let i = p + 1; i < out.length; i++) {
+        const earlier = out[i - 1];
+        const later = out[i];
+        if (smoothable(earlier, later) && later.neededSavings! > earlier.neededSavings!) {
+            out[i] = { ...later, neededSavings: earlier.neededSavings };
+        }
+    }
+    for (let i = p - 1; i >= 0; i--) {
+        const earlier = out[i];
+        const later = out[i + 1];
+        if (smoothable(earlier, later) && earlier.neededSavings! < later.neededSavings!) {
+            out[i] = { ...earlier, neededSavings: later.neededSavings };
+        }
+    }
+    return out.map(own);
 }

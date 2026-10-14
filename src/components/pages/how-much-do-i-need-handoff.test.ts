@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { needHandoff } from './how-much-do-i-need-handoff';
+import { needHandoff, needSaveAsYouGoHandoff } from './how-much-do-i-need-handoff';
 import { buildNeedInputs, initialNeedForm } from './how-much-do-i-need-inputs';
-import type { SavingsNeededResult } from '../../utils/meltdownOptimizer';
+import type { SavingsNeededResult, SavingsPerYearResult } from '../../utils/meltdownOptimizer';
 
 // Which plan the "See the full plan" link opens, under what name. Results are
 // hand-built fixtures: no solver runs.
@@ -31,7 +31,27 @@ const sn = (over: Partial<SavingsNeededResult> = {}): SavingsNeededResult => ({
     neededAtRetirement: 1_203_000, currentAtRetirement: 851_000,
     mcSuccessTarget: 85, achievedSuccessRate: 87, stepUpCapHit: false, boundHit: false,
     postRetirementSpend: 60_000, withdrawalStrategy: 'tax-efficient', strategyChanged: false,
-    badMarketsAge: null,
+    badMarketsAge: null, perYear: null, ageRows: [],
+    ...over,
+});
+
+// The save-as-you-go plan: today's balances, $14k a year less spending before
+// retiring, and CPP at 70.
+const saveAsYouGoInputs = () => {
+    const r = baseline();
+    r.preRetirementSpend -= 14_200;
+    r.person.cppStartAge = 70;
+    return r;
+};
+
+const perYear = (over: Partial<SavingsPerYearResult> = {}): SavingsPerYearResult => ({
+    status: 'found', clears: true,
+    extraPerYear: 14_200, deterministicExtraPerYear: 11_000,
+    currentPreRetirementSpend: 70_000, newPreRetirementSpend: 55_800,
+    yearsOfSaving: 10, searchCap: 70_000,
+    achievedSuccessRate: 86, stepUpCapHit: false, boundHit: false,
+    atRetirement: 1_190_000, withdrawalStrategy: 'tax-efficient', strategyChanged: false,
+    decisions: [], recommendedInputs: saveAsYouGoInputs(),
     ...over,
 });
 
@@ -93,5 +113,37 @@ describe('/how-much-do-i-need-to-retire/ hand-off to the full planner', () => {
 
     it('nothing to hand off without a savings answer', () => {
         expect(needHandoff({ baselineInputs: baseline(), recommendedInputs: recommended() })).toBeNull();
+    });
+});
+
+describe('/how-much-do-i-need-to-retire/ save-as-you-go hand-off', () => {
+    const saveAsYouGo = (over: Partial<SavingsNeededResult> = {}) =>
+        needSaveAsYouGoHandoff({ savingsNeeded: sn({ perYear: perYear(), ...over }) });
+
+    it('opens the yearly plan exactly as the solver built it, named after the age and the amount', () => {
+        const h = saveAsYouGo()!;
+        expect(h.inputs).toEqual(saveAsYouGoInputs());
+        expect(h.inputs.person.rrsp.balance).toBe(300_000); // today's balances, not the lump sum's
+        expect(h.name).toBe('Retire at 60, save $14k/yr more');
+        expect(h.buttonLabel).toBe('See the save-as-you-go plan');
+    });
+
+    it('named after the spouse when the answer is framed on their retirement', () => {
+        expect(saveAsYouGo({ reportedWho: 'spouse' })!.name).toBe('Spouse retires at 60, save $14k/yr more');
+    });
+
+    it('an amount under $1,000 is "a little more", not "$0"', () => {
+        expect(saveAsYouGo({ perYear: perYear({ extraPerYear: 400 }) })!.name).toBe('Retire at 60, save a little more');
+    });
+
+    it('only when saving as you go clears the bar, beside a lump sum that does and is more than you have', () => {
+        expect(saveAsYouGo({ perYear: null })).toBeNull();
+        expect(saveAsYouGo({ perYear: perYear({ clears: false, boundHit: true, achievedSuccessRate: 80 }) })).toBeNull();
+        expect(saveAsYouGo({ perYear: perYear({
+            status: 'unreachable', clears: false, extraPerYear: null, achievedSuccessRate: null, recommendedInputs: null,
+        }) })).toBeNull();
+        expect(saveAsYouGo({ haveEnough: true, neededSavings: 440_000 })).toBeNull();
+        expect(saveAsYouGo({ boundHit: true, achievedSuccessRate: 72 })).toBeNull();
+        expect(needSaveAsYouGoHandoff({})).toBeNull();
     });
 });

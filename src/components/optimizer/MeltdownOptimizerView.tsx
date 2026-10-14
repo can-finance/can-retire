@@ -17,7 +17,8 @@ import { ComparisonMetricsTable } from '../comparison/ComparisonMetricsTable';
 import { EarliestAgeHeadline } from './EarliestAgeHeadline';
 import { EarliestAgeTable } from './EarliestAgeTable';
 import { SavingsNeededHeadline } from './SavingsNeededHeadline';
-import { savingsAnswerClears } from './savingsNeededSummary';
+import { SavingsNeededTable } from './SavingsNeededTable';
+import { saveAsYouGoAmount, saveAsYouGoPlan, savingsAgeTableShown, savingsAnswerClears } from './savingsNeededSummary';
 import { describeStrategyChanges } from './strategySummary';
 import { SUCCESS_TARGETS, DEFAULT_SUCCESS_TARGET } from './successTargets';
 
@@ -86,6 +87,20 @@ function savedPlanName(result: MeltdownResult): string {
     return `Needs ${formatCurrencyApprox(sn.neededSavings)}`;
 }
 
+// The save-as-you-go plan's saved name: the yearly amount and the age it runs
+// to ("Save $14k/yr more to 60"), so it stays apart from the lump-sum copy.
+// null when there is no save-as-you-go plan to save.
+function saveAsYouGoPlanName(result: MeltdownResult): string | null {
+    const sn = result.savingsNeeded;
+    const plan = sn ? saveAsYouGoPlan(sn) : null;
+    if (!sn || !plan || sn.retirementAge === null) return null;
+    const amount = saveAsYouGoAmount(plan.extraPerYear);
+    const save = amount === null ? 'Save a little more' : `Save ${amount} more`;
+    return sn.reportedWho === 'spouse'
+        ? `${save} (spouse retires at ${sn.retirementAge})`
+        : `${save} to ${sn.retirementAge}`;
+}
+
 // Human labels for the household withdrawal strategy. Matches
 // ComparisonMetricsTable's wording. Deliberately no "(early melt)" here: this
 // setting is the drawdown ORDER, not the voluntary meltdown, which runs off
@@ -127,7 +142,12 @@ export function MeltdownOptimizerView({
     const [considerCppOas, setConsiderCppOas] = useState(true);
     const [bandMode, setBandMode] = useState<BandMode>('p25p75');
     const [savedName, setSavedName] = useState<string | null>(null);
+    // Savings Needed's second save, the save-as-you-go plan: saved apart from
+    // the first, so each button keeps its own "Saved ✓".
+    const [savedPerYearName, setSavedPerYearName] = useState<string | null>(null);
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+    // Which save the dialog is confirming.
+    const [lastSaved, setLastSaved] = useState<'main' | 'per-year'>('main');
     const [applied, setApplied] = useState(false);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -145,6 +165,7 @@ export function MeltdownOptimizerView({
         const controller = new AbortController();
         abortRef.current = controller;
         setSavedName(null);
+        setSavedPerYearName(null);
         setSaveDialogOpen(false);
         setApplied(false);
         setPhase({ kind: 'running', done: 0, total: 1 });
@@ -176,6 +197,7 @@ export function MeltdownOptimizerView({
         abortRef.current?.abort();
         abortRef.current = null;
         setSavedName(null);
+        setSavedPerYearName(null);
         setSaveDialogOpen(false);
         setApplied(false);
         setPhase({ kind: 'setup' });
@@ -449,12 +471,27 @@ export function MeltdownOptimizerView({
             bandMode={bandMode}
             onBandMode={setBandMode}
             savedName={savedName}
+            savedPerYearName={savedPerYearName}
             saveDialogOpen={saveDialogOpen}
+            dialogName={lastSaved === 'per-year' ? savedPerYearName : savedName}
             onSave={() => {
                 // uniquePlanName appends " 2", " 3" on collision, so re-running
                 // the same objective stays readable in the plan list.
                 const baseName = savedPlanName(phase.result);
                 setSavedName(onSavePlan(baseName, phase.result.recommendedInputs));
+                setLastSaved('main');
+                setSaveDialogOpen(true);
+            }}
+            onSavePerYear={() => {
+                // The save-as-you-go plan as the solver built it: today's
+                // balances with the lower before-retirement spending.
+                // applyMeltdownRecommendation would drop the spending change.
+                const sn = phase.result.savingsNeeded;
+                const plan = sn ? saveAsYouGoPlan(sn) : null;
+                const baseName = saveAsYouGoPlanName(phase.result);
+                if (!plan || !baseName) return;
+                setSavedPerYearName(onSavePlan(baseName, plan.recommendedInputs));
+                setLastSaved('per-year');
                 setSaveDialogOpen(true);
             }}
             onCloseSaveDialog={() => setSaveDialogOpen(false)}
@@ -479,8 +516,11 @@ interface ResultsViewProps {
     bandMode: BandMode;
     onBandMode: (m: BandMode) => void;
     savedName: string | null;
+    savedPerYearName: string | null;   // Savings Needed's save-as-you-go copy
     saveDialogOpen: boolean;
+    dialogName: string | null;         // the name the open dialog confirms
     onSave: () => void;
+    onSavePerYear: () => void;
     onCloseSaveDialog: () => void;
     applied: boolean;
     onApply: () => void;
@@ -496,8 +536,11 @@ function ResultsView({
     bandMode,
     onBandMode,
     savedName,
+    savedPerYearName,
     saveDialogOpen,
+    dialogName,
     onSave,
+    onSavePerYear,
     onCloseSaveDialog,
     applied,
     onApply,
@@ -547,6 +590,10 @@ function ResultsView({
     const canSave = isSavings
         ? result.improved && !!result.savingsNeeded && savingsAnswerClears(result.savingsNeeded)
         : result.improved;
+    // Savings Needed's second copy, the save-as-you-go plan: only beside a
+    // savable answer, and only when some yearly amount clears the bar too.
+    const canSavePerYear = isSavings && canSave && saveAsYouGoPlanName(result) !== null;
+    const savedBtn = 'text-sm bg-emerald-50 text-emerald-700 px-5 py-2.5 rounded-lg border border-emerald-200 font-semibold whitespace-nowrap cursor-default';
 
     // Savings Needed's comparison run is the plan at a different balance. When
     // no amount can fund the spending even on average returns there is no such
@@ -575,21 +622,26 @@ function ResultsView({
                             : 'Applying changes the RRSP melt amount, CPP/OAS start ages and withdrawal order in your current plan. Nothing else changes. To keep both versions, use Save as new plan instead.'}
                 </p>
             )}
-            {isSavings && canSave && (
+            {isSavings && canSave && (canSavePerYear ? (
+                <p className="text-xs text-slate-500">
+                    Save as new plan adds a copy of your plan with the savings needed and the strategy
+                    the amount assumes. Save the save-as-you-go plan adds a copy with your savings as they
+                    are today and less spending before you retire instead. You can explore either year by
+                    year, and your current plan stays as it is.
+                </p>
+            ) : (
                 <p className="text-xs text-slate-500">
                     Save as new plan adds a copy of your plan with the savings needed and the strategy
                     the amount assumes, so you can explore it year by year. Your current plan stays as it is.
                 </p>
-            )}
+            ))}
 
             <div className="flex flex-wrap items-center gap-3">
                 {canApply && (
                     <button
                         onClick={onApply}
                         disabled={applied}
-                        className={applied
-                            ? 'text-sm bg-emerald-50 text-emerald-700 px-5 py-2.5 rounded-lg border border-emerald-200 font-semibold whitespace-nowrap cursor-default'
-                            : primaryBtn}
+                        className={applied ? savedBtn : primaryBtn}
                     >
                         {applied ? 'Applied ✓' : 'Apply to current plan'}
                     </button>
@@ -598,11 +650,18 @@ function ResultsView({
                     <button
                         onClick={onSave}
                         disabled={savedName !== null}
-                        className={savedName !== null
-                            ? 'text-sm bg-emerald-50 text-emerald-700 px-5 py-2.5 rounded-lg border border-emerald-200 font-semibold whitespace-nowrap cursor-default'
-                            : secondary}
+                        className={savedName !== null ? savedBtn : secondary}
                     >
                         {savedName !== null ? 'Saved ✓' : 'Save as new plan'}
+                    </button>
+                )}
+                {canSavePerYear && (
+                    <button
+                        onClick={onSavePerYear}
+                        disabled={savedPerYearName !== null}
+                        className={savedPerYearName !== null ? savedBtn : secondary}
+                    >
+                        {savedPerYearName !== null ? 'Saved ✓' : 'Save the save-as-you-go plan'}
                     </button>
                 )}
                 <button onClick={onRunAgain} className={secondary}>
@@ -725,7 +784,7 @@ function ResultsView({
                 }
             >
                 <p>
-                    Saved as "{savedName}". You'll find it in your plan list on the
+                    Saved as "{dialogName}". You'll find it in your plan list on the
                     dashboard, and your current plan is untouched.
                 </p>
             </Dialog>
@@ -1052,12 +1111,13 @@ function EarliestAgeCard({ result, actions }: { result: MeltdownResult; actions:
 }
 
 /*
- * Savings-needed result: the answer box (shared with the landing page), the
- * actions, then the detail behind the amount as the same current-vs-answer
- * tables the other modes use. There is no Apply — balances are facts about the
- * household, not settings — so the tables' second column says what it holds
- * rather than "Suggested". Results with no amount that clears the bar stop
- * after the answer box: there is no answer to tabulate.
+ * Savings-needed result: the answer box and the table of nearby ages (both
+ * shared with the landing page), the actions, then the detail behind the
+ * amount as the same current-vs-answer tables the other modes use. There is no
+ * Apply — balances are facts about the household, not settings — so the
+ * tables' second column says what it holds rather than "Suggested". Results
+ * with no amount that clears the bar skip the detail: there is no answer to
+ * tabulate (the nearby ages still show when the solver estimated them).
  */
 function SavingsNeededCard({ result, actions }: { result: MeltdownResult; actions: React.ReactNode }) {
     const sn = result.savingsNeeded!;
@@ -1083,6 +1143,18 @@ function SavingsNeededCard({ result, actions }: { result: MeltdownResult; action
     return (
         <div className="flex flex-col gap-6">
             <SavingsNeededHeadline result={result} />
+
+            {savingsAgeTableShown(sn) && (
+                <div className="rounded-2xl bg-white p-6 shadow-sm border border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-900">Retiring earlier or later</h3>
+                    <p className="mt-1 text-sm text-slate-500">
+                        How much you'd need at nearby ages, at the same spending.
+                    </p>
+                    <div className="mt-4">
+                        <SavingsNeededTable result={sn} />
+                    </div>
+                </div>
+            )}
 
             {actions}
 

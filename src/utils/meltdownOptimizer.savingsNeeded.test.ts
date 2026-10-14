@@ -29,11 +29,15 @@ import {
     householdSavingsAtRetirement,
     tfsaRoomAccumulated,
     savingsSearchCap,
+    preRetirementSpendYears,
     SAVINGS_DET_PRECISION_ABS,
     SAVINGS_DET_PRECISION_REL,
     SAVINGS_MC_PRECISION_ABS,
     SAVINGS_MC_PRECISION_REL,
+    PER_YEAR_PRECISION_ABS,
+    PER_YEAR_PRECISION_REL,
 } from './savingsSearch';
+import { planAgeShift, applyRetirementShift, personOf } from './retirementAgeSearch';
 
 const mcHooks = vi.hoisted(() => ({
     rate: null as null | ((inputs: SimulationInputs) => number),
@@ -119,7 +123,17 @@ const defaultCouple = (): SimulationInputs => ({
     postRetirementSpend: DEFAULT_SPEND.couple.post,
 });
 
-const SN: OptimizeMeltdownOptions = { objective: 'savings-needed', mcIterations: 100, mcSuccessTarget: 85 };
+const defaultSingle = (): SimulationInputs => structuredClone(INITIAL_INPUTS);
+
+// The lump-sum answer alone: the per-year framing and the age rows are opted
+// out here and switched on by the tests about them (SN_FULL), for speed.
+const SN: OptimizeMeltdownOptions = {
+    objective: 'savings-needed', mcIterations: 100, mcSuccessTarget: 85,
+    savingsPerYear: false, savingsAgeRows: 'none',
+};
+const SN_PER_YEAR: OptimizeMeltdownOptions = { ...SN, savingsPerYear: true };
+const SN_ROWS: OptimizeMeltdownOptions = { ...SN, savingsAgeRows: 'all' };
+const SN_FULL: OptimizeMeltdownOptions = { ...SN, savingsPerYear: true, savingsAgeRows: 'all' };
 
 // --- Oracles ----------------------------------------------------------------
 
@@ -162,6 +176,10 @@ function anyStrategyFeasible(base: SimulationInputs): boolean {
     }
     return false;
 }
+
+// An MC stand-in rate with no noise: clears exactly when the plan is funded on
+// average returns, so every MC answer equals its deterministic one.
+const averageReturnsRate = (i: SimulationInputs): number => (shortfallOf(i) > 1000 ? 0 : 100);
 
 const detPrecision = (hi: number) => Math.max(SAVINGS_DET_PRECISION_ABS, SAVINGS_DET_PRECISION_REL * hi);
 const mcPrecision = (clear: number) => Math.max(SAVINGS_MC_PRECISION_ABS, SAVINGS_MC_PRECISION_REL * clear);
@@ -512,6 +530,310 @@ describe('optimizeMeltdown (savings-needed objective)', () => {
         expect(seen.slice(0, -1).every(d => d < total)).toBe(true);
         // The deterministic phase alone moves the bar most of the way.
         expect(seen.some(d => d >= 0.5 * total && d < total)).toBe(true);
+    }, 60_000);
+});
+
+// --- Follow-ups: the per-year framing and the age rows ---------------------
+
+// Spending nothing before retiring at 60, from 58 on a modest salary, with
+// $200k saved and $70k a year to fund: two years of saving can't get there.
+const lateStarter = () => inputs({
+    person: person({
+        age: 58, retirementAge: 60, currentIncome: 60_000,
+        rrsp: { type: 'RRSP', balance: 150_000 }, tfsa: { type: 'TFSA', balance: 50_000 },
+        nonRegisteredAccounts: [nonReg()],
+    }),
+    preRetirementSpend: 40_000, postRetirementSpend: 70_000,
+});
+
+// The plan with the answer's strategy (as the rows hold it) and its ages moved by Δ.
+function heldAt(base: SimulationInputs, res: MeltdownResult, delta: number): SimulationInputs {
+    const moved = applyRetirementShift(base, planAgeShift(base), delta).inputs;
+    return applyMeltdownRecommendation(moved, res.recommendedInputs, 'savings-needed');
+}
+
+// The contract for any table of rows, whatever MC did.
+function expectRowInvariants(base: SimulationInputs, res: MeltdownResult): void {
+    const s = res.savingsNeeded!;
+    const rows = s.ageRows!;
+    const target = s.mcSuccessTarget;
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.map(r => r.delta)).toEqual([...rows.map(r => r.delta)].sort((a, b) => a - b));
+    const plan = rows.filter(r => r.isPlan);
+    expect(plan).toHaveLength(1);
+    // The plan row IS the headline answer.
+    expect(plan[0]).toMatchObject({
+        delta: 0, status: 'found',
+        neededSavings: s.neededSavings, neededAtRetirement: s.neededAtRetirement,
+        currentAtRetirement: s.currentAtRetirement, savingsGap: s.savingsGap, haveEnough: s.haveEnough,
+        successRateAtCurrent: res.baselineSuccessRate, stepUpCapHit: s.stepUpCapHit, boundHit: s.boundHit,
+    });
+    const reported = personOf(base, s.reportedWho);
+    for (const r of rows) {
+        expect(r.retirementAge).toBe(reported.retirementAge + r.delta);
+        expect(r.status === 'unreachable').toBe(r.neededSavings === null);
+        if (r.neededSavings !== null) expect(r.savingsGap).toBeCloseTo(r.neededSavings - s.currentSavings, 6);
+        if (r.isPlan) continue;
+        expect(r.haveEnough).toBe(r.clears && r.neededSavings !== null && r.neededSavings <= s.currentSavings);
+        // Each row agrees with its own odds at current savings.
+        if (r.successRateAtCurrent >= target) expect(r.haveEnough).toBe(true);
+        else expect(r.neededSavings === null || r.neededSavings > s.currentSavings).toBe(true);
+    }
+}
+
+describe('optimizeMeltdown (savings-needed follow-ups)', () => {
+    // --- Per-year framing ----------------------------------------------------
+
+    it('per year: spending R less before retiring clears the bar at today’s balances', async () => {
+        const base = defaultSingle(); // 48, retiring at 60, $850k saved: needs more
+        const res = await optimizeMeltdown(base, SN_PER_YEAR);
+        const s = res.savingsNeeded!;
+        expectFoundInvariants(base, res);
+        expect(s.haveEnough).toBe(false);
+        expect(s.ageRows).toEqual([]);
+
+        const p = s.perYear!;
+        expect(p.status).toBe('found');
+        expect(p.clears).toBe(true);
+        expect(p.currentPreRetirementSpend).toBe(base.preRetirementSpend);
+        expect(p.searchCap).toBe(base.preRetirementSpend);
+        expect(p.yearsOfSaving).toBe(12);
+        expect(p.yearsOfSaving).toBe(preRetirementSpendYears(base));
+        expect(p.extraPerYear!).toBeGreaterThan(0);
+        expect(p.extraPerYear!).toBeGreaterThanOrEqual(p.deterministicExtraPerYear!);
+        expect(p.newPreRetirementSpend).toBe(base.preRetirementSpend - p.extraPerYear!);
+        expect(p.achievedSuccessRate!).toBeGreaterThanOrEqual(85);
+
+        // The plan at the answer: today's balances, the spending cut, ages and
+        // retirement spending as entered, funded on average returns.
+        const rec = p.recommendedInputs!;
+        expect(rec.preRetirementSpend).toBe(p.newPreRetirementSpend);
+        expect(householdSavings(rec)).toBe(s.currentSavings);
+        expect(rec.person.rrsp).toEqual(base.person.rrsp);
+        expect(rec.postRetirementSpend).toBe(base.postRetirementSpend);
+        expect(rec.person.retirementAge).toBe(base.person.retirementAge);
+        expect(rec.withdrawalStrategy).toBe(p.withdrawalStrategy);
+        expect(p.strategyChanged).toBe(p.withdrawalStrategy !== base.withdrawalStrategy);
+        expect(p.decisions).toHaveLength(1);
+        expect(shortfallOf(rec)).toBeLessThanOrEqual(1000);
+
+        // On retirement day: what the extra saving builds, next to the lump
+        // sum's figures. More than the current path; roughly what the lump sum
+        // needs then (a different account mix and less pre-retirement market
+        // risk, so not equal).
+        expect(p.atRetirement).toBeCloseTo(householdSavingsAtRetirement(runSimulation(rec), 12)!, 6);
+        expect(p.atRetirement!).toBeGreaterThan(s.currentAtRetirement!);
+        expect(p.atRetirement! / s.neededAtRetirement!).toBeGreaterThan(0.7);
+        expect(p.atRetirement! / s.neededAtRetirement!).toBeLessThan(1.3);
+    }, 60_000);
+
+    it('per year: the MC step-up raises R until the bar clears, and flags a bound hit when even $0 spending misses', async () => {
+        const base = needsMore();
+        const pre = base.preRetirementSpend;
+        // No noise anywhere: every answer is its deterministic one.
+        mcHooks.rate = averageReturnsRate;
+        const plain = (await optimizeMeltdown(base, SN_PER_YEAR)).savingsNeeded!;
+        const p0 = plain.perYear!;
+        expect(p0.status).toBe('found');
+        expect(p0.deterministicExtraPerYear!).toBeGreaterThan(0);
+        expect(p0.extraPerYear).toBe(p0.deterministicExtraPerYear);
+        expect(p0.achievedSuccessRate).toBe(100);
+
+        // Cutting spending clears the bar only from `bar` a year up.
+        const det = p0.deterministicExtraPerYear!;
+        const bar = Math.round((det * 1.5) / 100) * 100;
+        expect(bar).toBeLessThan(pre);
+        const cut = (i: SimulationInputs) => pre - i.preRetirementSpend;
+        mcHooks.rate = (i) => (cut(i) > 0 ? (cut(i) >= bar - 1e-6 ? 90 : 50) : averageReturnsRate(i));
+        const p = (await optimizeMeltdown(base, SN_PER_YEAR)).savingsNeeded!.perYear!;
+        expect(p.deterministicExtraPerYear).toBe(det);
+        expect(p.extraPerYear!).toBeGreaterThanOrEqual(bar);
+        expect(p.extraPerYear! - bar).toBeLessThanOrEqual(Math.max(PER_YEAR_PRECISION_ABS, PER_YEAR_PRECISION_REL * p.extraPerYear!));
+        expect(p.achievedSuccessRate).toBe(90);
+        expect(p.clears).toBe(true);
+        expect(p.boundHit).toBe(false);
+        expect(p.stepUpCapHit).toBe(false);
+
+        mcHooks.rate = (i) => (cut(i) > 0 ? 50 : averageReturnsRate(i));
+        const none = (await optimizeMeltdown(base, SN_PER_YEAR)).savingsNeeded!.perYear!;
+        expect(none.status).toBe('found');
+        expect(none.boundHit).toBe(true);
+        expect(none.clears).toBe(false);
+        expect(none.achievedSuccessRate).toBe(50);
+    }, 60_000);
+
+    it('per year: unreachable when even spending nothing before retiring fails on average returns', async () => {
+        mcHooks.rate = averageReturnsRate;
+        const base = lateStarter();
+        const res = await optimizeMeltdown(base, SN_PER_YEAR);
+        const s = res.savingsNeeded!;
+        expectFoundInvariants(base, res);
+        expect(s.haveEnough).toBe(false);
+        expect(s.perYear).toEqual({
+            status: 'unreachable', clears: false,
+            extraPerYear: null, deterministicExtraPerYear: null,
+            currentPreRetirementSpend: 40_000, newPreRetirementSpend: null,
+            yearsOfSaving: 2, searchCap: 40_000,
+            achievedSuccessRate: null, stepUpCapHit: false, boundHit: false, atRetirement: null,
+            withdrawalStrategy: 'tax-efficient', strategyChanged: false, decisions: [], recommendedInputs: null,
+        });
+        // Independently: no strategy funds the plan as entered with nothing spent before retiring.
+        expect(anyStrategyFeasible({ ...structuredClone(base), preRetirementSpend: 0 })).toBe(false);
+    }, 60_000);
+
+    it('per year: null when it does not apply', async () => {
+        mcHooks.rate = averageReturnsRate;
+        // Has enough.
+        expect((await optimizeMeltdown(hasEnough(), SN_PER_YEAR)).savingsNeeded!.perYear).toBeNull();
+        // Already retired: no pre-retirement years to save in.
+        const retired = inputs({
+            person: person({ age: 66, retirementAge: 65, currentIncome: 0 }),
+            postRetirementSpend: 80_000,
+        });
+        const r = (await optimizeMeltdown(retired, SN_PER_YEAR)).savingsNeeded!;
+        expect(r.haveEnough).toBe(false);
+        expect(r.perYear).toBeNull();
+        // Opted out.
+        expect((await optimizeMeltdown(needsMore(), SN)).savingsNeeded!.perYear).toBeNull();
+        // No lump-sum answer (unreachable), or none that clears the bar.
+        expect((await optimizeMeltdown(needsMore(), { ...SN_PER_YEAR, savingsSearchCap: 100_000 }))
+            .savingsNeeded!.perYear).toBeNull();
+        mcHooks.rate = () => 30;
+        const noClear = (await optimizeMeltdown(needsMore(), SN_PER_YEAR)).savingsNeeded!;
+        expect(noClear.boundHit).toBe(true);
+        expect(noClear.perYear).toBeNull();
+    }, 60_000);
+
+    // --- Savings needed at each retirement age -------------------------------
+
+    it('age rows: Δ −3…+3, the plan row is the headline answer, and each row matches the engine on the held strategy', async () => {
+        mcHooks.rate = averageReturnsRate;
+        const base = needsMore();
+        const res = await optimizeMeltdown(base, SN_ROWS);
+        const s = res.savingsNeeded!;
+        expectFoundInvariants(base, res);
+        expectRowInvariants(base, res);
+        const rows = s.ageRows!;
+        expect(rows.map(r => r.delta)).toEqual([-3, -2, -1, 0, 1, 2, 3]);
+        expect(rows.map(r => r.retirementAge)).toEqual([57, 58, 59, 60, 61, 62, 63]);
+        expect(rows.every(r => r.otherRetirementAge === undefined)).toBe(true);
+        expect(s.perYear).toBeNull(); // opted out
+        for (const r of rows) {
+            expect(r.clears).toBe(true);
+            if (r.isPlan) continue;
+            // At-retirement figures: the held strategy's runs at current
+            // savings and at the row's need, on the row's own retirement day.
+            const held = heldAt(base, res, r.delta);
+            const years = 10 + r.delta;
+            expect(r.currentAtRetirement).toBeCloseTo(householdSavingsAtRetirement(runSimulation(held), years)!, 6);
+            expect(r.neededAtRetirement).toBeCloseTo(
+                householdSavingsAtRetirement(runSimulation(allocateSavings(held, r.neededSavings!).inputs), years)!, 6);
+            expect(r.successRateAtCurrent).toBe(averageReturnsRate(held));
+        }
+        // Later retirement: more working years, a shorter retirement — no more needed.
+        for (let i = 1; i < rows.length; i++) {
+            expect(rows[i].neededSavings!).toBeLessThanOrEqual(rows[i - 1].neededSavings!);
+        }
+        expect(rows[6].neededSavings!).toBeLessThan(rows[0].neededSavings!);
+    }, 60_000);
+
+    it('age rows, real MC: later ages need no more, and each row agrees with its odds at current savings', async () => {
+        const base = needsMore();
+        const res = await optimizeMeltdown(base, SN_ROWS);
+        expectRowInvariants(base, res);
+        const rows = res.savingsNeeded!.ageRows!;
+        expect(rows.map(r => r.delta)).toEqual([-3, -2, -1, 0, 1, 2, 3]);
+        // Smoothed where both rows clear (MC wobble can't invert the order).
+        for (let i = 1; i < rows.length; i++) {
+            if (rows[i].clears && rows[i - 1].clears) {
+                expect(rows[i].neededSavings!).toBeLessThanOrEqual(rows[i - 1].neededSavings!);
+            }
+        }
+        // $480k is far short at every one of these ages.
+        expect(rows.every(r => !r.haveEnough)).toBe(true);
+    }, 60_000);
+
+    it('age rows, real MC: a row that clears at current savings has enough', async () => {
+        const base = hasEnough();
+        const res = await optimizeMeltdown(base, SN_ROWS);
+        expectRowInvariants(base, res);
+        const rows = res.savingsNeeded!.ageRows!;
+        for (const r of rows.filter(x => !x.isPlan && x.successRateAtCurrent >= 85)) {
+            expect(r.haveEnough).toBe(true);
+            expect(r.neededSavings!).toBeLessThanOrEqual(res.savingsNeeded!.currentSavings);
+            expect(r.savingsGap!).toBeLessThanOrEqual(0);
+        }
+        // $1M on $40k a year: retiring later than planned has plenty of room.
+        expect(rows.filter(r => r.delta > 0).every(r => r.haveEnough)).toBe(true);
+    }, 60_000);
+
+    it('age rows: clamped to the age-shift bounds; a couple’s rows move both', async () => {
+        mcHooks.rate = averageReturnsRate;
+        const soon = inputs({ person: person({ age: 50, retirementAge: 52 }), postRetirementSpend: 45_000 });
+        const soonRows = (await optimizeMeltdown(soon, SN_ROWS)).savingsNeeded!.ageRows!;
+        expect(soonRows.map(r => r.delta)).toEqual([-2, -1, 0, 1, 2, 3]);
+        expect(soonRows[0].retirementAge).toBe(50);
+        // Retiring this year: no working year left to end on.
+        expect(soonRows[0].neededAtRetirement).toBeNull();
+        expect(soonRows[0].currentAtRetirement).toBeNull();
+
+        const late = inputs({ person: person({ age: 64, retirementAge: 74 }), postRetirementSpend: 70_000 });
+        expect((await optimizeMeltdown(late, SN_ROWS)).savingsNeeded!.ageRows!.map(r => r.delta))
+            .toEqual([-3, -2, -1, 0, 1]); // 75 is the latest age the search moves anyone to
+
+        const couple = inputs({
+            person: person({ age: 50, retirementAge: 60 }),
+            spouse: person({ age: 48, retirementAge: 62, currentIncome: 60_000 }),
+            postRetirementSpend: 95_000,
+        });
+        const res = await optimizeMeltdown(couple, SN_ROWS);
+        expectRowInvariants(couple, res);
+        for (const r of res.savingsNeeded!.ageRows!) {
+            expect(r.retirementAge).toBe(60 + r.delta);
+            expect(r.otherRetirementAge).toBe(62 + r.delta);
+        }
+    }, 120_000);
+
+    it('age rows: none when nobody is still working, no shared shift exists, the answer is unreachable, or opted out', async () => {
+        mcHooks.rate = averageReturnsRate;
+        const retired = inputs({ person: person({ age: 66, retirementAge: 65, currentIncome: 0 }) });
+        expect((await optimizeMeltdown(retired, SN_ROWS)).savingsNeeded!.ageRows).toEqual([]);
+        // Two working spouses whose allowed ranges don't overlap.
+        const apart = inputs({
+            person: person({ age: 74, retirementAge: 75 }),
+            spouse: person({ age: 40, retirementAge: 80 }),
+        });
+        expect(planAgeShift(apart).available).toBe(false);
+        expect((await optimizeMeltdown(apart, SN_ROWS)).savingsNeeded!.ageRows).toEqual([]);
+        expect((await optimizeMeltdown(needsMore(), { ...SN_ROWS, savingsSearchCap: 100_000 }))
+            .savingsNeeded!.ageRows).toEqual([]);
+        expect((await optimizeMeltdown(needsMore(), SN)).savingsNeeded!.ageRows).toEqual([]);
+    }, 120_000);
+
+    // --- Plumbing --------------------------------------------------------------
+
+    it('with both follow-ups on, progress stays monotone through every phase and finishes at 100%', async () => {
+        const seen: number[] = [];
+        let total = 0;
+        const res = await optimizeMeltdown(defaultSingle(), { ...SN_FULL, onProgress: (d, t) => { seen.push(d); total = t; } });
+        expect(res.savingsNeeded!.perYear).not.toBeNull();
+        expect(res.savingsNeeded!.ageRows!.length).toBe(7);
+        expect(seen[seen.length - 1]).toBe(total);
+        for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
+        expect(seen.slice(0, -1).every(d => d < total)).toBe(true);
+        // The follow-ups have slices of their own: the bar moves through the
+        // last stretch before finishing, rather than jumping from the lump sum to 100%.
+        expect(seen.some(d => d >= 0.9 * total && d < total)).toBe(true);
+    }, 60_000);
+
+    it('rejects with an AbortError when aborted during the follow-ups', async () => {
+        const controller = new AbortController();
+        const run = optimizeMeltdown(defaultSingle(), {
+            ...SN_FULL,
+            signal: controller.signal,
+            onProgress: (done, total) => { if (done / total > 0.75) controller.abort(); },
+        });
+        await expect(run).rejects.toMatchObject({ name: 'AbortError' });
     }, 60_000);
 });
 

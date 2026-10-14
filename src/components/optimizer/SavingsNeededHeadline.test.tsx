@@ -4,7 +4,7 @@ import { cleanup, render } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { SavingsNeededHeadline } from './SavingsNeededHeadline';
 import type { SavingsAnswer } from './savingsNeededSummary';
-import type { PersonMeltdownDecision, SavingsNeededResult } from '../../utils/meltdownOptimizer';
+import type { PersonMeltdownDecision, SavingsNeededResult, SavingsPerYearResult } from '../../utils/meltdownOptimizer';
 import { INITIAL_INPUTS } from '../../utils/inputSanitizer';
 import { formatCurrencyApprox } from '../../utils/formatters';
 
@@ -28,11 +28,24 @@ const sn = (over: Partial<SavingsNeededResult> = {}): SavingsNeededResult => ({
     neededAtRetirement: 1_203_000, currentAtRetirement: 851_000,
     mcSuccessTarget: 85, achievedSuccessRate: 87, stepUpCapHit: false, boundHit: false,
     postRetirementSpend: 60_000, withdrawalStrategy: 'tax-efficient', strategyChanged: false,
-    badMarketsAge: null,
+    badMarketsAge: null, perYear: null, ageRows: [],
     ...over,
 });
 
-const answer = (over: Partial<SavingsNeededResult> = {}, rest: Partial<SavingsAnswer> = {}): SavingsAnswer => {
+// The same person's save-as-you-go answer: spend about $14k a year less than
+// the $70k they spend now, for the 10 years to 60.
+const perYear = (over: Partial<SavingsPerYearResult> = {}): SavingsPerYearResult => ({
+    status: 'found', clears: true,
+    extraPerYear: 14_200, deterministicExtraPerYear: 11_000,
+    currentPreRetirementSpend: 70_000, newPreRetirementSpend: 55_800,
+    yearsOfSaving: 10, searchCap: 70_000,
+    achievedSuccessRate: 86, stepUpCapHit: false, boundHit: false,
+    atRetirement: 1_190_000, withdrawalStrategy: 'tax-efficient', strategyChanged: false,
+    decisions: [], recommendedInputs: structuredClone(INITIAL_INPUTS),
+    ...over,
+});
+
+const answer =(over: Partial<SavingsNeededResult> = {}, rest: Partial<SavingsAnswer> = {}): SavingsAnswer => {
     const baselineInputs = structuredClone(INITIAL_INPUTS);
     baselineInputs.person.pension = undefined;
     return { savingsNeeded: sn(over), baselineInputs, baselineSuccessRate: 62, decisions: [], ...rest };
@@ -71,23 +84,23 @@ describe('SavingsNeededHeadline: need more', () => {
         const text = textOf(answer());
         expect(text).toContain('You need about $1.2M saved by 60');
         expect(text).toContain('You’re on track for about $850k, so about $350k more.');
-        expect(text).toContain('That’s like having $700k today instead of the $500k you have now.');
-        expect(text).toContain('With the savings needed, your money lasts in 87% of market simulations at $60,000/yr (your target: 85%).');
-        expect(text).toContain('Your odds today, with what you have saved: 62%.');
+        expect(text).toContain('That’s like having $700k today instead of $500k.');
+        expect(text).toContain('With the savings needed, your money lasts in 87% of market simulations (target 85%).');
+        expect(text).toContain('Your odds today: 62%.');
         expect(text).toContain('How that splits: RRSP $420k · TFSA $210k · Non-registered $70k');
-        expect(text).toContain('In the worst 5% of market simulations, your money still lasts the whole plan.');
-        expect(text).toContain('keeps the mix of RRSP, TFSA and non-registered savings you have now');
+        expect(text).toContain('Even in the worst 5% of markets, money lasts the whole plan.');
+        expect(text).toContain('Keeps your current mix of accounts.');
     });
 
     it('frames it on the spouse’s retirement when only they still work', () => {
         const text = textOf(answer({ reportedWho: 'spouse', badMarketsAge: 84 }));
         expect(text).toContain('You need about $1.2M saved when your spouse retires at 60');
-        expect(text).toContain('your money lasts until your spouse is about 84.');
+        expect(text).toContain('money lasts until your spouse is about 84.');
     });
 
     it('uses today’s amount when already retired', () => {
         const retired = { stillWorking: false, retirementAge: null, neededAtRetirement: null, currentAtRetirement: null };
-        expect(textOf(answer(retired))).toContain('You need about $700k saved — about $200k more than you have');
+        expect(textOf(answer(retired))).toContain('You need about $700k saved — $200k more than you have');
     });
 
     it('drops "more than you have" when nothing is saved, and says which mix it assumed', () => {
@@ -97,7 +110,7 @@ describe('SavingsNeededHeadline: need more', () => {
         }));
         expect(text).toContain('You need about $700k saved');
         expect(text).not.toContain('more than you have');
-        expect(text).toContain('You have no savings entered, so this assumes a TFSA first');
+        expect(text).toContain('Assumes a TFSA first, then an RRSP.');
     });
 
     it('carries the strategy the amount assumes', () => {
@@ -116,13 +129,80 @@ describe('SavingsNeededHeadline: need more', () => {
     });
 });
 
+describe('SavingsNeededHeadline: saving as you go', () => {
+    const TFSA_NOTE = 'Yearly savings rise with inflation and go to your TFSA first, then RRSP, then non-registered.';
+
+    it('offers the yearly amount after the lump-sum lines, with where it goes', () => {
+        const text = textOf(answer({ perYear: perYear() }));
+        expect(text).toContain('Or save as you go: spend about $14k less a year until you retire at 60.');
+        expect(text).toContain(TFSA_NOTE);
+        const at = (s: string) => text.indexOf(s);
+        expect(at('That’s like having')).toBeLessThan(at('Or save as you go'));
+        expect(at('Or save as you go')).toBeLessThan(at('With the savings needed'));
+    });
+
+    it('runs until you both retire when a spouse works on after you', () => {
+        expect(textOf(answer({ perYear: perYear({ yearsOfSaving: 12 }) })))
+            .toContain('spend about $14k less a year until you both retire.');
+    });
+
+    it('names the spouse when the answer is framed on their retirement', () => {
+        expect(textOf(answer({ reportedWho: 'spouse', perYear: perYear() })))
+            .toContain('spend about $14k less a year until your spouse retires at 60.');
+    });
+
+    it('a yearly amount under $1,000 reads as "a little less", not a figure', () => {
+        const text = textOf(answer({ perYear: perYear({ extraPerYear: 400, newPreRetirementSpend: 69_600 }) }));
+        expect(text).toContain('Or save as you go: spending a little less before you retire (under $1,000 a year) would close the gap.');
+        expect(text).not.toContain('$0 less');
+    });
+
+    it('words the yearly plan’s strategy against the lump sum’s', () => {
+        expect(textOf(answer({ perYear: perYear({ decisions: cppTo70 }) }, { decisions: cppTo70 })))
+            .toContain('To get there: start your CPP at 70 instead of 65.Or save as you go, with the same changes: spend about $14k less');
+        cleanup();
+        expect(textOf(answer({ perYear: perYear({ decisions: cppTo70 }) })))
+            .toContain('less a year until you retire at 60. To do this: start your CPP at 70 instead of 65.');
+        cleanup();
+        expect(textOf(answer({ perYear: perYear() }, { decisions: cppTo70 })))
+            .toContain('Or save as you go, without those changes: spend about $14k less');
+    });
+
+    it('even spending nothing before retiring falls short: says so with the best odds', () => {
+        // The best probe is spending nothing before retiring: never shown as an amount.
+        const text = textOf(answer({ perYear: perYear({ clears: false, boundHit: true, extraPerYear: 70_000, achievedSuccessRate: 80 }) }));
+        expect(text).toContain('Saving from your pay alone can’t close the gap: even saving everything you now spend until you retire at 60, your money lasts in 80% of market simulations (target 85%).');
+        expect(text).not.toContain('Or save as you go');
+        expect(text).not.toContain(TFSA_NOTE);
+        expect(text).not.toContain('less a year');
+    });
+
+    it('unreachable even on average returns', () => {
+        const text = textOf(answer({ perYear: perYear({
+            status: 'unreachable', clears: false, extraPerYear: null, deterministicExtraPerYear: null,
+            newPreRetirementSpend: null, achievedSuccessRate: null, atRetirement: null, recommendedInputs: null,
+        }) }));
+        expect(text).toContain('Saving from your pay alone can’t close the gap: saving everything you now spend until you retire at 60 isn’t enough, even with average returns.');
+    });
+
+    it('says nothing when there is no yearly answer, or no lump-sum answer to pair it with', () => {
+        expect(textOf(answer())).not.toMatch(/save as you go|Saving from your pay/i);
+        cleanup();
+        const enough = { haveEnough: true, neededSavings: 440_000, savingsGap: -60_000, perYear: perYear() };
+        expect(textOf(answer(enough, { baselineSuccessRate: 95 }))).not.toMatch(/save as you go|Saving from your pay/i);
+        cleanup();
+        expect(textOf(answer({ boundHit: true, achievedSuccessRate: 72, perYear: perYear() })))
+            .not.toMatch(/save as you go|Saving from your pay/i);
+    });
+});
+
 describe('SavingsNeededHeadline: have enough', () => {
     const enough = { haveEnough: true, neededSavings: 440_000, savingsGap: -60_000 };
 
     it('says how much lower the savings could be', () => {
         const text = textOf(answer(enough, { baselineSuccessRate: 95 }));
         expect(text).toContain('You have enough to retire at 60');
-        expect(text).toContain('Your savings could be about 12% lower (about $440k instead of $500k) and still last in at least 85% of market simulations.');
+        expect(text).toContain('Your savings could be about 12% lower (about $440k instead of $500k) and still meet your 85% target.');
         expect(text).not.toContain('To get there');
     });
 
@@ -134,9 +214,9 @@ describe('SavingsNeededHeadline: have enough', () => {
     it('needs the changes when the plan as entered misses the bar', () => {
         const text = textOf(answer({ ...enough, strategyChangeNeeded: true }, { baselineSuccessRate: 78, decisions: cppTo70 }));
         expect(text).toContain('You have enough to retire at 60 — with the changes below');
-        expect(text).toContain('As it stands, your plan falls short of your 85% target. With the changes below, your savings could be about 12% lower');
+        expect(text).toContain('As entered, your plan falls short of your 85% target. With the changes below, your savings could be about 12% lower');
         expect(text).toContain('To get there: start your CPP at 70 instead of 65.');
-        expect(text).toContain('Your odds today, with what you have saved: 78%.');
+        expect(text).toContain('Your odds today: 78%.');
     });
 
     it('says "about enough" when only market-simulation noise separates the two', () => {
@@ -157,9 +237,9 @@ describe('SavingsNeededHeadline: no savings needed', () => {
         const text = textOf(answer(zero, { baselineSuccessRate: 99 }));
         expect(text).toContain('You don’t need any savings today');
         expect(text).toContain('What you save from your pay before retiring at 60, plus CPP and OAS, covers your spending.');
-        expect(text).toContain('The $500k you have saved is extra cushion.');
+        expect(text).toContain('Your $500k saved is extra cushion.');
         expect(text).not.toContain('How that splits');
-        expect(text).not.toContain('keeps the mix');
+        expect(text).not.toContain('Keeps your current mix');
     });
 
     it('says when it only works with the changes', () => {
@@ -191,9 +271,9 @@ describe('SavingsNeededHeadline: no amount works', () => {
     it('unreachable: says what was tried and points at the optimizer goals', () => {
         const text = textOf(answer(unreachable, { decisions: cppTo70 }));
         expect(text).toContain('Savings alone can’t fund this spending');
-        expect(text).toContain('We tried savings of up to $10M, and your money still runs out before the end of the plan at $60,000/yr');
+        expect(text).toContain('We tried up to $10M. At $60,000/yr, your money still runs out before the plan ends');
         expect(text).toContain('“Spend the most in retirement” or “Retire as early as possible”');
-        expect(text).not.toContain('market simulations at $60,000/yr (your target');
+        expect(text).not.toContain('(target 85%)');
         expect(text).not.toContain('To get there');
     });
 
@@ -207,7 +287,7 @@ describe('SavingsNeededHeadline: no amount works', () => {
     it('bound hit: gives the best result found and suggests a lower target', () => {
         const text = textOf(answer({ boundHit: true, neededSavings: 10_000_000, achievedSuccessRate: 72 }));
         expect(text).toContain('Savings alone can’t fund this spending at your 85% target');
-        expect(text).toContain('We tried savings of up to $10M. With $10M, the best we found, your money lasts in 72% of market simulations');
+        expect(text).toContain('We tried up to $10M. The best, $10M, lasts in 72% of market simulations');
         expect(text).toContain('Or choose a lower target.');
         expect(text).not.toContain('You need about');
     });
@@ -215,7 +295,7 @@ describe('SavingsNeededHeadline: no amount works', () => {
     it('a probe budget that ran out short of the bar reads like a bound hit', () => {
         const text = textOf(answer({ stepUpCapHit: true, achievedSuccessRate: 80 }));
         expect(text).toContain('Savings alone can’t fund this spending at your 85% target');
-        expect(text).toContain('The calculator stopped checking before any amount reached your target.');
+        expect(text).toContain('The calculator stopped checking before any amount met your target.');
     });
 
     it('a probe budget that ran out after clearing the bar is still an answer', () => {

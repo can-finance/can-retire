@@ -29,12 +29,14 @@ unit-tested MC-free.
   earliest-age table was switched to today's dollars; these were left as-is.
 - **Phase 3b — "How much do I need to retire?" (built 2026-10-13, unreleased).**
   Optimizer mode `savings-needed` + /how-much-do-i-need-to-retire/ page; pure
-  planners in `src/utils/savingsSearch.ts`. Lump-sum framing only. Follow-ups:
-  the per-year framing ("save $Y more per year", bisecting `preRetirementSpend`
-  on the same loop); a "need at each retirement age" table (one savings solve
-  per age is too slow — would need could-spend-style reuse of each age's
-  strategy); the no-savings default mix uses the TFSA limit table and ignores
-  any `tfsa.contributionRoom` entered. `TFSA_ANNUAL_LIMITS` holds the last
+  planners in `src/utils/savingsSearch.ts`. Lump sum, plus the per-year
+  framing (lower `preRetirementSpend`, the surplus sweep saves it) and a table
+  of nearby retirement ages (estimates on the answer's held strategy).
+  Follow-ups: a per-year column in the age table (another R search + MC
+  step-up per row, roughly doubling its cost); the headline moves ~±7% between
+  runs at 200 MC iterations — consider more iterations if repeat runs bother
+  users; the no-savings default mix uses the TFSA limit table and ignores any
+  `tfsa.contributionRoom` entered. `TFSA_ANNUAL_LIMITS` holds the last
   published year flat — add each new year's limit when CRA announces it.
 - **Phase 4 — the engine phase.** See spec below.
 

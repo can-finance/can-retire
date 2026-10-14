@@ -7,8 +7,9 @@
 // cppContributedYears — on deep clones of the base inputs and
 // re-runs runSimulation / runMonteCarlo to score each candidate. In
 // savings-needed mode the balances (and non-reg ACB) are rescaled too — on the
-// clones the search scores, never as a recommendation. Nothing here mutates the
-// caller's inputs.
+// clones the search scores, never as a recommendation — and its two follow-ups
+// move preRetirementSpend (the per-year framing) and the retirement ages with
+// their CPP years (the age table). Nothing here mutates the caller's inputs.
 //
 // Four objective modes share one coordinate-descent search (see the `Objective`
 // abstraction below and runStrategySearch). All four are duals of the same
@@ -62,7 +63,7 @@ import {
     personOf,
     DEFAULT_MAX_AGE_STEPUP_PROBES,
 } from './retirementAgeSearch';
-import type { AgeFeasibilityProbe, AgeProbeResult, AgeStepUpAction, Who } from './retirementAgeSearch';
+import type { AgeFeasibilityProbe, AgeProbeResult, AgeShiftPlan, AgeStepUpAction, Who } from './retirementAgeSearch';
 import {
     householdSavings,
     savingsBasis,
@@ -74,13 +75,25 @@ import {
     planSavingsStepUp,
     planSavingsFraming,
     householdSavingsAtRetirement,
+    preRetirementSpendYears,
+    savingsPerYearScale,
+    savingsPerYearHint,
+    savingsPerYearBisectionPlan,
+    savingsPerYearStepUpPlan,
+    savingsAgeRowDeltas,
+    reconcileSavingsAgeRows,
     DEFAULT_MAX_SAVINGS_STEPUP_PROBES,
+    SAVINGS_ROW_MC_PRECISION_ABS,
+    SAVINGS_ROW_MC_PRECISION_REL,
+    SAVINGS_ROW_MAX_STEPUP_PROBES,
 } from './savingsSearch';
 import type {
     SavingsAccountsBreakdown,
     SavingsBasis,
     SavingsFeasibilityProbe,
+    SavingsFraming,
     SavingsProbeResult,
+    SavingsRowDraft,
     SavingsStepUpAction,
 } from './savingsSearch';
 
@@ -112,6 +125,13 @@ export interface OptimizeMeltdownOptions {
     // savings-needed only, TEST-ONLY: replaces the search cap (savingsSearchCap)
     // so the unreachable path can be reached without a pathological plan.
     savingsSearchCap?: number;
+    // savings-needed only: also solve the per-year framing, "spend $R less a
+    // year before you retire" (default true). Only runs when it applies — see
+    // SavingsNeededResult.perYear. false skips it (faster, e.g. for tests).
+    savingsPerYear?: boolean;
+    // savings-needed only: 'all' (default) estimates the "savings needed at
+    // each retirement age" table; 'none' skips it (faster, e.g. for tests).
+    savingsAgeRows?: 'all' | 'none';
     // Progress callback. `total` is an estimate that the run snaps to on finish.
     onProgress?: (done: number, total: number) => void;
     // Cancellation. Checked between batches; rejects with an AbortError.
@@ -298,6 +318,131 @@ export interface SavingsNeededResult {
     // they retire (from today when already retired) at the answer, on their own
     // clock — or null when money lasts the plan even in the worst 1-in-20 markets.
     badMarketsAge: number | null;
+
+    // --- Follow-ups (Phase 3b) ---
+    // Both are always set by the solver (null / [] when they don't apply or
+    // were opted out).
+    //
+    // The per-year framing: "spend about $R less a year before you retire and
+    // save the difference". Set only when someone is still working, the answer
+    // clears the bar (status 'found', not boundHit, not a probe-budget miss)
+    // and it is MORE than the household has; null otherwise (already retired,
+    // have enough, unreachable, no clearing answer, or savingsPerYear: false).
+    perYear: SavingsPerYearResult | null;
+    // "Savings needed at each retirement age": rows for Δ = −3 … +3 around the
+    // plan's retirement age, sorted by Δ. Empty when nobody is still working,
+    // when no shared age shift is available (two working spouses' ranges don't
+    // overlap), when status is 'unreachable' (no answer strategy to hold), or
+    // with savingsAgeRows: 'none'.
+    ageRows: SavingsAgeRow[];
+}
+
+// savings-needed: the per-year framing. Every dollar figure is TODAY'S dollars.
+//
+// The engine has no contribution lever, so the lever is preRetirementSpend
+// lowered by extraPerYear (R) on the plan as entered, at TODAY'S balances: the
+// working years' surplus grows by R a year and is swept into accounts the way
+// the engine saves any surplus — TFSA room first, then RRSP room for whoever
+// is still working (its deduction refund swept into non-registered), then
+// non-registered. So the extra lands in a different mix from the lump sum's
+// (which scales the current mix), and atRetirement differs from
+// neededAtRetirement for that reason as well as MC wobble. See savingsSearch.ts
+// ("Per-year framing") for the engine semantics.
+//
+// Statuses mirror the lump sum's. Key the copy on `clears`:
+//  - clears: "spend about $R less a year before you retire and save the difference".
+//  - !clears && (status 'unreachable' || boundHit): even spending nothing before
+//    retiring doesn't get there — the lump sum (or retiring later, or spending
+//    less in retirement) is the way.
+//  - !clears && stepUpCapHit: the probe budget ran out short of the bar (rare);
+//    extraPerYear is only the best probe.
+export interface SavingsPerYearResult {
+    // 'found': some R funds the plan on average returns (check boundHit /
+    //   stepUpCapHit for how firmly it clears the bar).
+    // 'unreachable': even R = preRetirementSpend (spending nothing before
+    //   retiring) fails on average returns, whatever the strategy.
+    status: 'found' | 'unreachable';
+    clears: boolean;                     // an R that clears the bar was found
+    // R: spend this much less each pre-retirement year (null when unreachable).
+    // Can be 0 or a few hundred dollars when the lump sum's shortfall is within
+    // MC wobble of what the household has (a separate run at today's balances
+    // cleared) — read that like the headline's "about enough".
+    extraPerYear: number | null;
+    deterministicExtraPerYear: number | null; // smallest R funding the plan on average returns (≤ extraPerYear)
+    currentPreRetirementSpend: number;   // the plan's preRetirementSpend
+    newPreRetirementSpend: number | null; // currentPreRetirementSpend − extraPerYear
+    // Pre-retirement years the lever applies in: every year until the LAST
+    // earner retires (the engine charges preRetirementSpend while anyone alive
+    // still works), so for a couple it can run past the reported person's
+    // retirement. R × yearsOfSaving is the total set aside, before growth.
+    yearsOfSaving: number;
+    searchCap: number;                   // largest R tried = currentPreRetirementSpend
+    achievedSuccessRate: number | null;  // MC success at extraPerYear (null when unreachable)
+    stepUpCapHit: boolean;               // MC probe budget ran out (read like the lump sum's)
+    boundHit: boolean;                   // even spending nothing before retiring misses the bar
+    // Household savings on the day the reported person retires, with the extra
+    // saving (householdSavingsAtRetirement on the answer's run), today's
+    // dollars — the sanity line next to neededAtRetirement / currentAtRetirement.
+    // null when unreachable.
+    atRetirement: number | null;
+    withdrawalStrategy: WithdrawalStrategy; // the answer's winning order (the plan's when unreachable)
+    strategyChanged: boolean;
+    // The answer's strategy vs the plan's, judged at today's balances (empty
+    // when unreachable) — the same shape as MeltdownResult.decisions.
+    decisions: PersonMeltdownDecision[];
+    // The plan at the answer: today's balances, preRetirementSpend lowered by
+    // extraPerYear, the winning CPP/OAS/melt/order. Suitable for "Save as new
+    // plan" as-is; applyMeltdownRecommendation would drop the spending change.
+    // null when unreachable.
+    recommendedInputs: SimulationInputs | null;
+}
+
+// savings-needed: one row of "savings needed at each retirement age". Every
+// dollar figure is TODAY'S dollars.
+//
+// Rows other than the plan's own are ESTIMATES: the headline answer's strategy
+// (CPP/OAS start, melt amount, withdrawal order) held fixed on the age-shifted
+// plan, a deterministic search on the savings total with engine runs only,
+// then the MC step-up — no strategy search per row, so an estimate errs a
+// little high. Then reconciled (reconcileSavingsAgeRows): a row that clears at
+// current savings never reports needing more than current, one that misses
+// always needs more, and MC wobble is smoothed so a later age needs no more
+// than an earlier one where the deterministic answers agree on the direction.
+// The plan's own row (isPlan, Δ = 0) is the headline answer copied exactly.
+// The ages move as in the earliest-age search: every still-working person by
+// the same Δ, CPP contribution years following (a CPP Calculator estimate and
+// a DB pension held as entered).
+export interface SavingsAgeRow {
+    delta: number;                     // Δ vs the plan (negative = sooner)
+    retirementAge: number;             // the reported person's retirement age
+    otherRetirementAge?: number;       // the other shifted person's, when both move
+    isPlan: boolean;                   // Δ = 0: the headline answer, not an estimate
+    // 'unreachable': the held strategy can't fund the plan at this age even at
+    // the search cap on average returns (neededSavings null).
+    status: 'found' | 'unreachable';
+    neededSavings: number | null;      // household total today that clears the bar at this age
+    // Household savings on this row's retirement day (the END of the reported
+    // person's last working year), held strategy: neededAtRetirement at
+    // neededSavings, currentAtRetirement at the plan's own balances. null when
+    // retiring this year (no working year left) or, for needed, when unreachable.
+    // On the plan row these are the headline's values.
+    neededAtRetirement: number | null;
+    currentAtRetirement: number | null;
+    savingsGap: number | null;         // neededSavings − current savings; negative = the margin
+    haveEnough: boolean;               // clears && neededSavings ≤ current savings (plan row: the headline's haveEnough)
+    // "Your odds with what you have, retiring at this age": one MC at current
+    // balances on this row's inputs (held strategy). On the plan row it is
+    // baselineSuccessRate — the plan as entered, the headline's "your odds
+    // today" — so its haveEnough can disagree with it in the same ways the
+    // headline's can (strategyChangeNeeded, or MC wobble).
+    successRateAtCurrent: number;
+    // neededSavings clears the bar. False with status 'unreachable', boundHit
+    // (even the cap misses), or a probe-budget miss (stepUpCapHit) — then
+    // neededSavings is only the best probe. Show such a row as "more than we
+    // can find" rather than an amount.
+    clears: boolean;
+    stepUpCapHit: boolean;
+    boundHit: boolean;
 }
 
 export interface MeltdownResult {
@@ -1593,6 +1738,10 @@ interface OuterProbe {
     mcAt(key: number, onFraction?: (f: number) => void): Promise<MonteCarloResult>;
     // Uncached MC on arbitrary inputs (the baseline), same abort handling.
     runMc(inputs: SimulationInputs): Promise<MonteCarloResult>;
+    // Seed the check cache at `key` with a check already run on the SAME inputs
+    // by another probe (the per-year search's R = 0 is the lump-sum search's
+    // current total), so it isn't searched twice.
+    prime(key: number, check: OuterCheck): void;
 }
 
 function createOuterProbe(args: {
@@ -1635,7 +1784,11 @@ function createOuterProbe(args: {
         return mc;
     };
 
-    return { checkAt, mcAt, runMc };
+    const prime = (key: number, check: OuterCheck): void => {
+        if (!checks.has(key)) checks.set(key, { ...check, key });
+    };
+
+    return { checkAt, mcAt, runMc, prime };
 }
 
 // Bad-markets line: the first age the 5th-percentile balance hits ~0 once the
@@ -1938,12 +2091,40 @@ async function solveEarliestAge(
 //      expansion, then bisection. Inner check = earliest-age's, cached per D.
 //   2. Monte Carlo step-up from there until the success bar clears, on each
 //      probed D's winning strategy.
-// Retirement ages and spending are held exactly as entered.
+// Retirement ages and spending are held exactly as entered for the answer.
+// Two follow-ups run after it (each can be opted out of):
+//   3. Per-year framing, when someone is still working and the answer is more
+//      than the household has: the same two phases over R, a cut to
+//      preRetirementSpend, at today's balances (solveSavingsPerYear).
+//   4. Savings needed at each retirement age: the answer's strategy held on
+//      each age-shifted plan, a deterministic search and MC step-up on D with
+//      no strategy search (estimateSavingsAgeRows).
 
-const PROGRESS_SAVINGS_DET_END = 0.6; // deterministic search; the MC step-up takes the rest
+// Progress weights, in units where the main solve is 1 (its deterministic
+// search 0.6, its MC step-up 0.4). A phase that is off gets no slice; one that
+// turns out not to apply (per-year when the household has enough) is skipped
+// over, so the bar jumps forward but never back.
+const PROGRESS_SAVINGS_MAIN_DET = 0.6;
+const PROGRESS_SAVINGS_MAIN_MC = 0.4;
+const PROGRESS_SAVINGS_PER_YEAR = 0.6;
+const PROGRESS_SAVINGS_ROWS = 1;
 // Typical counts, progress only (the bar clamps at each phase's end).
 const EXPECTED_SAVINGS_DET_CHECKS = 8;
 const EXPECTED_SAVINGS_STEPUP_PROBES = 5;
+const EXPECTED_PER_YEAR_DET_CHECKS = 7;
+const EXPECTED_PER_YEAR_STEPUP_PROBES = 4;
+const EXPECTED_ROW_STEPUP_PROBES = 4;
+// Share of a phase's slice its deterministic part takes (per-year), or of a
+// row's unit the deterministic search and the MC at current savings take.
+const PER_YEAR_DET_SHARE = 0.6;
+const ROW_DET_SHARE = 0.1;
+const ROW_CURRENT_MC_SHARE = 0.25;
+
+// The answer clears the bar: a 'done' step-up, or a probe-budget stop at a
+// total that clears. (boundHit and a non-clearing capHit report a best probe.)
+function stepUpClears(step: SavingsStepUpAction): boolean {
+    return step.kind === 'done' || (step.kind === 'capHit' && step.cleared);
+}
 
 async function solveSavingsNeeded(
     baseInputs: SimulationInputs,
@@ -1952,8 +2133,17 @@ async function solveSavingsNeeded(
     const considerCppOas = options.considerCppOas ?? true;
     const mcIterations = options.mcIterations ?? 200;
     const mcSuccessTarget = options.mcSuccessTarget ?? DEFAULT_MC_TARGET;
+    const withPerYear = options.savingsPerYear ?? true;
+    const withRows = (options.savingsAgeRows ?? 'all') === 'all';
     const { signal } = options;
     const progress = phasedProgress(options.onProgress);
+
+    // Phase slices on the 0-1 scale (see PROGRESS_SAVINGS_*).
+    const weightTotal = PROGRESS_SAVINGS_MAIN_DET + PROGRESS_SAVINGS_MAIN_MC
+        + (withPerYear ? PROGRESS_SAVINGS_PER_YEAR : 0) + (withRows ? PROGRESS_SAVINGS_ROWS : 0);
+    const detEnd = PROGRESS_SAVINGS_MAIN_DET / weightTotal;
+    const mcEnd = (PROGRESS_SAVINGS_MAIN_DET + PROGRESS_SAVINGS_MAIN_MC) / weightTotal;
+    const perYearEnd = mcEnd + (withPerYear ? PROGRESS_SAVINGS_PER_YEAR / weightTotal : 0);
 
     if (signal?.aborted) throw abortError();
 
@@ -1995,7 +2185,7 @@ async function solveSavingsNeeded(
     while (bisect.kind === 'probe') {
         const n = detProbes.length;
         const c = await probe.checkAt(bisect.total,
-            f => progress.at(0, PROGRESS_SAVINGS_DET_END, (n + f) / EXPECTED_SAVINGS_DET_CHECKS));
+            f => progress.at(0, detEnd, (n + f) / EXPECTED_SAVINGS_DET_CHECKS));
         detProbes.push({ total: bisect.total, feasible: c.feasible });
         bisect = planSavingsBisection(bisectPlan, detProbes);
     }
@@ -2040,11 +2230,13 @@ async function solveSavingsNeeded(
                 withdrawalStrategy: currentStrategy,
                 strategyChanged: false,
                 badMarketsAge: null,
+                perYear: null,
+                ageRows: [],
             },
         };
     }
     const deterministicSavings = bisect.total;
-    progress.at(0, PROGRESS_SAVINGS_DET_END, 1);
+    progress.at(0, detEnd, 1);
 
     // --- 2. Monte Carlo step-up from the deterministic answer ---
     const stepPlan = {
@@ -2058,15 +2250,16 @@ async function solveSavingsNeeded(
         // A total the deterministic phase never checked costs a strategy search
         // as well as the MC run: let the search move the bar most of the way.
         const mc = await probe.mcAt(step.total, f => progress.at(
-            PROGRESS_SAVINGS_DET_END, 1, (n + 0.7 * f) / EXPECTED_SAVINGS_STEPUP_PROBES,
+            detEnd, mcEnd, (n + 0.7 * f) / EXPECTED_SAVINGS_STEPUP_PROBES,
         ));
         mcProbes.push({ total: step.total, successRate: mc.successRate });
-        progress.at(PROGRESS_SAVINGS_DET_END, 1, mcProbes.length / EXPECTED_SAVINGS_STEPUP_PROBES);
+        progress.at(detEnd, mcEnd, mcProbes.length / EXPECTED_SAVINGS_STEPUP_PROBES);
         step = planSavingsStepUp(stepPlan, mcProbes);
     }
     const neededSavings = step.total;
     const stepUpCapHit = step.kind === 'capHit';
     const boundHit = step.kind === 'boundHit';
+    const answerClears = stepUpClears(step);
 
     // "Your odds today": the plan exactly as entered, at current savings.
     const baselineMonteCarlo = await probe.runMc(base);
@@ -2111,6 +2304,47 @@ async function solveSavingsNeeded(
     const strategyChangeNeeded = haveEnough
         && strategyDiffersFromPlan(decisions, currentStrategy, winningStrategy)
         && baselineMonteCarlo.successRate < mcSuccessTarget;
+    progress.at(detEnd, mcEnd, 1);
+
+    // --- 3. Per-year framing ---
+    let perYear: SavingsPerYearResult | null = null;
+    if (withPerYear && framing.stillWorking && answerClears && neededSavings > currentSavings) {
+        // The at-retirement gap sizes R's first step and the MC phase's first
+        // guess. Both sides are on the answer's strategy, so they differ by
+        // savings alone.
+        const gapAtRetirement = neededAtRetirement !== null && currentAtRetirement !== null
+            ? neededAtRetirement - currentAtRetirement
+            : neededSavings - currentSavings;
+        perYear = await solveSavingsPerYear({
+            base, framing, currentStrategy, mainProbe: probe, currentSavings, gapAtRetirement,
+            considerCppOas, mcIterations, mcSuccessTarget, signal,
+            onFraction: f => progress.at(mcEnd, perYearEnd, f),
+        });
+    }
+    progress.at(mcEnd, perYearEnd, 1);
+
+    // --- 4. Savings needed at each retirement age ---
+    let ageRows: SavingsAgeRow[] = [];
+    if (withRows) {
+        const shift = planAgeShift(base);
+        if (shift.available) {
+            ageRows = await estimateSavingsAgeRows({
+                base, shift, held: winner.a, currentSavings, searchCap, scale,
+                mcIterations, mcSuccessTarget, signal,
+                planRow: {
+                    neededSavings,
+                    neededAtRetirement,
+                    currentAtRetirement,
+                    haveEnough,
+                    successRateAtCurrent: baselineMonteCarlo.successRate,
+                    clears: answerClears,
+                    stepUpCapHit,
+                    boundHit,
+                },
+                onFraction: f => progress.at(perYearEnd, 1, f),
+            });
+        }
+    }
     progress.finish();
 
     return {
@@ -2148,8 +2382,387 @@ async function solveSavingsNeeded(
             withdrawalStrategy: winningStrategy,
             strategyChanged: winningStrategy !== currentStrategy,
             badMarketsAge,
+            perYear,
+            ageRows,
         },
     };
+}
+
+// --- Savings-needed follow-up: the per-year framing ------------------------
+//
+// "Spend $R less a year before you retire and save the difference": the same
+// outer loop as the lump sum with R — a cut to preRetirementSpend on the plan
+// as entered, today's balances — as the outer variable (engine semantics in
+// savingsSearch.ts, "Per-year framing"). Its own probe, so its cache keys (R in
+// $/yr) never meet the lump sum's (D in $).
+
+function withPreRetirementSpend(inputs: SimulationInputs, spend: number): SimulationInputs {
+    const next = structuredClone(inputs);
+    next.preRetirementSpend = spend;
+    return next;
+}
+
+interface SavingsPerYearArgs {
+    base: SimulationInputs;
+    framing: SavingsFraming;
+    currentStrategy: WithdrawalStrategy;
+    mainProbe: OuterProbe;     // the lump-sum search's probe (for R = 0)
+    currentSavings: number;
+    gapAtRetirement: number;   // today's $, sizes R's first step
+    considerCppOas: boolean;
+    mcIterations: number;
+    mcSuccessTarget: number;
+    signal?: AbortSignal;
+    onFraction: (f: number) => void; // 0-1 through this phase
+}
+
+async function solveSavingsPerYear(args: SavingsPerYearArgs): Promise<SavingsPerYearResult> {
+    const { base, framing, currentStrategy, mainProbe, currentSavings, mcSuccessTarget, onFraction } = args;
+    const pre = Math.max(0, base.preRetirementSpend);
+    const yearsOfSaving = preRetirementSpendYears(base);
+    const scale = savingsPerYearScale(args.gapAtRetirement, framing.yearsToRetirement ?? yearsOfSaving, pre);
+    const probe = createOuterProbe({
+        inputsAt: (extra) => withPreRetirementSpend(base, pre - extra),
+        considerCppOas: args.considerCppOas, mcIterations: args.mcIterations, signal: args.signal,
+    });
+    // R = 0 is the plan as entered at today's balances — exactly the lump-sum
+    // search's check at the current total (its first probe, so already cached).
+    probe.prime(0, await mainProbe.checkAt(currentSavings));
+
+    const common = {
+        currentPreRetirementSpend: base.preRetirementSpend,
+        yearsOfSaving,
+        searchCap: pre,
+    };
+
+    // Deterministic search over R.
+    const detPlan = savingsPerYearBisectionPlan(pre, scale);
+    const detProbes: SavingsFeasibilityProbe[] = [];
+    let bisect = planSavingsBisection(detPlan, detProbes);
+    while (bisect.kind === 'probe') {
+        const n = detProbes.length;
+        const c = await probe.checkAt(bisect.total,
+            f => onFraction(PER_YEAR_DET_SHARE * Math.min(1, (n + f) / EXPECTED_PER_YEAR_DET_CHECKS)));
+        detProbes.push({ total: bisect.total, feasible: c.feasible });
+        bisect = planSavingsBisection(detPlan, detProbes);
+    }
+    if (bisect.kind === 'unreachable') {
+        return {
+            ...common,
+            status: 'unreachable',
+            clears: false,
+            extraPerYear: null,
+            deterministicExtraPerYear: null,
+            newPreRetirementSpend: null,
+            achievedSuccessRate: null,
+            stepUpCapHit: false,
+            boundHit: false,
+            atRetirement: null,
+            withdrawalStrategy: currentStrategy,
+            strategyChanged: false,
+            decisions: [],
+            recommendedInputs: null,
+        };
+    }
+    const deterministicExtra = bisect.total;
+    onFraction(PER_YEAR_DET_SHARE);
+
+    // The MC phase's first probe is a guess (savingsPerYearHint), calibrated
+    // with one engine run: the deterministic answer's strategy with R raised
+    // by one scale step gives the extra savings at retirement per $1/yr.
+    let hint: number | null = null;
+    const detWinner = (await probe.checkAt(deterministicExtra)).winner; // cached
+    const calibration = Math.min(pre, deterministicExtra + scale) - deterministicExtra;
+    if (calibration > 0) {
+        const before = householdSavingsAtRetirement(detWinner.results, framing.yearsToRetirement);
+        const after = householdSavingsAtRetirement(
+            runSimulation(withPreRetirementSpend(detWinner.inputs, pre - deterministicExtra - calibration)),
+            framing.yearsToRetirement,
+        );
+        if (before !== null && after !== null) {
+            hint = savingsPerYearHint(args.gapAtRetirement, (after - before) / calibration, pre);
+        }
+    }
+
+    // MC step-up over R.
+    const stepPlan = savingsPerYearStepUpPlan(mcSuccessTarget, deterministicExtra, pre, scale, hint);
+    const mcProbes: SavingsProbeResult[] = [];
+    const mcFraction = (units: number) =>
+        PER_YEAR_DET_SHARE + (1 - PER_YEAR_DET_SHARE) * Math.min(1, units / EXPECTED_PER_YEAR_STEPUP_PROBES);
+    let step: SavingsStepUpAction = planSavingsStepUp(stepPlan, mcProbes);
+    while (step.kind === 'probe') {
+        const n = mcProbes.length;
+        const mc = await probe.mcAt(step.total, f => onFraction(mcFraction(n + 0.7 * f)));
+        mcProbes.push({ total: step.total, successRate: mc.successRate });
+        onFraction(mcFraction(mcProbes.length));
+        step = planSavingsStepUp(stepPlan, mcProbes);
+    }
+    const extra = step.total;
+    const answer = await probe.checkAt(extra); // cached: the step-up probed it
+    const answerMc = await probe.mcAt(extra);  // cached likewise
+    const winner = answer.winner;
+
+    // Balances are today's, so the plan's own decide hasRrsp.
+    const decisions: PersonMeltdownDecision[] = [buildDecision('person', 'You', base.person, winner.a.person)];
+    if (base.spouse && winner.a.spouse) decisions.push(buildDecision('spouse', 'Spouse', base.spouse, winner.a.spouse));
+
+    return {
+        ...common,
+        status: 'found',
+        clears: stepUpClears(step),
+        extraPerYear: extra,
+        deterministicExtraPerYear: deterministicExtra,
+        newPreRetirementSpend: pre - extra,
+        achievedSuccessRate: answerMc.successRate,
+        stepUpCapHit: step.kind === 'capHit',
+        boundHit: step.kind === 'boundHit',
+        atRetirement: householdSavingsAtRetirement(winner.results, framing.yearsToRetirement),
+        withdrawalStrategy: winner.a.strategy,
+        strategyChanged: winner.a.strategy !== currentStrategy,
+        decisions,
+        recommendedInputs: winner.inputs,
+    };
+}
+
+// --- Savings-needed follow-up: savings needed at each retirement age ------
+//
+// One row per Δ (savingsAgeRowDeltas). Each row other than the plan's holds the
+// headline answer's strategy fixed on the age-shifted plan and estimates the
+// need with engine runs and MC only — the earliest-age "could spend" pattern:
+//   1. deterministic search on D (planSavingsBisection from current savings,
+//      feasibility = the inner check's $1k shortfall tolerance on the held
+//      strategy's run);
+//   2. one MC at current savings: the row's "odds with what you have" — and,
+//      when current savings sit at or above the deterministic answer, the
+//      step-up's first measurement, so it isn't wasted;
+//   3. the MC step-up on D (planSavingsStepUp, the rows' coarser precision),
+//      first probing a guess from the neighbouring row's MC/deterministic ratio.
+// The plan row copies the headline answer; its held-strategy deterministic
+// answer is still computed (engine runs only) so the smoothing in
+// reconcileSavingsAgeRows compares like with like.
+
+// The held strategy at one age: engine and MC runs cached per savings total.
+function heldStrategyAtAge(
+    rowInputs: SimulationInputs,
+    runMc: (inputs: SimulationInputs) => Promise<MonteCarloResult>,
+    signal?: AbortSignal,
+) {
+    const runs = new Map<number, { inputs: SimulationInputs; results: SimulationResult[] }>();
+    const mcs = new Map<number, MonteCarloResult>();
+    let sinceYield = 0;
+
+    const runAt = (total: number) => {
+        let hit = runs.get(total);
+        if (!hit) {
+            const inputs = allocateSavings(rowInputs, total).inputs;
+            hit = { inputs, results: runSimulation(inputs) };
+            runs.set(total, hit);
+        }
+        return hit;
+    };
+
+    const feasibleAt = async (total: number): Promise<boolean> => {
+        if (signal?.aborted) throw abortError();
+        const { inputs, results } = runAt(total);
+        if (++sinceYield >= BATCH) {
+            sinceYield = 0;
+            await yieldToEventLoop();
+            if (signal?.aborted) throw abortError();
+        }
+        return computeSummaryMetrics(results, inputs, false).totalShortfall <= SHORTFALL_TOL;
+    };
+
+    const mcAt = async (total: number): Promise<MonteCarloResult> => {
+        let hit = mcs.get(total);
+        if (!hit) {
+            hit = await runMc(runAt(total).inputs);
+            mcs.set(total, hit);
+        }
+        return hit;
+    };
+
+    // Smallest total the held strategy funds on average returns, or null when
+    // even the cap falls short.
+    const deterministicNeed = async (cap: number, start: number, expandFloor: number): Promise<number | null> => {
+        const plan = { start, cap, expandFloor };
+        const probes: SavingsFeasibilityProbe[] = [];
+        let action = planSavingsBisection(plan, probes);
+        while (action.kind === 'probe') {
+            probes.push({ total: action.total, feasible: await feasibleAt(action.total) });
+            action = planSavingsBisection(plan, probes);
+        }
+        return action.kind === 'found' ? action.total : null;
+    };
+
+    return { runAt, mcAt, deterministicNeed };
+}
+
+// The headline answer's figures, for the plan row.
+interface SavingsPlanRowSource {
+    neededSavings: number;
+    neededAtRetirement: number | null;
+    currentAtRetirement: number | null;
+    haveEnough: boolean;
+    successRateAtCurrent: number; // baselineSuccessRate
+    clears: boolean;
+    stepUpCapHit: boolean;
+    boundHit: boolean;
+}
+
+interface SavingsAgeRowsArgs {
+    base: SimulationInputs;
+    shift: AgeShiftPlan;       // available
+    held: Assignment;          // the headline answer's strategy
+    planRow: SavingsPlanRowSource;
+    currentSavings: number;
+    searchCap: number;
+    scale: number;             // savingsSearchScale
+    mcIterations: number;
+    mcSuccessTarget: number;
+    signal?: AbortSignal;
+    onFraction: (f: number) => void; // 0-1 through this phase
+}
+
+async function estimateSavingsAgeRows(args: SavingsAgeRowsArgs): Promise<SavingsAgeRow[]> {
+    const { base, shift, held, planRow, currentSavings, searchCap, scale, mcSuccessTarget, signal, onFraction } = args;
+    const runMc = abortableMcRunner(args.mcIterations, signal);
+    const deltas = savingsAgeRowDeltas(shift.minDelta, shift.maxDelta);
+    const reported = personOf(base, shift.reportedWho);
+    const otherWho = shift.shifted.find(w => w !== shift.reportedWho);
+    const units = deltas.length;
+
+    interface RowWork {
+        draft: SavingsRowDraft;
+        at: ReturnType<typeof heldStrategyAtAge>;
+        yearsToRetirement: number;
+        successRateAtCurrent: number;
+    }
+    const work = new Map<number, RowWork>();
+
+    // The MC answer sits well above the deterministic one (average returns
+    // every year is optimistic), by a ratio that changes slowly with age. A
+    // row's step-up therefore starts from a guess — its own deterministic
+    // answer × the nearest finished row's ratio, toward the plan — rather than
+    // climbing from the deterministic answer. So rows run outward from the
+    // plan's own: 0, +1, −1, +2, −2, …
+    const order = [...deltas].sort((a, b) => Math.abs(a) - Math.abs(b) || b - a);
+    const ratioToward = (delta: number): number | null => {
+        const inward = delta > 0 ? -1 : 1;
+        for (let d = delta + inward; ; d += inward) {
+            const w = work.get(d);
+            if (w) {
+                const r = w.draft;
+                if (!r.clears || r.neededSavings === null || !r.heldDeterministic) return null;
+                return Math.max(1, r.neededSavings / r.heldDeterministic);
+            }
+            if (d === 0) return null;
+        }
+    };
+
+    for (let i = 0; i < order.length; i++) {
+        const delta = order[i];
+        const rowProgress = (f: number) => onFraction((i + Math.max(0, Math.min(1, f))) / units);
+        const rowInputs = applyAssignment(applyRetirementShift(base, shift, delta).inputs, held);
+        const at = heldStrategyAtAge(rowInputs, runMc, signal);
+        const yearsToRetirement = reported.retirementAge + delta - reported.age;
+        const heldDeterministic = await at.deterministicNeed(searchCap, currentSavings, scale);
+        rowProgress(ROW_DET_SHARE);
+
+        if (delta === 0) {
+            // The headline answer, copied exactly; only the held-strategy
+            // deterministic answer is new (for the smoothing's shape check and
+            // the other rows' starting guess).
+            work.set(delta, {
+                draft: {
+                    delta, isPlan: true, status: 'found',
+                    neededSavings: planRow.neededSavings,
+                    clears: planRow.clears,
+                    stepUpCapHit: planRow.stepUpCapHit,
+                    boundHit: planRow.boundHit,
+                    clearsAtCurrent: planRow.successRateAtCurrent >= mcSuccessTarget,
+                    heldDeterministic,
+                },
+                at, yearsToRetirement,
+                successRateAtCurrent: planRow.successRateAtCurrent,
+            });
+            rowProgress(1);
+            continue;
+        }
+
+        const atCurrent = await at.mcAt(currentSavings);
+        rowProgress(ROW_DET_SHARE + ROW_CURRENT_MC_SHARE);
+        const clearsAtCurrent = atCurrent.successRate >= mcSuccessTarget;
+
+        let draft: SavingsRowDraft;
+        if (heldDeterministic === null) {
+            draft = {
+                delta, isPlan: false, status: 'unreachable', neededSavings: null,
+                clears: false, stepUpCapHit: false, boundHit: false, clearsAtCurrent, heldDeterministic,
+            };
+        } else {
+            const ratio = ratioToward(delta);
+            const stepPlan = {
+                target: mcSuccessTarget, start: heldDeterministic, cap: searchCap, minStepBase: scale,
+                firstProbe: ratio === null ? undefined : heldDeterministic * ratio,
+                maxProbes: SAVINGS_ROW_MAX_STEPUP_PROBES,
+                precisionAbs: SAVINGS_ROW_MC_PRECISION_ABS, precisionRel: SAVINGS_ROW_MC_PRECISION_REL,
+            };
+            // The MC already run at current savings is a measurement the
+            // step-up may use — but only at or above its start, which it
+            // never goes below.
+            const mcProbes: SavingsProbeResult[] = currentSavings >= heldDeterministic && currentSavings <= searchCap
+                ? [{ total: currentSavings, successRate: atCurrent.successRate }]
+                : [];
+            const seeded = mcProbes.length;
+            let step: SavingsStepUpAction = planSavingsStepUp(stepPlan, mcProbes);
+            while (step.kind === 'probe') {
+                const mc = await at.mcAt(step.total);
+                mcProbes.push({ total: step.total, successRate: mc.successRate });
+                rowProgress(ROW_DET_SHARE + ROW_CURRENT_MC_SHARE + (1 - ROW_DET_SHARE - ROW_CURRENT_MC_SHARE)
+                    * Math.min(1, (mcProbes.length - seeded) / EXPECTED_ROW_STEPUP_PROBES));
+                step = planSavingsStepUp(stepPlan, mcProbes);
+            }
+            draft = {
+                delta, isPlan: false, status: 'found', neededSavings: step.total,
+                clears: stepUpClears(step),
+                stepUpCapHit: step.kind === 'capHit',
+                boundHit: step.kind === 'boundHit',
+                clearsAtCurrent, heldDeterministic,
+            };
+        }
+        work.set(delta, { draft, at, yearsToRetirement, successRateAtCurrent: atCurrent.successRate });
+        rowProgress(1);
+    }
+
+    const sorted = deltas.map(d => work.get(d)!);
+    const reconciled = reconcileSavingsAgeRows(sorted.map(w => w.draft), currentSavings);
+    return reconciled.map((r, i): SavingsAgeRow => {
+        const w = sorted[i];
+        const neededSavings = r.neededSavings;
+        return {
+            delta: r.delta,
+            retirementAge: reported.retirementAge + r.delta,
+            otherRetirementAge: otherWho ? personOf(base, otherWho).retirementAge + r.delta : undefined,
+            isPlan: r.isPlan,
+            status: r.status,
+            neededSavings,
+            // Plan row: the headline's figures. Otherwise the held strategy's
+            // runs at this row's (reconciled) need and at current savings —
+            // cached when the searches already ran them.
+            neededAtRetirement: r.isPlan
+                ? planRow.neededAtRetirement
+                : neededSavings === null ? null : householdSavingsAtRetirement(w.at.runAt(neededSavings).results, w.yearsToRetirement),
+            currentAtRetirement: r.isPlan
+                ? planRow.currentAtRetirement
+                : householdSavingsAtRetirement(w.at.runAt(currentSavings).results, w.yearsToRetirement),
+            savingsGap: neededSavings === null ? null : neededSavings - currentSavings,
+            haveEnough: r.isPlan ? planRow.haveEnough : r.clears && neededSavings !== null && neededSavings <= currentSavings,
+            successRateAtCurrent: w.successRateAtCurrent,
+            clears: r.clears,
+            stepUpCapHit: r.stepUpCapHit,
+            boundHit: r.boundHit,
+        };
+    });
 }
 
 // Merge only the fields the optimizer searched from `recommended` onto a fresh

@@ -15,18 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tries different CPP and OAS start ages, RRSP meltdown amounts and which
   accounts to take money from first. If you're still working, it shows what you'd
   need on the day you retire next to what you're on track for, and what that
-  means in savings today, all in today's dollars. If you already have enough, it
-  says how much lower your savings could be. There is no Apply, since your
-  savings are what they are; Save as new plan keeps a copy at the amount needed.
+  means in savings today, all in today's dollars. It also shows the other way
+  to get there, saving as you go: about how much less to spend each year before
+  you retire, saving the difference. A table shows what you'd need retiring a
+  few years earlier or later. If you already have enough, it says how much lower
+  your savings could be. There is no Apply, since your savings are what they
+  are; Save as new plan keeps a copy at the amount needed, and a second button
+  saves the save-as-you-go plan.
 - **New "How much do I need to retire?" page** at
   [craptool.ca/how-much-do-i-need-to-retire](https://craptool.ca/how-much-do-i-need-to-retire/).
   Enter your age, the age you want to retire, province, income, savings,
   spending, any workplace pension and an optional spouse, pick how sure you want
-  to be, and it finds the savings you need, with the same answer as the
-  optimizer. With no savings entered, it assumes a TFSA first, up to the room you
-  could have built up by now, then an RRSP. "See the full plan" opens the result
-  as a new plan in the full planner (e.g. "Retire at 60 with $1.2M"). It is in
-  the **Tools** menu, and it and "When can I retire?" link to each other.
+  to be, and it finds the savings you need, with the same answer, save-as-you-go
+  amount and table of nearby ages as the optimizer. With no savings entered, it
+  assumes a TFSA first, up to the room you could have built up by now, then an
+  RRSP. "See the full plan" opens the result as a new plan in the full planner
+  (e.g. "Retire at 60 with $1.2M"), and a second link opens the save-as-you-go
+  plan (e.g. "Retire at 60, save $14k/yr more"). It is in the **Tools** menu,
+  and it and "When can I retire?" link to each other.
 
 ## [0.13.0] - 2026-10-12
 

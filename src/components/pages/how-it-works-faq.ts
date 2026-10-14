@@ -9,10 +9,15 @@
  * Keep answers as plain text: they feed both the on-page prose and the
  * structured-data `acceptedAnswer.text`, so editing here updates both and
  * prevents the two copies from drifting apart.
+ *
+ * `links` is optional and only affects the on-page prose: each entry's `text`
+ * must appear verbatim in `answer`, and `FaqAnswer` turns its first occurrence
+ * into a link. The JSON-LD keeps the plain `answer` string.
  */
 export interface FaqItem {
     question: string;
     answer: string;
+    links?: { text: string; href: string }[];
 }
 
 export const FAQ_ITEMS: FaqItem[] = [

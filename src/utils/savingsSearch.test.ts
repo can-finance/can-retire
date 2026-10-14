@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { NonRegisteredAccount, Person, SimulationInputs, SimulationResult } from '../engine/types';
+import { runSimulation } from '../engine/projection';
 import {
     householdSavings,
     savingsBasis,
@@ -14,6 +15,14 @@ import {
     planSavingsStepUp,
     planSavingsFraming,
     householdSavingsAtRetirement,
+    preRetirementSpendYears,
+    savingsPerYearScale,
+    savingsPerYearHint,
+    savingsPerYearBisectionPlan,
+    savingsPerYearStepUpPlan,
+    savingsAgeRowDeltas,
+    reconcileRowNeed,
+    reconcileSavingsAgeRows,
     SAVINGS_CAP_MIN,
     SAVINGS_DET_PRECISION_ABS,
     SAVINGS_DET_PRECISION_REL,
@@ -21,12 +30,20 @@ import {
     SAVINGS_MC_PRECISION_REL,
     SAVINGS_GRANULARITY,
     DEFAULT_MAX_SAVINGS_STEPUP_PROBES,
+    PER_YEAR_GRANULARITY,
+    PER_YEAR_PRECISION_ABS,
+    PER_YEAR_PRECISION_REL,
+    PER_YEAR_DET_PRECISION_ABS,
+    PER_YEAR_DET_PRECISION_REL,
+    PER_YEAR_SCALE_MIN,
 } from './savingsSearch';
 import type {
     SavingsBisectionAction,
     SavingsBisectionPlan,
     SavingsFeasibilityProbe,
     SavingsProbeResult,
+    SavingsRowDraft,
+    SavingsRowNeed,
     SavingsStepUpAction,
     SavingsStepUpPlan,
 } from './savingsSearch';
@@ -673,5 +690,324 @@ describe('householdSavingsAtRetirement', () => {
         expect(householdSavingsAtRetirement(rows, 0)).toBeNull();
         expect(householdSavingsAtRetirement(rows, 9)).toBeNull();
         expect(householdSavingsAtRetirement([], 3)).toBeNull();
+    });
+});
+
+// --- MC step-up: a first-probe hint and handed-in probes ---------------------
+
+describe('planSavingsStepUp (first-probe hint, handed-in probes)', () => {
+    it('probes the hint first, rounded up to the grid and kept within [start, cap]', () => {
+        expect(planSavingsStepUp(stepPlan(600_000, { firstProbe: 812_345 }), []))
+            .toEqual({ kind: 'probe', total: 813_000 });
+        expect(planSavingsStepUp(stepPlan(600_000, { firstProbe: 400_000 }), []))
+            .toEqual({ kind: 'probe', total: 600_000 });
+        expect(planSavingsStepUp(stepPlan(600_000, { firstProbe: 9_000_000 }), []))
+            .toEqual({ kind: 'probe', total: CAP });
+    });
+
+    it('a hint that misses steps up from it, gap-scaled', () => {
+        // 5 pp short: +8% of 813k.
+        expect(planSavingsStepUp(stepPlan(600_000, { firstProbe: 812_345 }), [{ total: 813_000, successRate: 80 }]))
+            .toEqual({ kind: 'probe', total: 879_000 });
+    });
+
+    it('a hint that clears steps DOWN toward the start, gap-scaled, never below it', () => {
+        const plan = stepPlan(600_000, { firstProbe: 812_345 });
+        // 2 pp over: −4% of 813k (32,520), rounded down to the grid.
+        expect(planSavingsStepUp(plan, [{ total: 813_000, successRate: 87 }])).toEqual({ kind: 'probe', total: 780_000 });
+        // 14 pp over: −15%.
+        expect(planSavingsStepUp(plan, [{ total: 813_000, successRate: 99 }])).toEqual({ kind: 'probe', total: 691_000 });
+        // A step past the start lands on the start.
+        const near = stepPlan(600_000, { firstProbe: 620_000 });
+        expect(planSavingsStepUp(near, [{ total: 620_000, successRate: 95 }])).toEqual({ kind: 'probe', total: 600_000 });
+        // The start clears too: done there. It misses: bisect the bracket.
+        expect(planSavingsStepUp(near, [{ total: 620_000, successRate: 95 }, { total: 600_000, successRate: 90 }]))
+            .toEqual({ kind: 'done', total: 600_000, successRate: 90 });
+        expect(planSavingsStepUp(near, [{ total: 620_000, successRate: 95 }, { total: 600_000, successRate: 80 }]))
+            .toEqual({ kind: 'probe', total: 610_000 });
+    });
+
+    it('a handed-in clear above the start steps down; a handed-in miss steps up from it', () => {
+        expect(planSavingsStepUp(stepPlan(400_000), [{ total: 1_000_000, successRate: 97 }]))
+            .toEqual({ kind: 'probe', total: 850_000 }); // 12 pp over: −15%
+        expect(planSavingsStepUp(stepPlan(400_000), [{ total: 1_000_000, successRate: 60 }]))
+            .toEqual({ kind: 'probe', total: 1_300_000 }); // 25 pp short: +30%
+    });
+
+    it('consults the hint while it lies inside the bracket, after a handed-in probe', () => {
+        const plan = stepPlan(400_000, { firstProbe: 700_000 });
+        expect(planSavingsStepUp(plan, [{ total: 1_000_000, successRate: 97 }])).toEqual({ kind: 'probe', total: 700_000 });
+        expect(planSavingsStepUp(plan, [{ total: 500_000, successRate: 60 }])).toEqual({ kind: 'probe', total: 700_000 });
+        // Below a miss, the hint is already ruled out: step up from the miss.
+        expect(planSavingsStepUp(plan, [{ total: 1_000_000, successRate: 60 }])).toEqual({ kind: 'probe', total: 1_300_000 });
+    });
+
+    it('flags a cap hit that still clears when the budget runs out stepping down', () => {
+        expect(planSavingsStepUp(stepPlan(400_000, { maxProbes: 2 }), [
+            { total: 1_000_000, successRate: 97 }, { total: 850_000, successRate: 95 },
+        ])).toEqual({ kind: 'capHit', total: 850_000, successRate: 95, cleared: true });
+    });
+
+    it('from any reasonable hint, converges to the smallest clearing total, never below the start or re-probing', () => {
+        const start = 700_000;
+        for (let x = 500_000; x <= 2_100_000; x += 37_777) {
+            for (const f of [0.5, 0.8, 0.95, 1, 1.1, 1.3]) {
+                const { action, probes } = runStepUp(stepPlan(start, { firstProbe: x * f }), t => (t >= x ? 90 : 50));
+                const totals = probes.map(p => p.total);
+                expect(new Set(totals).size).toBe(totals.length);
+                expect(totals.every(t => t >= start)).toBe(true);
+                expect(probes.length).toBeLessThanOrEqual(DEFAULT_MAX_SAVINGS_STEPUP_PROBES);
+                expect(action.kind).toBe('done');
+                const found = (action as { total: number }).total;
+                if (x <= start) {
+                    expect(found).toBe(start);
+                } else {
+                    expect(found).toBeGreaterThanOrEqual(x);
+                    expect(found - x).toBeLessThanOrEqual(mcPrecision(found));
+                }
+            }
+        }
+    });
+
+    it('a wildly high hint still reports a clearing total, flagged when the budget runs out', () => {
+        const { action, probes } = runStepUp(stepPlan(700_000, { firstProbe: 4_000_000 }), t => (t >= 800_000 ? 90 : 50));
+        expect(probes.length).toBeLessThanOrEqual(DEFAULT_MAX_SAVINGS_STEPUP_PROBES);
+        expect(action.kind === 'done' || (action.kind === 'capHit' && action.cleared)).toBe(true);
+        expect((action as { total: number }).total).toBeGreaterThanOrEqual(800_000);
+    });
+});
+
+// --- Per-year framing -------------------------------------------------------
+
+describe('preRetirementSpendYears', () => {
+    it('counts the years until the last earner retires', () => {
+        expect(preRetirementSpendYears(inputs({ person: person({ age: 50, retirementAge: 60 }) }))).toBe(10);
+        expect(preRetirementSpendYears(inputs({
+            person: person({ age: 50, retirementAge: 60 }),
+            spouse: person({ age: 45, retirementAge: 65 }),
+        }))).toBe(20);
+        // Primary retired, spouse still working: the spouse's years.
+        expect(preRetirementSpendYears(inputs({
+            person: person({ age: 63, retirementAge: 60 }),
+            spouse: person({ age: 55, retirementAge: 63 }),
+        }))).toBe(8);
+    });
+
+    it('is 0 once everyone has retired (retiring this year counts)', () => {
+        expect(preRetirementSpendYears(inputs({ person: person({ age: 66, retirementAge: 65 }) }))).toBe(0);
+        expect(preRetirementSpendYears(inputs({ person: person({ age: 60, retirementAge: 60 }) }))).toBe(0);
+    });
+
+    it('matches the years the engine actually charges preRetirementSpend', () => {
+        // Staggered couple: the household spends at the pre-retirement level
+        // until the LATER retiree stops working, not the primary.
+        const base = inputs({
+            person: person({ age: 50, retirementAge: 55, currentIncome: 90_000 }),
+            spouse: person({ age: 48, retirementAge: 58, currentIncome: 60_000 }),
+            preRetirementSpend: 70_000, postRetirementSpend: 50_000,
+        });
+        const rows = runSimulation(base);
+        const preYears = rows.map(r => Math.abs(r.spending - 70_000 * r.inflationFactor) < 1e-6);
+        expect(preRetirementSpendYears(base)).toBe(10);
+        expect(preYears.filter(Boolean)).toHaveLength(10);
+        expect(preYears.slice(0, 10).every(Boolean)).toBe(true);
+    });
+});
+
+describe('savingsPerYearScale / savingsPerYearHint', () => {
+    it('scale: the at-retirement gap over the years, rounded up to $100, within [floor, cap]', () => {
+        expect(savingsPerYearScale(120_000, 10, 60_000)).toBe(12_000);
+        expect(savingsPerYearScale(120_050, 10, 60_000)).toBe(12_100);
+        expect(savingsPerYearScale(5_000, 10, 60_000)).toBe(PER_YEAR_SCALE_MIN);
+        expect(savingsPerYearScale(-5_000, 10, 60_000)).toBe(PER_YEAR_SCALE_MIN);
+        expect(savingsPerYearScale(1_000_000, 5, 60_000)).toBe(60_000);
+        expect(savingsPerYearScale(120_000, 0, 60_000)).toBe(60_000);
+        expect(savingsPerYearScale(5_000, 10, 500)).toBe(500); // the cap wins over the floor
+    });
+
+    it('hint: the gap over the measured slope, at most the cap; none without a usable slope', () => {
+        expect(savingsPerYearHint(300_000, 15, 60_000)).toBe(20_000);
+        expect(savingsPerYearHint(3_000_000, 15, 60_000)).toBe(60_000);
+        expect(savingsPerYearHint(300_000, 0, 60_000)).toBeNull();
+        expect(savingsPerYearHint(300_000, -2, 60_000)).toBeNull();
+        expect(savingsPerYearHint(0, 15, 60_000)).toBeNull();
+    });
+});
+
+describe('per-year search plans', () => {
+    it('deterministic: from R = 0, up to spending nothing before retiring, on the $100 grid', () => {
+        expect(savingsPerYearBisectionPlan(55_000, 12_000)).toEqual({
+            start: 0, cap: 55_000, expandFloor: 12_000,
+            precisionAbs: PER_YEAR_DET_PRECISION_ABS, precisionRel: PER_YEAR_DET_PRECISION_REL,
+            granularity: PER_YEAR_GRANULARITY,
+        });
+        const detPrecisionR = (hi: number) => Math.max(PER_YEAR_DET_PRECISION_ABS, PER_YEAR_DET_PRECISION_REL * hi);
+        for (let threshold = 0; threshold <= 55_000; threshold += 1_234) {
+            const { action, probes } = runBisection(savingsPerYearBisectionPlan(55_000, 12_000), threshold);
+            expect(probes[0].total).toBe(0);
+            expect(probes.every(p => p.total % PER_YEAR_GRANULARITY === 0 && p.total <= 55_000)).toBe(true);
+            expect(action.kind).toBe('found');
+            const found = (action as { total: number }).total;
+            expect(found).toBeGreaterThanOrEqual(threshold);
+            expect(found - threshold).toBeLessThanOrEqual(detPrecisionR(found));
+        }
+        // Even spending nothing before retiring falls short.
+        const { action, probes } = runBisection(savingsPerYearBisectionPlan(55_000, 12_000), 60_000);
+        expect(action).toEqual({ kind: 'unreachable' });
+        expect(probes.map(p => p.total)).toEqual([0, 12_000, 24_000, 48_000, 55_000]);
+    });
+
+    it('MC: from the deterministic answer (or the hint), to max($500, 2.5%), never past the spending', () => {
+        expect(savingsPerYearStepUpPlan(85, 8_000, 55_000, 12_000, 14_321)).toEqual({
+            target: 85, start: 8_000, cap: 55_000, minStepBase: 12_000, firstProbe: 14_321,
+            precisionAbs: PER_YEAR_PRECISION_ABS, precisionRel: PER_YEAR_PRECISION_REL,
+            granularity: PER_YEAR_GRANULARITY,
+        });
+        expect(savingsPerYearStepUpPlan(85, 8_000, 55_000, 12_000).firstProbe).toBeUndefined();
+        expect(planSavingsStepUp(savingsPerYearStepUpPlan(85, 8_000, 55_000, 12_000, 14_321), []))
+            .toEqual({ kind: 'probe', total: 14_400 });
+
+        const precisionR = (clear: number) => Math.max(PER_YEAR_PRECISION_ABS, PER_YEAR_PRECISION_REL * clear);
+        for (let x = 8_000; x <= 55_000; x += 2_345) {
+            for (const hint of [null, x * 0.8, x * 1.2]) {
+                const { action, probes } = runStepUp(savingsPerYearStepUpPlan(85, 8_000, 55_000, 12_000, hint), t => (t >= x ? 90 : 50));
+                expect(probes.every(p => p.total >= 8_000 && p.total <= 55_000)).toBe(true);
+                expect(action.kind).toBe('done');
+                const found = (action as { total: number }).total;
+                expect(found).toBeGreaterThanOrEqual(x);
+                expect(found - x).toBeLessThanOrEqual(precisionR(found));
+            }
+        }
+        // Even R = the whole pre-retirement spend misses: a bound hit at the cap.
+        const { action } = runStepUp(savingsPerYearStepUpPlan(85, 8_000, 55_000, 12_000), () => 60);
+        expect(action.kind).toBe('boundHit');
+    });
+});
+
+// --- Savings needed at each retirement age ---------------------------------
+
+describe('savingsAgeRowDeltas', () => {
+    it('−3 … +3 around the plan, clamped to the bounds, always including the plan itself', () => {
+        expect(savingsAgeRowDeltas(-10, 10)).toEqual([-3, -2, -1, 0, 1, 2, 3]);
+        expect(savingsAgeRowDeltas(-2, 10)).toEqual([-2, -1, 0, 1, 2, 3]);
+        expect(savingsAgeRowDeltas(-10, 1)).toEqual([-3, -2, -1, 0, 1]);
+        expect(savingsAgeRowDeltas(-1, 0)).toEqual([-1, 0]);
+        // A plan age past the search's upper bound still gets its own row.
+        expect(savingsAgeRowDeltas(-10, -2)).toEqual([-3, -2, 0]);
+        expect(savingsAgeRowDeltas(-10, -5)).toEqual([0]);
+    });
+});
+
+const need = (over: Partial<SavingsRowNeed> = {}): SavingsRowNeed => ({
+    status: 'found', neededSavings: 600_000, clears: true, stepUpCapHit: false, boundHit: false, ...over,
+});
+
+describe('reconcileRowNeed', () => {
+    const CURRENT = 500_000;
+
+    it('clears at current savings: needs no more than current, and clears there', () => {
+        expect(reconcileRowNeed(need(), CURRENT, true)).toEqual(need({ neededSavings: CURRENT }));
+        const fine = need({ neededSavings: 450_000 });
+        expect(reconcileRowNeed(fine, CURRENT, true)).toBe(fine);
+        // Even when the step-up found nothing that clears.
+        expect(reconcileRowNeed(need({ neededSavings: 2_000_000, clears: false, boundHit: true }), CURRENT, true))
+            .toEqual(need({ neededSavings: CURRENT }));
+        expect(reconcileRowNeed(need({ status: 'unreachable', neededSavings: null, clears: false }), CURRENT, true))
+            .toEqual(need({ neededSavings: CURRENT }));
+    });
+
+    it('misses at current savings: needs at least one grid step more than current', () => {
+        expect(reconcileRowNeed(need({ neededSavings: 450_000 }), CURRENT, false).neededSavings).toBe(501_000);
+        expect(reconcileRowNeed(need({ neededSavings: 450_000 }), 487_654.32, false).neededSavings).toBe(488_000);
+        const fine = need();
+        expect(reconcileRowNeed(fine, CURRENT, false)).toBe(fine);
+        const none = need({ status: 'unreachable', neededSavings: null, clears: false });
+        expect(reconcileRowNeed(none, CURRENT, false)).toBe(none);
+    });
+
+    it('keeps the rest of the row', () => {
+        const row = { ...need({ neededSavings: 450_000 }), delta: 2 };
+        expect(reconcileRowNeed(row, CURRENT, false)).toEqual({ ...row, neededSavings: 501_000 });
+    });
+});
+
+describe('reconcileSavingsAgeRows', () => {
+    const CURRENT = 500_000;
+    const draft = (delta: number, neededSavings: number | null, heldDeterministic: number | null,
+        over: Partial<SavingsRowDraft> = {}): SavingsRowDraft => ({
+        delta, isPlan: delta === 0, status: 'found', neededSavings, clears: true,
+        stepUpCapHit: false, boundHit: false, clearsAtCurrent: false, heldDeterministic, ...over,
+    });
+    const needs = (rows: SavingsRowDraft[]) => rows.map(r => r.neededSavings);
+
+    it('smooths MC wobble so a later age needs no more, anchored on the plan row', () => {
+        const rows = [
+            draft(-2, 900_000, 600_000),
+            draft(-1, 780_000, 560_000), // below the plan: raised to it
+            draft(0, 800_000, 520_000),
+            draft(1, 820_000, 480_000),  // above the plan: lowered to it
+            draft(2, 700_000, 440_000),
+        ];
+        const out = reconcileSavingsAgeRows(rows, CURRENT);
+        expect(needs(out)).toEqual([900_000, 800_000, 800_000, 800_000, 700_000]);
+        expect(out[2]).toBe(rows[2]); // the plan row is never touched
+    });
+
+    it('chains outward from the plan', () => {
+        const out = reconcileSavingsAgeRows([
+            draft(0, 800_000, 520_000), draft(1, 850_000, 480_000), draft(2, 900_000, 440_000),
+        ], CURRENT);
+        expect(needs(out)).toEqual([800_000, 800_000, 800_000]);
+    });
+
+    it('leaves rows alone where the deterministic answers rise with age (spending more than earning while working)', () => {
+        const rising = [draft(-1, 700_000, 400_000), draft(0, 800_000, 500_000), draft(1, 900_000, 600_000)];
+        expect(needs(reconcileSavingsAgeRows(rising, CURRENT))).toEqual([700_000, 800_000, 900_000]);
+        // …but deterministic answers within the search's precision count as agreeing.
+        const flat = [draft(0, 800_000, 500_000), draft(1, 820_000, 510_000)];
+        expect(needs(reconcileSavingsAgeRows(flat, CURRENT))).toEqual([800_000, 800_000]);
+    });
+
+    it('does not smooth across a row that does not clear', () => {
+        const out = reconcileSavingsAgeRows([
+            draft(0, 800_000, 520_000),
+            draft(1, 2_000_000, 480_000, { clears: false, boundHit: true }),
+            draft(2, 850_000, 440_000),
+        ], CURRENT);
+        expect(needs(out)).toEqual([800_000, 2_000_000, 850_000]);
+        expect(out[1].clears).toBe(false);
+    });
+
+    it('a row’s own MC at current savings outranks its neighbour', () => {
+        // The plan has enough; the next row missed at current savings, so
+        // smoothing it down to the plan's amount would contradict it.
+        const later = reconcileSavingsAgeRows([
+            draft(0, 480_000, 520_000, { clearsAtCurrent: true }),
+            draft(1, 530_000, 480_000),
+        ], CURRENT);
+        expect(needs(later)).toEqual([480_000, 501_000]);
+        // An earlier row that cleared at current savings is never raised past them.
+        const earlier = reconcileSavingsAgeRows([
+            draft(-1, 450_000, 560_000, { clearsAtCurrent: true }),
+            draft(0, 600_000, 520_000),
+        ], CURRENT);
+        expect(needs(earlier)).toEqual([CURRENT, 600_000]);
+    });
+
+    it('reconciles every estimated row with its own MC at current savings', () => {
+        const out = reconcileSavingsAgeRows([
+            draft(-1, 650_000, 560_000, { clearsAtCurrent: true }), // cleared at current: needs current at most
+            draft(0, 600_000, 520_000),
+            draft(1, null, null, { status: 'unreachable', clears: false }),
+        ], CURRENT);
+        expect(needs(out)).toEqual([CURRENT, 600_000, null]);
+        expect(out[2].status).toBe('unreachable');
+    });
+
+    it('is pure', () => {
+        const rows = [draft(0, 800_000, 520_000), draft(1, 850_000, 480_000)];
+        const snapshot = structuredClone(rows);
+        reconcileSavingsAgeRows(rows, CURRENT);
+        expect(rows).toEqual(snapshot);
     });
 });
