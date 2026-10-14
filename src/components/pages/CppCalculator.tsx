@@ -12,6 +12,7 @@ import {
     parseStatementEarnings,
     maxAnnualBenefitAt65,
     ympeFor,
+    birthYearFromAge,
     LATEST_DATA_YEAR,
 } from '../../engine/cppDetailed';
 import { sanitizeSimulationInputs, INITIAL_INPUTS } from '../../utils/inputSanitizer';
@@ -213,7 +214,7 @@ export function CppCalculator() {
         setTimeout(() => setLinkCopied(false), 2500);
     };
 
-    const birthYear = LATEST_DATA_YEAR - state.currentAge;
+    const birthYear = birthYearFromAge(state.currentAge);
     const startAge = Math.min(Math.max(state.startAge, 60), 70);
 
     const update = (patch: Partial<CppCalcState>) => { setAppliedTo(null); setState({ ...state, ...patch }); };
@@ -683,7 +684,9 @@ export function CppCalculator() {
                             </div>
                             <div className="bg-slate-50 rounded-xl p-3">
                                 <p className="text-2xl font-bold text-slate-900">{nonZeroEarningYears}</p>
-                                <p className="text-xs text-slate-500 font-medium">Years with earnings<br />entered</p>
+                                <p className="text-xs text-slate-500 font-medium">
+                                    {state.mode === 'simple' ? <>Years with<br />earnings</> : <>Years with earnings<br />entered</>}
+                                </p>
                             </div>
                             <div className="bg-slate-50 rounded-xl p-3">
                                 <p className="text-2xl font-bold text-slate-900">{result.generalDropoutYears.toFixed(1)}</p>
@@ -706,8 +709,19 @@ export function CppCalculator() {
                                     <strong className="text-slate-800">Contributory period.</strong>{' '}
                                     Every year from age 18 until your pension starts counts — for you,{' '}
                                     <strong className="text-slate-800">{firstContribYear}–{lastContribYear}</strong> ({result.contributoryYears} years).
-                                    You entered earnings in <strong className="text-slate-800">{nonZeroEarningYears}</strong> of them;
-                                    blank years count as zero, and the lowest years are dropped in step 3.
+                                    {/* Simple mode builds the yearly earnings from an average salary
+                                        and working ages, so nothing was "entered" year by year. */}
+                                    {state.mode === 'simple' ? (
+                                        <>
+                                            You worked <strong className="text-slate-800">{nonZeroEarningYears}</strong> of them;
+                                            years you didn't work count as zero, and the lowest years are dropped in step 3.
+                                        </>
+                                    ) : (
+                                        <>
+                                            You entered earnings in <strong className="text-slate-800">{nonZeroEarningYears}</strong> of them;
+                                            blank years count as zero, and the lowest years are dropped in step 3.
+                                        </>
+                                    )}
                                     {startAge > 65 && (
                                         <> Years after 65 aren't added to the window — they can only replace lower years.</>
                                     )}
