@@ -88,6 +88,17 @@ and never upscales.
 - `dashboard-tour.mjs` — scene-based tutorial starting from a saved plan. Copy it to start a long one.
 - `all-inputs.mjs` — scene-based walk through every dashboard input, one scene per input section. Captions use `{ pos: 'right' }` (bottom of the chart column) so they never cover the inputs, and it hides help tooltips except where it hovers one on purpose.
 
+## Bug hunting
+
+Every video doubles as a bug hunt. While reading the app's code to write
+captions, and while checking frames, note anything wrong or confusing: numbers
+that look off, behaviour that contradicts a label, tooltip or How It Works,
+broken or cramped layout, duplicated or stale copy, controls that do nothing in
+the state shown. Record each with `file:line` and report it with the video. Don't
+fix app code from here: app fixes happen on main, once they've been agreed. The
+first videos found several real bugs this way, including one-time events not
+being adjusted for inflation and the RRSP melt starting at 60.
+
 ## Notes for new tutorials
 
 - The run prints each click and caption with an approximate timestamp in the final
