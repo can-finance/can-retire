@@ -508,11 +508,11 @@ function cashFlowSection(
             expected,
             actual: available,
             residual: available - expected,
-            // The withdrawal solvers size a gross-up from a marginal-tax estimate that
-            // is not the tax the year is finally assessed at (different credit
-            // arguments and a $1 binary-search tolerance), so a small residual is
-            // inherent to the engine rather than to this reconciliation.
-            note: 'Any small difference comes from the tax estimated when withdrawals were sized, versus the final tax calculated for the year.'
+            // The withdrawal solvers price each gross-up on the year's assessed tax
+            // function, but their binary searches stop within $1 of the target net,
+            // and a year can run several of them — so a residual of a dollar or two
+            // is inherent to the engine rather than to this reconciliation.
+            note: 'Any small difference comes from rounding when withdrawals were sized: each one is solved to within about $1 of the amount needed.'
         }
     };
 }

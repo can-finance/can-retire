@@ -90,17 +90,21 @@ const TFSA_ONLY = inputs({
     postRetirementSpend: 40_000
 });
 
-// First INITIAL_INPUTS year whose cash-flow check has residual >= $1 — the
-// engine-inherent gap documented in yearAudit.test.ts (stale-age solver estimate
-// vs. final assessed tax). Located at test time rather than hardcoded so this
-// stays correct if the engine's drift characteristics change.
-function findCashFlowResidualIndex(ins: SimulationInputs): { index: number; results: ReturnType<typeof runSimulation> } {
+// A real INITIAL_INPUTS run with a $250 cash-flow residual injected into one year
+// (its tax bill understated, so cash available overshoots the target). The
+// engine's own residual is binary-search noise, under $1 in every year since the
+// withdrawal solvers price draws with the assessed credits (2026-10-14), so the
+// "unexplained" rendering path needs a deliberate break rather than relying on
+// engine drift to supply one.
+const INJECTED_RESIDUAL = 250;
+function injectCashFlowResidual(ins: SimulationInputs): { index: number; results: ReturnType<typeof runSimulation> } {
     const results = runSimulation(ins);
-    for (let i = 0; i < results.length; i++) {
-        const check = buildYearAudit(ins, results, i).sections.find(s => s.key === 'cashFlow')!.check;
-        if (check && Math.abs(check.residual) >= 1) return { index: i, results };
-    }
-    throw new Error('Fixture assumption broken: expected a cash-flow residual >= $1 somewhere in INITIAL_INPUTS');
+    const index = results.findIndex(r => r.taxPaid > INJECTED_RESIDUAL && r.shortfall === 0);
+    if (index < 0) throw new Error('Fixture assumption broken: expected a taxed, fully funded year in INITIAL_INPUTS');
+    results[index] = { ...results[index], taxPaid: results[index].taxPaid - INJECTED_RESIDUAL };
+    const check = buildYearAudit(ins, results, index).sections.find(s => s.key === 'cashFlow')!.check!;
+    if (Math.abs(check.residual) < 1) throw new Error('Fixture assumption broken: the injected residual did not reach the cash-flow check');
+    return { index, results };
 }
 
 afterEach(() => {
@@ -354,7 +358,7 @@ describe('YearAuditDrawer', () => {
     });
 
     it('shows an "unexplained" residual row when a section check does not balance', () => {
-        const { index, results } = findCashFlowResidualIndex(INITIAL_INPUTS);
+        const { index, results } = injectCashFlowResidual(INITIAL_INPUTS);
         render(
             <YearAuditDrawer
                 inputs={INITIAL_INPUTS} results={results} index={index}
@@ -366,10 +370,9 @@ describe('YearAuditDrawer', () => {
 
     it('shows at most one check row — cashFlow is the only section with one — and it reads "balances" when the residual is small', () => {
         const results = runSimulation(INITIAL_INPUTS);
-        const { index: residualIndex } = findCashFlowResidualIndex(INITIAL_INPUTS);
-        // Pick a year other than the one with the known >=$1 residual, so the
-        // cashFlow check row reads as balancing.
-        const index = residualIndex === 0 ? 1 : 0;
+        // Every INITIAL_INPUTS year balances to within the solver's $1 tolerance, so
+        // any year's cashFlow check row reads as balancing; take the first.
+        const index = 0;
         render(
             <YearAuditDrawer
                 inputs={INITIAL_INPUTS} results={results} index={index}

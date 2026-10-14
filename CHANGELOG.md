@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Withdrawals no longer overshoot your spending in years with dividend or
+  pension tax credits.** When the plan sized an RRSP withdrawal or a
+  non-registered sale to cover spending, it estimated the tax without the
+  dividend, pension and CPP/EI credits the year is finally taxed with, so it
+  took out a little more than needed and the extra cash went unspent (not
+  reinvested). On the default plan that was up to about $900 a year in the first
+  years of retirement; plans living on Canadian dividends or a small pension near
+  the zero-tax line could see more. Withdrawals now match spending to within
+  about a dollar. Previously computed projections change slightly: withdrawals
+  and tax are a little lower in affected years and balances a little higher
+  (the default plan's after-tax estate rises by about $10,000).
+
 ## [0.14.0] - 2026-10-14
 
 ### Added
