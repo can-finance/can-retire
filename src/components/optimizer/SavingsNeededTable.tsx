@@ -1,5 +1,5 @@
 import type { SavingsAgeRow, SavingsNeededResult } from '../../utils/meltdownOptimizer';
-import { formatCurrencyApprox, formatCurrencyCAD, roundCurrencyApprox } from '../../utils/formatters';
+import { formatCurrencyApprox, formatCurrencyCAD, formatSuccessRate, roundCurrencyApprox } from '../../utils/formatters';
 import { HelpTooltip } from '../ui/HelpTooltip';
 import { savingsAgeTableShown } from './savingsNeededSummary';
 
@@ -130,7 +130,7 @@ export function SavingsNeededTable({
                                         meets ? 'text-emerald-700' : 'text-rose-600'
                                     }`}>
                                         <span aria-hidden="true">{meets ? '✓' : '✗'}</span>{' '}
-                                        {r.successRateAtCurrent.toFixed(0)}%
+                                        {formatSuccessRate(r.successRateAtCurrent, target)}
                                         <span className="sr-only">{meets ? ' (meets target)' : ' (below target)'}</span>
                                     </td>
                                 </tr>

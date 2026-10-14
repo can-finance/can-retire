@@ -1,5 +1,6 @@
 import type { EarliestAgeResult } from '../../utils/meltdownOptimizer';
-import { formatCurrencyCAD } from '../../utils/formatters';
+import { Fragment } from 'react';
+import { formatCurrencyCAD, formatSuccessRate } from '../../utils/formatters';
 import { HelpTooltip } from '../ui/HelpTooltip';
 
 /*
@@ -52,9 +53,18 @@ export function EarliestAgeTable({
                         </tr>
                     </thead>
                     <tbody>
-                        {rows.map(r => (
+                        {rows.map((r, i) => (
+                            <Fragment key={r.delta}>
+                            {/* The plan's own age can sit apart from the rows around
+                                the answer; mark the ages skipped in between. */}
+                            {i > 0 && r.delta - rows[i - 1].delta > 1 && (
+                                <tr className="border-b border-slate-100 text-slate-400">
+                                    <td colSpan={showOther ? 6 : 5} className="py-1 pl-2 text-left text-xs">
+                                        ⋯
+                                    </td>
+                                </tr>
+                            )}
                             <tr
-                                key={r.delta}
                                 className={`border-b border-slate-100 last:border-0 ${
                                     r.isAnswer ? 'bg-brand-50 font-semibold text-slate-900' : 'text-slate-700'
                                 }`}
@@ -79,7 +89,7 @@ export function EarliestAgeTable({
                                     r.clearsTarget ? 'text-emerald-700' : 'text-rose-600'
                                 }`}>
                                     <span aria-hidden="true">{r.clearsTarget ? '✓' : '✗'}</span>{' '}
-                                    {r.successRate.toFixed(0)}%
+                                    {formatSuccessRate(r.successRate, target)}
                                     <span className="sr-only">{r.clearsTarget ? ' (meets target)' : ' (below target)'}</span>
                                 </td>
                                 <td className="text-right py-2 pl-4 whitespace-nowrap tabular-nums">
@@ -92,6 +102,7 @@ export function EarliestAgeTable({
                                     {r.couldSpend === null ? '—' : `${formatCurrencyCAD(r.couldSpend)}/yr`}
                                 </td>
                             </tr>
+                            </Fragment>
                         ))}
                     </tbody>
                 </table>

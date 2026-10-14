@@ -2,6 +2,7 @@ import type { SimulationInputs } from '../../engine/types';
 import { INITIAL_INPUTS } from '../../utils/inputSanitizer';
 import { mergeSimpleAnswers, seedToSimpleAnswers, simpleAnswersErrors } from '../onboarding/simplePathMapping';
 import type { SimpleAnswers } from '../onboarding/simplePathMapping';
+import { MAX_SEARCH_RETIREMENT_AGE } from '../../utils/retirementAgeSearch';
 
 /*
  * The /when-can-i-retire/ form and how it becomes a plan.
@@ -167,10 +168,14 @@ export function calculatorFormErrors(form: CalculatorForm, retirementAge: number
 /** Problems that stop the search from running, in plain words. Empty = OK. */
 export function retireFormErrors(form: RetireForm): string[] {
     // The target is checked separately below (it must be later than today, not
-    // just "not earlier").
+    // just "not earlier"), and no later than the latest age the search tries:
+    // past that the table could never show a row for it to compare with.
     const out = calculatorFormErrors(form, planRetirementAge(form));
-    if (form.targetAge !== null && (form.targetAge <= form.age || form.targetAge > 99)) {
-        out.push(`Your target retirement age must be between ${form.age + 1} and 99`);
+    const max = MAX_SEARCH_RETIREMENT_AGE;
+    if (form.targetAge !== null && (form.targetAge <= form.age || form.targetAge > max)) {
+        out.push(form.age + 1 > max
+            ? `A target retirement age can only be compared up to ${max}. Leave it blank to see your earliest age.`
+            : `Your target retirement age must be between ${form.age + 1} and ${max}`);
     }
     return out;
 }

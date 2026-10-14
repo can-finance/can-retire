@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Leaving the optimizer or plan comparison returns you to where you were on the
   dashboard, and opening either starts at the top, instead of keeping a leftover
   scroll position.
+- Success rates in the optimizer and on the "When can I retire?" page are now
+  rounded down, so a rate that misses your target is never shown at or above it
+  (84.6% against an 85% target now reads "✗ 84%", not "✗ 85%").
+- The "When can I retire?" table now always includes a row for your target age
+  (or, in the optimizer, your plan's age), even when the earliest age is several
+  years away from it. Target ages are now limited to 75, the latest age the
+  search checks.
 - The optimizer's CPP/OAS timing tip now says which start ages it actually
   tries (CPP at 60, 65 or 70 and OAS at 65 or 70, plus your current ages), and
   the dashboard's optimizer tips mention all four goals.

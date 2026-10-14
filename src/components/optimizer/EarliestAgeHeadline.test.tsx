@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { EarliestAgeHeadline } from './EarliestAgeHeadline';
+import { EarliestAgeTable } from './EarliestAgeTable';
 import type { EarliestAgeComparison } from './EarliestAgeHeadline';
 import type { EarliestAgeResult, EarliestAgeRow } from '../../utils/meltdownOptimizer';
 
@@ -156,5 +157,49 @@ describe('EarliestAgeHeadline: couples retiring "now"', () => {
         }));
         expect(together).toContain('You and your spouse can retire now, at 52');
         expect(together).toContain('even if you both stop working now');
+    });
+});
+
+// The ✓/✗ marks compare the unrounded rate with the target; the shown percent
+// must never say otherwise, and the headline and table must agree.
+describe('success rates never contradict the target', () => {
+    const tableText = (r: EarliestAgeResult): string[] => {
+        const { container } = render(<EarliestAgeTable result={r} />);
+        return [...container.querySelectorAll('tbody tr')].map(tr => tr.textContent ?? '');
+    };
+
+    it('a rate just under the target is shown below it, in the table and the headline', () => {
+        const r = result({
+            boundHit: true, achievedSuccessRate: 84.6,
+            rows: [row(0, { isAnswer: true, successRate: 84.6, clearsTarget: false })],
+        });
+        const [only] = tableText(r);
+        expect(only).toContain('✗ 84%');
+        expect(only).not.toContain('85%');
+        cleanup();
+        const text = textOf(r);
+        expect(text).toContain('lasts in 84% of market simulations');
+    });
+
+    it('a rate exactly at the target shows the target with a ✓', () => {
+        const r = result({
+            achievedSuccessRate: 85,
+            rows: [row(0, { isAnswer: true, successRate: 85, clearsTarget: true })],
+        });
+        expect(tableText(r)[0]).toContain('✓ 85%');
+        cleanup();
+        expect(textOf(r)).toContain('lasts in 85% of market simulations');
+    });
+
+    it('marks ages skipped between the target row and the rows around the answer', () => {
+        const r = result({
+            answerAge: 65, deltaYears: 5, onTrack: false,
+            rows: [row(0, { successRate: 40, clearsTarget: false }), row(3), row(4), row(5, { isAnswer: true })],
+        });
+        const rows = tableText(r);
+        expect(rows).toHaveLength(5);
+        expect(rows[0]).toContain('60');
+        expect(rows[1].trim()).toBe('⋯');
+        expect(rows[2]).toContain('63');
     });
 });

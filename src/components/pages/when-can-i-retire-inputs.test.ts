@@ -8,7 +8,7 @@ import {
 } from './when-can-i-retire-inputs';
 import type { RetireForm } from './when-can-i-retire-inputs';
 import { INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
-import { planAgeShift } from '../../utils/retirementAgeSearch';
+import { MAX_SEARCH_RETIREMENT_AGE, planAgeShift } from '../../utils/retirementAgeSearch';
 
 const form = (over: Partial<RetireForm> = {}): RetireForm => ({ ...initialRetireForm(), ...over });
 
@@ -121,11 +121,23 @@ describe('/when-can-i-retire/ form → plan', () => {
     });
 
     describe('errors', () => {
-        it('needs a target later than today, and no later than 99', () => {
+        it('needs a target later than today, and no later than the search goes', () => {
+            const max = MAX_SEARCH_RETIREMENT_AGE;
             expect(retireFormErrors(form({ age: 50, targetAge: 50 }))).toHaveLength(1);
             expect(retireFormErrors(form({ age: 50, targetAge: 45 }))).toHaveLength(1);
             expect(retireFormErrors(form({ age: 50, targetAge: 100 }))).toHaveLength(1);
             expect(retireFormErrors(form({ age: 50, targetAge: 51 }))).toEqual([]);
+            expect(retireFormErrors(form({ age: 50, targetAge: max }))).toEqual([]);
+            expect(retireFormErrors(form({ age: 50, targetAge: max + 1 })))
+                .toEqual([`Your target retirement age must be between 51 and ${max}`]);
+        });
+
+        it('says plainly when no target can be compared at your age', () => {
+            const max = MAX_SEARCH_RETIREMENT_AGE;
+            const errs = retireFormErrors(form({ age: max, targetAge: max + 2 }));
+            expect(errs).toHaveLength(1);
+            expect(errs[0]).toContain(`only be compared up to ${max}`);
+            expect(retireFormErrors(form({ age: max, targetAge: null }))).toEqual([]);
         });
 
         it('uses onboarding’s age checks for you and your spouse', () => {

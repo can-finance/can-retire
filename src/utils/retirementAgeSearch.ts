@@ -276,11 +276,25 @@ export function isStrategyChangeNeeded(
 
 // --- Trade-off table -------------------------------------------------------
 
-// Δs for the trade-off rows: answer − 2 … answer + 4, clamped to the bounds.
+// Δs for the trade-off rows: answer − 2 … answer + 4, clamped to the bounds,
+// plus the plan's own age (Δ = 0 — the target the visitor typed in on the
+// landing page) whenever the search could test it, so the table always has a
+// row for the age they asked about. When the plan sits outside the window it is
+// added on its own rather than filling every age in between: each row costs a
+// Monte Carlo run and a could-spend search, and a far-off target would
+// otherwise stretch the table to a dozen rows. A gap of a single age is filled
+// (the table's "skipped ages" marker would take that line anyway). Ascending.
 export function tradeoffDeltas(answer: number, minDelta: number, maxDelta: number): number[] {
-    const out: number[] = [];
-    for (let d = Math.max(minDelta, answer - 2); d <= Math.min(maxDelta, answer + 4); d++) out.push(d);
-    return out;
+    const lo = Math.max(minDelta, answer - 2);
+    const hi = Math.min(maxDelta, answer + 4);
+    const out = new Set<number>();
+    for (let d = lo; d <= hi; d++) out.add(d);
+    if (minDelta <= 0 && 0 <= maxDelta) {
+        out.add(0);
+        if (lo - 0 === 2) out.add(1);        // plan, one age skipped, window
+        if (0 - hi === 2) out.add(-1);       // window, one age skipped, plan
+    }
+    return [...out].sort((a, b) => a - b);
 }
 
 // "Could spend" comes from its own MC step-down with its own MC wobble, so it

@@ -7,7 +7,7 @@ import { optimizeMeltdown } from '../../utils/meltdownOptimizer';
 import type { MeltdownResult, OptimizerObjective, PersonMeltdownDecision } from '../../utils/meltdownOptimizer';
 import { planAgeShift } from '../../utils/retirementAgeSearch';
 import { PLAN_COLORS } from '../../constants/chartColors';
-import { formatCurrencyApprox, formatCurrencyCAD, roundCurrencyApprox } from '../../utils/formatters';
+import { formatCurrencyApprox, formatCurrencyCAD, formatSuccessRate, roundCurrencyApprox } from '../../utils/formatters';
 import { Toggle } from '../ui/Toggle';
 import { Dialog } from '../ui/Dialog';
 import { HelpTooltip } from '../ui/HelpTooltip';
@@ -862,7 +862,7 @@ function RecommendationCard({ result, netEstateDelta, lifetimeTaxDelta }: {
                     label="Monte Carlo success"
                     value={
                         result.baselineSuccessRate !== null && result.recommendedSuccessRate !== null
-                            ? `${result.baselineSuccessRate.toFixed(0)}% → ${result.recommendedSuccessRate.toFixed(0)}%`
+                            ? `${formatSuccessRate(result.baselineSuccessRate)} → ${formatSuccessRate(result.recommendedSuccessRate)}`
                             : '—'
                     }
                     sub={result.baselineSuccessRate !== null && result.recommendedSuccessRate !== null
@@ -1257,13 +1257,13 @@ function MaxSpendCard({ result, actions }: { result: MeltdownResult; actions?: R
                 </p>
                 <p className={`mt-1.5 text-sm ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
                     {!metTarget
-                        ? `Even the lowest spending we tested, ${sustainable}/yr, only lasted in ${ms.achievedSuccessRate.toFixed(0)}% of market simulations. The spending that meets ${ms.mcSuccessTarget}% is lower than that. Run it again with a lower target to get a firm answer.`
+                        ? `Even the lowest spending we tested, ${sustainable}/yr, only lasted in ${formatSuccessRate(ms.achievedSuccessRate, ms.mcSuccessTarget)} of market simulations. The spending that meets ${ms.mcSuccessTarget}% is lower than that. Run it again with a lower target to get a firm answer.`
                         : good
                             ? `That’s the most you can spend each year (the same amount, adjusted for inflation) while your money lasts in at least ${ms.mcSuccessTarget}% of market simulations.`
                             : `With a ${ms.mcSuccessTarget}% target, your savings can’t support your planned spending. Applying lowers your plan’s spending to the level they can support.`}
                 </p>
                 <p className={`mt-2 text-sm font-medium ${good ? 'text-emerald-800' : 'text-amber-800'}`}>
-                    Monte Carlo success at this spending: {ms.achievedSuccessRate.toFixed(0)}%{' '}
+                    Monte Carlo success at this spending: {formatSuccessRate(ms.achievedSuccessRate, ms.mcSuccessTarget)}{' '}
                     {metTarget ? `(target ${ms.mcSuccessTarget}%)` : `— short of the ${ms.mcSuccessTarget}% target`}
                 </p>
             </div>

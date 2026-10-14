@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { EarliestAgeResult } from '../../utils/meltdownOptimizer';
-import { formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyCAD, formatSuccessRate } from '../../utils/formatters';
 
 /*
  * The answer box for the "When can I retire?" search: the age, how it compares
@@ -33,8 +33,8 @@ function years(n: number): string {
     return `${n} ${n === 1 ? 'year' : 'years'}`;
 }
 
-function pct(rate: number | null): string {
-    return rate === null ? '—' : `${rate.toFixed(0)}%`;
+function pct(rate: number | null, target?: number): string {
+    return formatSuccessRate(rate, target);
 }
 
 interface Copy {
@@ -97,7 +97,7 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
         return {
             tone: 'warn',
             title: `Even retiring at ${age}, your plan falls short of your ${target}% target`,
-            body: `At ${age}, your money lasts in ${pct(r.achievedSuccessRate)} of market simulations at ${spend}. Choose a lower target, or ${spendTip ?? `try ${MAX_SPEND} to see what spending your savings can support`}.`,
+            body: `At ${age}, your money lasts in ${pct(r.achievedSuccessRate, target)} of market simulations at ${spend}. Choose a lower target, or ${spendTip ?? `try ${MAX_SPEND} to see what spending your savings can support`}.`,
             notes,
         };
     }
@@ -140,7 +140,7 @@ function headlineCopy(r: EarliestAgeResult, compareTo: EarliestAgeComparison, sp
         tone: delta > 0 && compareTo !== 'none' ? 'warn' : 'good',
         title,
         body: answerBody(r, together),
-        successLine: `Your money lasts in ${pct(r.achievedSuccessRate)} of market simulations at ${spend} (your target: ${target}%).`,
+        successLine: `Your money lasts in ${pct(r.achievedSuccessRate, target)} of market simulations at ${spend} (your target: ${target}%).`,
         notes,
     };
 }

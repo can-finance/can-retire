@@ -448,9 +448,53 @@ describe('tradeoffDeltas', () => {
     });
 
     it('clamps to the search bounds', () => {
-        expect(tradeoffDeltas(-9, -10, 15)).toEqual([-10, -9, -8, -7, -6, -5]);
-        expect(tradeoffDeltas(14, -10, 15)).toEqual([12, 13, 14, 15]);
+        expect(tradeoffDeltas(-9, -10, 15)).toEqual([-10, -9, -8, -7, -6, -5, 0]);
+        expect(tradeoffDeltas(14, -10, 15)).toEqual([0, 12, 13, 14, 15]);
         expect(tradeoffDeltas(0, 0, 0)).toEqual([0]);
+    });
+
+    // Δ = 0 is the plan's own age — the visitor's target on the landing page.
+    it('always includes the target when it is well before the answer', () => {
+        // Target 60, answer 65 (Δ 5): window 63…69, so 60 is added on its own.
+        expect(tradeoffDeltas(5, -5, 15)).toEqual([0, 3, 4, 5, 6, 7, 8, 9]);
+        // The farthest case the search allows (target 60, answer 75).
+        expect(tradeoffDeltas(15, -5, 15)).toEqual([0, 13, 14, 15]);
+    });
+
+    it('fills a single skipped age next to the target', () => {
+        // Answer Δ 3: window 1…7 already touches the plan's age — no gap.
+        expect(tradeoffDeltas(3, -5, 15)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+        // Answer Δ 4: window 2…8 would skip only Δ 1; filled rather than marked.
+        expect(tradeoffDeltas(4, -5, 15)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    });
+
+    it('includes the target when it is after the answer', () => {
+        // Answer 6 years sooner: window −8…−2, and the one skipped age (Δ −1) is filled.
+        expect(tradeoffDeltas(-6, -10, 15)).toEqual([-8, -7, -6, -5, -4, -3, -2, -1, 0]);
+        // Answer 7 years sooner: window −9…−3, then the plan on its own.
+        expect(tradeoffDeltas(-7, -10, 15)).toEqual([-9, -8, -7, -6, -5, -4, -3, 0]);
+    });
+
+    it('target equal to the answer is just the window', () => {
+        expect(tradeoffDeltas(0, -10, 15)).toEqual([-2, -1, 0, 1, 2, 3, 4]);
+    });
+
+    it('leaves the target out when the search could not test it', () => {
+        // Target past the search's limit: every allowed Δ is negative.
+        expect(tradeoffDeltas(-6, -10, -3)).toEqual([-8, -7, -6, -5, -4, -3]);
+        // Target before today (min Δ above 0) — not testable either.
+        expect(tradeoffDeltas(5, 2, 15)).toEqual([3, 4, 5, 6, 7, 8, 9]);
+    });
+
+    it('is ascending with no duplicates', () => {
+        for (let answer = -10; answer <= 15; answer++) {
+            const ds = tradeoffDeltas(answer, -10, 15);
+            expect(ds).toContain(0);
+            expect(ds).toContain(answer);
+            for (let i = 1; i < ds.length; i++) expect(ds[i]).toBeGreaterThan(ds[i - 1]);
+            // Never a lone skipped age: gaps are either 0 or at least 2 ages.
+            for (let i = 1; i < ds.length; i++) expect(ds[i] - ds[i - 1]).not.toBe(2);
+        }
     });
 });
 

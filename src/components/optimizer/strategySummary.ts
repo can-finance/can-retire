@@ -25,7 +25,7 @@ export function describeStrategyChanges(
         if (d.oasChanged) parts.push(`start ${whose} OAS at ${d.oasStartAge} instead of ${d.originalOasStartAge}`);
         if (d.hasRrsp && d.meltAmount !== d.originalMeltAmount) {
             parts.push(d.meltAmount > 0
-                ? `take ${formatCurrencyCAD(d.meltAmount)}/yr from ${whose} RRSP from ${d.meltStartAge} to ${d.meltEndAge}, to lower the tax on it later`
+                ? `take ${formatCurrencyCAD(d.meltAmount)}/yr from ${whose} RRSP from ${d.meltStartAge} to ${d.meltEndAge} (to lower the tax on it later)`
                 : `stop the early withdrawals from ${whose} RRSP`);
         }
     }
@@ -34,8 +34,11 @@ export function describeStrategyChanges(
     }
 
     if (parts.length === 0) return null;
+    // Items are joined with semicolons so each change reads on its own — a
+    // comma list let the melt's reason seem to cover the item after it. The
+    // melt's reason sits in brackets for the same reason.
     const list = parts.length === 1
         ? parts[0]
-        : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+        : `${parts.slice(0, -1).join('; ')}; and ${parts[parts.length - 1]}`;
     return `To get there: ${list}.`;
 }
