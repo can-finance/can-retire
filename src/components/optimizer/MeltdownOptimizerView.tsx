@@ -710,7 +710,11 @@ function ResultsView({
                     </div>
                 )
             ) : result.improved ? (
-                <RecommendationCard result={result} />
+                <RecommendationCard
+                    result={result}
+                    netEstateDelta={runs[1].metrics.netEstateValue - runs[0].metrics.netEstateValue}
+                    lifetimeTaxDelta={runs[1].metrics.lifetimeTaxPaid - runs[0].metrics.lifetimeTaxPaid}
+                />
             ) : (
                 <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-6">
                     <p className="text-base font-bold text-emerald-900">Your current plan already looks good</p>
@@ -773,6 +777,12 @@ function ResultsView({
                 </>
             )}
 
+            <p className="text-xs text-slate-500">
+                The Guaranteed Income Supplement (GIS) isn’t modelled. If your income in
+                retirement could be low enough to qualify, RRSP withdrawals and RRIF income can
+                reduce it, so check how these suggestions affect your GIS before acting on them.
+            </p>
+
             <Dialog
                 open={saveDialogOpen}
                 onClose={onCloseSaveDialog}
@@ -792,7 +802,13 @@ function ResultsView({
     );
 }
 
-function RecommendationCard({ result }: { result: MeltdownResult }) {
+// The deltas come from the comparison runs (not result.*Delta, which is
+// nominal) so the tiles follow the today's-dollars toggle like the table below.
+function RecommendationCard({ result, netEstateDelta, lifetimeTaxDelta }: {
+    result: MeltdownResult;
+    netEstateDelta: number;
+    lifetimeTaxDelta: number;
+}) {
     // The estate search owns the household withdrawal order too, and applying
     // writes it — so it gets its own row here, exactly as in max-spend mode.
     // Without it a changed order would be applied to the user's plan silently.
@@ -829,13 +845,13 @@ function RecommendationCard({ result }: { result: MeltdownResult }) {
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Headline
                     label="Net estate"
-                    value={`${result.netEstateDelta >= 0 ? '+' : '−'}${formatCurrencyCAD(Math.abs(result.netEstateDelta))}`}
-                    tone={result.netEstateDelta >= 0 ? 'good' : 'bad'}
+                    value={`${netEstateDelta >= 0 ? '+' : '−'}${formatCurrencyCAD(Math.abs(netEstateDelta))}`}
+                    tone={netEstateDelta >= 0 ? 'good' : 'bad'}
                 />
                 <Headline
                     label="Total tax paid"
-                    value={`${result.lifetimeTaxDelta <= 0 ? '−' : '+'}${formatCurrencyCAD(Math.abs(result.lifetimeTaxDelta))}`}
-                    tone={result.lifetimeTaxDelta <= 0 ? 'good' : 'bad'}
+                    value={`${lifetimeTaxDelta <= 0 ? '−' : '+'}${formatCurrencyCAD(Math.abs(lifetimeTaxDelta))}`}
+                    tone={lifetimeTaxDelta <= 0 ? 'good' : 'bad'}
                 />
                 <Headline
                     label="Monte Carlo success"

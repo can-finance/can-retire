@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   about a dollar. Previously computed projections change slightly: withdrawals
   and tax are a little lower in affected years and balances a little higher
   (the default plan's after-tax estate rises by about $10,000).
+- **The RRSP optimizer's "Net estate" and "Total tax paid" tiles now follow the
+  Today's Dollars toggle,** matching the comparison table below them. They
+  previously always showed future dollars.
+
+### Added
+- The RRSP optimizer's results note that the Guaranteed Income Supplement isn't
+  modelled, since RRSP and RRIF withdrawals can reduce it.
 
 ## [0.14.0] - 2026-10-14
 

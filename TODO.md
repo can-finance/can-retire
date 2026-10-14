@@ -22,11 +22,6 @@ unit-tested MC-free.
   this may cost a year — weak evidence, best-of-many MC noise).
   (Checked 2026-10-12: the Cloudflare beacon's `location`/`referrer` don't
   carry the #start= hash.)
-- **Meltdown optimizer delta tiles ignore the today's-dollars toggle (noted
-  2026-10-12).** The "Net estate change" / "Lifetime tax change" tiles in
-  `MeltdownOptimizerView` show nominal `netEstateDelta`/`lifetimeTaxDelta`,
-  while the comparison table beneath them follows the toggle. The
-  earliest-age table was switched to today's dollars; these were left as-is.
 - **Phase 3b — "How much do I need to retire?" (shipped in 0.14.0).**
   Optimizer mode `savings-needed` + /how-much-do-i-need-to-retire/ page; pure
   planners in `src/utils/savingsSearch.ts`. Lump sum, plus the per-year
@@ -35,8 +30,8 @@ unit-tested MC-free.
   Follow-ups: a per-year column in the age table (another R search + MC
   step-up per row, roughly doubling its cost); the headline moves ~±7% between
   runs at 200 MC iterations — consider more iterations if repeat runs bother
-  users; the no-savings default mix uses the TFSA limit table and ignores any
-  `tfsa.contributionRoom` entered. `TFSA_ANNUAL_LIMITS` holds the last
+  users; the no-savings default mix estimates TFSA room from the limit table
+  (there's no TFSA-room input to use instead). `TFSA_ANNUAL_LIMITS` holds the last
   published year flat — add each new year's limit when CRA announces it.
 - **Phase 4 — the engine phase.** See spec below.
 
@@ -354,13 +349,6 @@ contract stays intact; storage is never half-written). If wanted: persist the dr
 screen/step under a `retirement_onboarding_draft_v1` key on step transitions, offer
 "Continue where you left off?" on the intro, delete the key on Save/Skip. Decided
 2026-07-17 to ship without it and see whether anyone misses it.
-
-### GIS not modeled — blind spot to disclose in the UI
-For low-income households, pre-65 meltdown is often about protecting GIS
-eligibility, and the optimizer's recommendations can't capture that. A footnote
-near the optimizer results is probably enough; silence is not. The
-`/rrsp-withdrawal-strategy/` page already carries a GIS caution, so the gap is
-specifically the results view.
 
 ### Pre-existing mobile horizontal overflow
 The year-by-year breakdown table (~1000px min width) forces horizontal scroll on
