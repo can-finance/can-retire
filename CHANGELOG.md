@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-14
+
 ### Added
 - **"See how much you need" in the optimizer.** A fourth goal finds the savings
   your plan needs to stay funded at your current spending and retirement age,
