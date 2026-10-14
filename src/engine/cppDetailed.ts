@@ -44,6 +44,17 @@ export function ympeFor(year: number): number {
     return YMPE_BY_YEAR[year] ?? YMPE_BY_YEAR[EARLIEST_CPP_YEAR];
 }
 
+/**
+ * Birth year for someone who is `age` this calendar year. Taken from the real
+ * calendar year, not LATEST_DATA_YEAR: the data year only says which YMPEs are
+ * known (later years reuse the latest), and pinning birth years to it would
+ * shift the contributory window and every year label once the calendar moves
+ * past it.
+ */
+export function birthYearFromAge(age: number, currentYear: number = new Date().getFullYear()): number {
+    return currentYear - age;
+}
+
 /** Maximum annual base CPP at 65 in today's dollars: 25% × five-year average YMPE. */
 export function maxAnnualBenefitAt65(): number {
     let sum = 0;

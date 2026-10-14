@@ -9,6 +9,7 @@ import {
     ympeFor,
     YMPE_BY_YEAR,
     LATEST_DATA_YEAR,
+    birthYearFromAge,
 } from './cppDetailed';
 
 // Person born 1961: turns 18 in 1979, turns 65 in 2026.
@@ -177,6 +178,44 @@ describe('generateEarningsFromSimple', () => {
             birthYear: 1970, workStartAge: 25, workEndAge: 25, avgSalaryTodayDollars: 500_000,
         });
         expect(table[1995]).toBe(ympeFor(1995));
+    });
+});
+
+describe('birthYearFromAge', () => {
+    // The CPP Calculator's Simple-mode flow: age 50, worked 22–62 at $70,000 in
+    // today's dollars, pension at 65.
+    function simpleFlow(currentYear: number) {
+        const birthYear = birthYearFromAge(50, currentYear);
+        const earningsByYear = generateEarningsFromSimple({
+            birthYear, workStartAge: 22, workEndAge: 62, avgSalaryTodayDollars: 70_000,
+        });
+        return { birthYear, result: calculateDetailedCPP({ birthYear, startAge: 65, earningsByYear }) };
+    }
+
+    it('in the data year, gives the figures the CPP tutorial video quotes', () => {
+        const { birthYear, result } = simpleFlow(LATEST_DATA_YEAR);
+        expect(birthYear).toBe(LATEST_DATA_YEAR - 50);
+        expect(Math.round(result.monthlyBenefit)).toBe(1352);
+        expect(Math.round(result.annualBenefit)).toBe(16229);
+        expect(result.contributoryYears).toBe(47);
+        expect(result.generalDropoutYears.toFixed(1)).toBe('8.0');
+    });
+
+    it('follows the calendar, not the data year, once the calendar moves past it', () => {
+        const later = LATEST_DATA_YEAR + 2;
+        const { birthYear, result } = simpleFlow(later);
+        // Born two years later than in the data year: the window moves with the
+        // person, not stuck at LATEST_DATA_YEAR − age.
+        expect(birthYear).toBe(later - 50);
+        expect(result.contributoryYears).toBe(47);
+        // A constant share of each year's YMPE gives the same benefit, with the
+        // years past the data year reusing its YMPE (to within the whole-dollar
+        // rounding of each year's earnings).
+        expect(result.annualBenefit).toBeCloseTo(simpleFlow(LATEST_DATA_YEAR).result.annualBenefit, 1);
+    });
+
+    it('defaults to the real calendar year', () => {
+        expect(birthYearFromAge(50)).toBe(new Date().getFullYear() - 50);
     });
 });
 
