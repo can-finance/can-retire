@@ -30,6 +30,7 @@ import {
     SAVINGS_MC_PRECISION_REL,
     SAVINGS_GRANULARITY,
     DEFAULT_MAX_SAVINGS_STEPUP_PROBES,
+    SAVINGS_ROW_MAX_STEPUP_PROBES,
     PER_YEAR_GRANULARITY,
     PER_YEAR_PRECISION_ABS,
     PER_YEAR_PRECISION_REL,
@@ -767,6 +768,34 @@ describe('planSavingsStepUp (first-probe hint, handed-in probes)', () => {
                 }
             }
         }
+    });
+
+    it('a handed-in clear far above a start of 0 finishes at 0, not partway down', () => {
+        // The age rows' case: the MC at current savings ($850k) clears at
+        // 100%, the row's deterministic answer is 0, six probes in all. At
+        // −15% a step the budget would run out at ~$375k; the start is
+        // probed directly instead.
+        const run = (plan: SavingsStepUpPlan, rate: (t: number) => number) => {
+            const probes: SavingsProbeResult[] = [{ total: 850_000, successRate: 100 }];
+            let action = planSavingsStepUp(plan, probes);
+            while (action.kind === 'probe') {
+                probes.push({ total: action.total, successRate: rate(action.total) });
+                action = planSavingsStepUp(plan, probes);
+            }
+            return { action, probes };
+        };
+        const base = { target: 90, cap: CAP, minStepBase: 100_000, maxProbes: SAVINGS_ROW_MAX_STEPUP_PROBES };
+        for (const plan of [{ ...base, start: 0 }, { ...base, start: 0, firstProbe: 0 }]) {
+            const { action, probes } = run(plan, () => 100);
+            expect(probes[1].total).toBe(0);
+            expect(action).toEqual({ kind: 'done', total: 0, successRate: 100 });
+        }
+        // The start misses: bisect between it and the clear, never reporting a miss.
+        const { action, probes } = run({ ...base, start: 0 }, t => (t >= 200_000 ? 95 : 40));
+        expect(probes.length).toBeLessThanOrEqual(SAVINGS_ROW_MAX_STEPUP_PROBES);
+        expect(action.kind === 'done' || (action.kind === 'capHit' && action.cleared)).toBe(true);
+        expect((action as { total: number }).total).toBeGreaterThanOrEqual(200_000);
+        expect((action as { total: number }).total).toBeLessThan(375_000);
     });
 
     it('a wildly high hint still reports a clearing total, flagged when the budget runs out', () => {

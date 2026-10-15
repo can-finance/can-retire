@@ -413,8 +413,18 @@ export function planSavingsStepUp(plan: SavingsStepUpPlan, probes: SavingsProbeR
             if (probes.length >= maxProbes) {
                 return { kind: 'capHit', total: lowestClear.total, successRate: lowestClear.successRate, cleared: true };
             }
-            const step = Math.max(lowestClear.total, plan.minStepBase)
-                * savingsStepFractionForGap(lowestClear.successRate - target);
+            const fraction = savingsStepFractionForGap(lowestClear.successRate - target);
+            // When the steps left can't get down to the start at this pace,
+            // probe the start itself: a clear there ends the search at it, a
+            // miss closes the bracket for bisection. Otherwise a clear far
+            // above a start of (say) 0 would run out of probes partway down
+            // and report the last clear as the need.
+            let reach = lowestClear.total;
+            for (let k = maxProbes - probes.length; k > 0 && reach > start; k--) {
+                reach = Math.max(start, floorTo(reach - Math.max(reach, plan.minStepBase) * fraction, granularity));
+            }
+            if (reach > start) return { kind: 'probe', total: start };
+            const step = Math.max(lowestClear.total, plan.minStepBase) * fraction;
             const next = Math.max(start, floorTo(lowestClear.total - step, granularity));
             return { kind: 'probe', total: next };
         }

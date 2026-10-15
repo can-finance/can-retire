@@ -14,6 +14,7 @@ import {
     EducationalDisclaimer,
     PensionFields,
     RunStatusBlock,
+    SpendOverPayNote,
     SpouseSection,
     primaryBtn,
 } from './calculatorParts';
@@ -119,6 +120,7 @@ export function WhenCanIRetire() {
     const update = (patch: Partial<RetireForm>) => setForm((f) => ({ ...f, ...patch }));
 
     const errors = useMemo(() => retireFormErrors(form), [form]);
+    const spendPlan = useMemo(() => (errors.length > 0 ? null : buildRetireInputs(form)), [errors, form]);
     const formKey = JSON.stringify([form, successTarget]);
     const stale = answer !== null && answer.key !== formKey;
 
@@ -284,8 +286,11 @@ export function WhenCanIRetire() {
                 <div className="space-y-4">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Household spending per year</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FinancialInput label="Before retirement" value={form.preRetirementSpend}
-                            onChange={(e) => update({ preRetirementSpend: Number(e.target.value) })} />
+                        <div className="space-y-1.5">
+                            <FinancialInput label="Before retirement" value={form.preRetirementSpend}
+                                onChange={(e) => update({ preRetirementSpend: Number(e.target.value) })} />
+                            <SpendOverPayNote plan={spendPlan} />
+                        </div>
                         <FinancialInput
                             label="After retirement"
                             tooltip="What you plan to spend each year once retired, in today's dollars. It rises with inflation. The calculator keeps this the same and finds the age instead."

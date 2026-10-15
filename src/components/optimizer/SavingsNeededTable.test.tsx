@@ -96,6 +96,20 @@ describe('SavingsNeededTable', () => {
         expect(text).not.toContain('For retiring this year');
     });
 
+    it('a row that needs nothing today: "None", with everything it is on track for to spare', () => {
+        const rows = [
+            row({ delta: 0, isPlan: true, neededSavings: 0, neededAtRetirement: 59_000, currentAtRetirement: 1_400_000, haveEnough: true, successRateAtCurrent: 100 }),
+            row({ delta: 1, retirementAge: 61, neededSavings: 0, neededAtRetirement: null, currentAtRetirement: null, haveEnough: true, successRateAtCurrent: 100 }),
+        ];
+        const { container } = render(<SavingsNeededTable result={sn({ ageRows: rows })} />);
+        const [plan, now] = rowsOf(container);
+        expect(plan).toContain('None');
+        expect(plan).not.toContain('$59k');
+        expect(plan).toContain('$1.4M to spare');
+        expect(now).toContain('None');
+        expect(now).toContain('$500k to spare');
+    });
+
     it('hidden with only the plan row, or none', () => {
         expect(render(<SavingsNeededTable result={sn({ ageRows: [row({ isPlan: true })] })} />).container.textContent).toBe('');
         cleanup();

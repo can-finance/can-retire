@@ -24,17 +24,22 @@ const money = formatCurrencyApprox;
 
 interface RowAmounts {
     needed: number | null;  // null when no amount meets the target at this age
+    none: boolean;          // nothing needed today: shown as "None", all savings to spare
     current: number;
     today: boolean;         // retiring this year: today's figures stand in
 }
 
 // What a row shows. Retiring this year leaves no working year to grow
 // through, so the at-retirement pair is null and today's figures stand in.
+// A row that needs nothing today shows "None" rather than its at-retirement
+// figure (which would be only the pay saved until then, grown).
 function rowAmounts(r: SavingsAgeRow, currentSavings: number): RowAmounts {
     const today = r.currentAtRetirement === null;
-    const neededRaw = today ? r.neededSavings : r.neededAtRetirement;
+    const none = r.clears && r.neededSavings === 0;
+    const neededRaw = none ? 0 : today ? r.neededSavings : r.neededAtRetirement;
     return {
         needed: r.clears && neededRaw !== null ? neededRaw : null,
+        none,
         current: today ? currentSavings : r.currentAtRetirement!,
         today,
     };
@@ -118,7 +123,7 @@ export function SavingsNeededTable({
                                         </td>
                                     )}
                                     <td className="text-right py-2 pl-4 whitespace-nowrap tabular-nums">
-                                        {a.needed === null ? '—' : <>{money(a.needed)}{todayTag}</>}
+                                        {a.needed === null ? '—' : a.none ? 'None' : <>{money(a.needed)}{todayTag}</>}
                                     </td>
                                     <td className="text-right py-2 pl-4 whitespace-nowrap tabular-nums">
                                         {money(a.current)}{todayTag}

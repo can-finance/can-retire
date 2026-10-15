@@ -125,15 +125,21 @@ function headlineCopy(r: SavingsAnswer, sn: SavingsNeededResult, spendTip?: stri
             const gap = roundCurrencyApprox(neededAtRet) - roundCurrencyApprox(currentAtRet);
             if (gap > 0) {
                 const by = isSpouse ? `when your spouse retires at ${age}` : `by ${age}`;
+                const likeToday = current > 0
+                    ? `That’s like having ${money(needed)} today instead of ${money(current)}.`
+                    : `That’s like having ${money(needed)} today.`;
+                // Spending above take-home pay is drawn from savings until
+                // retirement, so today's figure can exceed the at-retirement one.
+                const moreToday = roundCurrencyApprox(needed) > roundCurrencyApprox(neededAtRet)
+                    ? ` It’s more than you’d need ${by} because it also pays for your spending above your pay until then.`
+                    : '';
                 return {
                     tone: 'warn',
                     title: `You need about ${money(neededAtRet)} saved ${by}`,
                     lead: roundCurrencyApprox(currentAtRet) > 0
                         ? `You’re on track for about ${money(currentAtRet)}, so about ${money(gap)} more.`
                         : 'You’re not on track to have any savings by then.',
-                    sub: current > 0
-                        ? `That’s like having ${money(needed)} today instead of ${money(current)}.`
-                        : `That’s like having ${money(needed)} today.`,
+                    sub: likeToday + moreToday,
                 };
             }
         }

@@ -41,10 +41,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The optimizer's CPP/OAS timing tip now says which start ages it actually
   tries (CPP at 60, 65 or 70 and OAS at 65 or 70, plus your current ages), and
   the dashboard's optimizer tips mention all four goals.
+- The "Retiring earlier or later" table on "How much do I need?" no longer
+  shows savings needed at earlier ages when you need none (low spending after
+  retirement or a well-funded plan). On the default plan with little or no
+  spending after retirement, ages 59 to 61 showed about $375,000 needed today;
+  they now show what is actually needed, often nothing. Ages that need nothing
+  read "None", with everything you're on track for to spare.
 
 ### Added
 - The RRSP optimizer's results note that the Guaranteed Income Supplement isn't
   modelled, since RRSP and RRIF withdrawals can reduce it.
+- "When can I retire?" and "How much do I need?" note when your spending before
+  retirement is more than your take-home pay, since the calculator takes the
+  difference from your savings each year. When that makes today's savings
+  figure larger than the one needed at retirement, the answer says why.
 
 ## [0.14.0] - 2026-10-14
 
