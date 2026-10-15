@@ -508,7 +508,7 @@ describe('spendForSpouseToggle', () => {
 
     it('the note names the defaults it set', () => {
         expect(spouseToggleSpendNote(true)).toBe(
-            'We set household spending to the couple default ($84,000 before / $77,000 after retirement). Change it if yours differ.'
+            'We set household spending to the couple default ($84,000 before / $77,000 after retirement). Change them if yours differ.'
         );
         expect(spouseToggleSpendNote(false)).toContain('single default ($60,000 before / $55,000 after retirement)');
     });

@@ -408,8 +408,13 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
                 ? 'Pension income your spouse split to you'
                 : 'Pension income you split to your spouse',
             amount: r.pensionSplitAmount!,
+            // The giver loses the income, the receiver gains it; hasSpouse is
+            // implied since a split only happens for couples.
+            ...(r.pensionSplitFrom === 'spouse'
+                ? { person: r.pensionSplitAmount!, spouse: -r.pensionSplitAmount! }
+                : { person: -r.pensionSplitAmount!, spouse: r.pensionSplitAmount! }),
             kind: 'info',
-            note: 'Moves taxable income between spouses; household cash is unchanged'
+            note: 'Moves taxable income between spouses; household cash is unchanged. Chosen each year for the lowest combined tax, so the direction can change from year to year.'
         });
     }
 

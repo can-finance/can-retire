@@ -4,6 +4,18 @@ import { calculateTotalTax, calculatePayrollContributions, calculateOptimalSplit
 import type { SplitPerson } from './tax';
 import { calculateEstimatedCPP, calculateOAS, cppOverrideAtStartAge } from './cpp';
 
+/**
+ * Smallest tax saving (nominal dollars) for which a pension split is applied.
+ * Below this a split is noise and would show a transfer with no visible saving
+ * in the year audit, whose rows hide amounts under a cent.
+ */
+export const MIN_SPLIT_SAVING = 1;
+
+/** Whether an optimal split saves enough tax to be worth applying. */
+export function splitSavingIsWorthApplying(taxSavings: number): boolean {
+    return taxSavings >= MIN_SPLIT_SAVING;
+}
+
 // --- Helper Types for Internal engine calculation ---
 
 // Standard Normal Distribution Generator (Mean 0, StdDev 1)
@@ -1074,7 +1086,7 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
 
             const splitResult = calculateOptimalSplit(pSplitInfo, sSplitInfo, province, inflationFactor);
 
-            if (splitResult.taxSavings > 0) {
+            if (splitSavingIsWorthApplying(splitResult.taxSavings)) {
                 pensionSplitAmount = splitResult.splitAmount;
                 // calculateOptimalSplit was called (pSplitInfo, sSplitInfo): 1 = person.
                 pensionSplitFrom = splitResult.fromPerson === 1 ? 'person' : 'spouse';

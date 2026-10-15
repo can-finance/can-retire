@@ -280,7 +280,10 @@ export function Dashboard() {
         && inputs.preRetirementSpend === spendNote.pre
         && inputs.postRetirementSpend === spendNote.post;
 
-    const loadPlanInputs = (p: SavedPlan) => setInputsRaw(sanitizeSimulationInputs(p.inputs) ?? INITIAL_INPUTS);
+    const loadPlanInputs = (p: SavedPlan) => {
+        setSpendNote(null);
+        setInputsRaw(sanitizeSimulationInputs(p.inputs) ?? INITIAL_INPUTS);
+    };
 
     const handleActivate = (id: string) => {
         if (id === activePlanId) return;
@@ -319,6 +322,7 @@ export function Dashboard() {
     // wizard leaves the plan at default values as-is (accepted trade-off).
     const handleNewPlanGuided = () => {
         const fresh = createPlan(nextPlanName(plans), INITIAL_INPUTS);
+        setSpendNote(null);
         setInputsRaw({ ...INITIAL_INPUTS });
         // usePersistentState/usePlans both persist via a plain `useEffect` (no
         // flushSync), and window.location.assign below unloads the page. Whether
@@ -456,20 +460,20 @@ export function Dashboard() {
                             <span className="text-xs opacity-70">Include a spouse's accounts and CPP/OAS in the simulation</span>
                         </button>
                     )}
+                    {showSpendNote && (
+                        <div role="status" className="flex items-start justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                            <p className="text-xs text-sky-800">{spendNote!.text}</p>
+                            <button
+                                onClick={() => setSpendNote(null)}
+                                className="text-xs font-medium text-sky-600 hover:text-sky-800 underline decoration-dotted whitespace-nowrap"
+                            >
+                                Dismiss
+                            </button>
+                        </div>
+                    )}
 
                     {/* Household Spending */}
                     <CollapsibleSection title="Household Spending" accent="teal">
-                        {showSpendNote && (
-                            <div role="status" className="flex items-start justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-4">
-                                <p className="text-xs text-sky-800">{spendNote!.text}</p>
-                                <button
-                                    onClick={() => setSpendNote(null)}
-                                    className="text-xs font-medium text-sky-600 hover:text-sky-800 underline decoration-dotted whitespace-nowrap"
-                                >
-                                    Dismiss
-                                </button>
-                            </div>
-                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <FinancialInput
                                 label="Pre-Retirement"

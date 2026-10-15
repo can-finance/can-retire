@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { runSimulation, runMonteCarlo, lognormalReturn, DIVIDEND_EQUITY_BETA, MARGINAL_RATE_PROBE } from './projection';
+import { runSimulation, runMonteCarlo, lognormalReturn, DIVIDEND_EQUITY_BETA, MARGINAL_RATE_PROBE, MIN_SPLIT_SAVING, splitSavingIsWorthApplying } from './projection';
 import { calculateIncomeTax, calculateOASClawback, calculateTotalTax, TAX_CONSTANTS } from './tax';
 import type { Person, NonRegisteredAccount, SimulationInputs, SimulationResult } from './types';
 import { INITIAL_INPUTS } from '../utils/inputSanitizer';
@@ -1921,5 +1921,42 @@ describe('RRIF withdrawals above the minimum count as pension income from 72', (
         const r = runSimulation(retiree(75, 20_000))[0];
         expect(r.shortfall).toBe(0);
         expect(Math.abs(r.netIncome - r.spending)).toBeLessThan(2);
+    });
+});
+
+describe('minimum pension-split saving', () => {
+    it('applies a split only when it saves at least MIN_SPLIT_SAVING', () => {
+        expect(MIN_SPLIT_SAVING).toBe(1);
+        expect(splitSavingIsWorthApplying(0)).toBe(false);
+        expect(splitSavingIsWorthApplying(0.004)).toBe(false);
+        expect(splitSavingIsWorthApplying(0.99)).toBe(false);
+        expect(splitSavingIsWorthApplying(1)).toBe(true);
+        expect(splitSavingIsWorthApplying(250)).toBe(true);
+    });
+
+    it('every year in a splitting plan either saves at least the minimum or shows no split', () => {
+        const res = runSimulation(inputs({
+            useIncomeSplitting: true,
+            withdrawalStrategy: 'rrsp-first',
+            postRetirementSpend: 80_000,
+            person: person({
+                age: 70, lifeExpectancy: 85, rrsp: { type: 'RRSP', balance: 600_000 },
+                nonRegisteredAccounts: [nonReg({ receivesSurplus: true })]
+            }),
+            spouse: person({
+                age: 70, lifeExpectancy: 85,
+                nonRegisteredAccounts: [nonReg({ id: 'nr-s', receivesSurplus: true })]
+            })
+        }));
+        let splitYears = 0;
+        for (const r of res) {
+            if ((r.pensionSplitAmount ?? 0) > 0) {
+                splitYears++;
+                expect(r.taxSavingsFromSplit!).toBeGreaterThanOrEqual(MIN_SPLIT_SAVING);
+            } else {
+                expect(r.taxSavingsFromSplit ?? 0).toBe(0);
+            }
+        }
+        expect(splitYears).toBeGreaterThan(0);
     });
 });
