@@ -790,6 +790,27 @@ describe('gross income section (section 1)', () => {
         expect(fromSpouse).toContain('Pension income your spouse split to you');
         expect(fromSpouse).not.toContain('Pension income you split to your spouse');
     });
+
+    it('shows the split per person: the giver is negative, the receiver positive', () => {
+        const results = runSimulation(COUPLE);
+        const i = results.findIndex(r => (r.pensionSplitAmount ?? 0) > 1);
+        expect(i).toBeGreaterThanOrEqual(0);
+        const amount = results[i].pensionSplitAmount!;
+        const lineFor = (from: 'person' | 'spouse') => {
+            const rows = results.map((r, j) => j === i ? { ...r, pensionSplitFrom: from } : r);
+            return sectionOf(buildYearAudit(COUPLE, rows, i), 'taxes')!.lines.find(
+                l => l.label.startsWith('Pension income')
+            )!;
+        };
+        const fromPerson = lineFor('person');
+        expect(fromPerson.amount).toBeCloseTo(amount, 6);
+        expect(fromPerson.person).toBeCloseTo(-amount, 6);
+        expect(fromPerson.spouse).toBeCloseTo(amount, 6);
+        const fromSpouse = lineFor('spouse');
+        expect(fromSpouse.amount).toBeCloseTo(amount, 6);
+        expect(fromSpouse.person).toBeCloseTo(amount, 6);
+        expect(fromSpouse.spouse).toBeCloseTo(-amount, 6);
+    });
 });
 
 describe('net income section (section 3)', () => {

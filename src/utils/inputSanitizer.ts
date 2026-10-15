@@ -83,7 +83,7 @@ export function spendForSpouseToggle(
 export function spouseToggleSpendNote(adding: boolean): string {
     const to = adding ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
     const fmt = (v: number) => `$${v.toLocaleString('en-CA')}`;
-    return `We set household spending to the ${adding ? 'couple' : 'single'} default (${fmt(to.pre)} before / ${fmt(to.post)} after retirement). Change it if yours differ.`;
+    return `We set household spending to the ${adding ? 'couple' : 'single'} default (${fmt(to.pre)} before / ${fmt(to.post)} after retirement). Change them if yours differ.`;
 }
 
 export const INITIAL_INPUTS: SimulationInputs = {

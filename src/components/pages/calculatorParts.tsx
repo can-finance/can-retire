@@ -99,9 +99,16 @@ export function SpouseSection({ form, update }: {
                 label="Include a spouse / partner"
             />
             {showSpendNote && (
-                <p role="status" className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
-                    {spendNote!.text}
-                </p>
+                <div role="status" className="flex items-start justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-sky-800">{spendNote!.text}</p>
+                    <button
+                        type="button"
+                        onClick={() => setSpendNote(null)}
+                        className="text-xs font-medium text-sky-600 hover:text-sky-800 underline decoration-dotted whitespace-nowrap"
+                    >
+                        Dismiss
+                    </button>
+                </div>
             )}
             {form.includeSpouse && (
                 <div className="space-y-4 rounded-2xl bg-slate-50 border border-slate-100 p-4">
