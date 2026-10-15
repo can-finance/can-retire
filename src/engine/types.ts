@@ -211,7 +211,11 @@ export interface SimulationResult {
     shortfall: number; // Target spending the household could NOT fund after draining all accounts
 
     // Income Splitting
-    pensionSplitAmount?: number;     // Amount of pension income split to spouse
+    pensionSplitAmount?: number;     // Pension income moved from one spouse's return to the other's (direction: pensionSplitFrom)
+    // Whose pension income was split away this year: 'person' = the primary split
+    // to the spouse, 'spouse' = the spouse split to the primary. The direction can
+    // flip over a plan. Undefined when nothing was split.
+    pensionSplitFrom?: 'person' | 'spouse';
     taxSavingsFromSplit?: number;    // Tax savings achieved from income splitting
     // Part of taxSavingsFromSplit that could not be swept into a non-registered
     // account because neither spouse holds one. Normally 0 — the saving is

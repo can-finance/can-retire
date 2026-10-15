@@ -56,7 +56,7 @@ export function SettingsFields({ inputs, onChange }: {
                     checked={inputs.useIncomeSplitting ?? true}
                     onChange={(val) => onChange({ useIncomeSplitting: val })}
                     label="Pension Income Splitting"
-                    tooltip={'ON = the engine calculates the optimal pension income split of up to 50%.\nOFF = each spouse is taxed on their own income with no splitting.'}
+                    tooltip={"ON = each year, move up to half of one spouse's eligible pension income to the other when it lowers your combined tax. Eligible here: a workplace (defined-benefit) pension at any age, and RRIF withdrawals from 72. RRSP withdrawals (including the melt), CPP and OAS aren't split.\nOFF = each spouse is taxed on their own income."}
                 />
             )}
 

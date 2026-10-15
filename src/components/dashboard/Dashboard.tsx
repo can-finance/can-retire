@@ -17,7 +17,7 @@ import { YearlyBreakdownTable } from '../tables/YearlyBreakdownTable';
 import { YearAuditDrawer } from './YearAuditDrawer';
 import { runSimulation, runMonteCarlo, blendedNonRegMix } from '../../engine/projection';
 import type { SimulationInputs, SimulationResult, MonteCarloResult, NonRegisteredAccount, NonRegMix } from '../../engine/types';
-import { createDefaultPerson, DEFAULT_SPEND, INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
+import { createDefaultPerson, INITIAL_INPUTS, sanitizeSimulationInputs, spendForSpouseToggle, spouseToggleSpendNote } from '../../utils/inputSanitizer';
 import { SIM_KEY, hasSavedPlan } from '../../utils/onboarding';
 import { parseStartHash } from '../../utils/shareLink';
 import { formatCurrencyCAD } from '../../utils/formatters';
@@ -46,6 +46,9 @@ export function Dashboard() {
     const [isComparing, setIsComparing] = useState(false);
     // Year Audit drawer: an index into `simulationResults`, not a year — null when closed.
     const [selectedYearIndex, setSelectedYearIndex] = useState<number | null>(null);
+    // Set when a spouse toggle moved the spending defaults; shown only while both
+    // figures still equal what the toggle set, so editing either one hides it.
+    const [spendNote, setSpendNote] = useState<{ pre: number; post: number; text: string } | null>(null);
 
     // Capture a deep-linked "open the meltdown optimizer" request via `?optimize=1`
     // ONCE, synchronously, at mount — mirroring the `setupRequested` capture in
@@ -259,19 +262,23 @@ export function Dashboard() {
     };
 
     // Adding or removing a spouse also moves the household spending defaults
-    // (see DEFAULT_SPEND) — but ONLY while they still sit at the other size's
-    // default. Once the user has typed their own figure it is theirs to keep,
-    // so a spouse toggle must never overwrite it.
+    // (see spendForSpouseToggle) — but ONLY while both still sit at the other
+    // size's defaults. Once the user has typed either figure, both are theirs to
+    // keep, so a spouse toggle must never overwrite them.
     const toggleSpouse = () => {
-        const from = hasSpouse ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
-        const to = hasSpouse ? DEFAULT_SPEND.single : DEFAULT_SPEND.couple;
+        const adding = !hasSpouse;
+        const spend = spendForSpouseToggle(inputs.preRetirementSpend, inputs.postRetirementSpend, adding);
+        setSpendNote(spend.swapped ? { pre: spend.pre, post: spend.post, text: spouseToggleSpendNote(adding) } : null);
         updateInputs({
             ...inputs,
-            spouse: hasSpouse ? undefined : createDefaultPerson(true),
-            preRetirementSpend: inputs.preRetirementSpend === from.pre ? to.pre : inputs.preRetirementSpend,
-            postRetirementSpend: inputs.postRetirementSpend === from.post ? to.post : inputs.postRetirementSpend
+            spouse: adding ? createDefaultPerson(true) : undefined,
+            preRetirementSpend: spend.pre,
+            postRetirementSpend: spend.post
         });
     };
+    const showSpendNote = spendNote !== null
+        && inputs.preRetirementSpend === spendNote.pre
+        && inputs.postRetirementSpend === spendNote.post;
 
     const loadPlanInputs = (p: SavedPlan) => setInputsRaw(sanitizeSimulationInputs(p.inputs) ?? INITIAL_INPUTS);
 
@@ -452,6 +459,17 @@ export function Dashboard() {
 
                     {/* Household Spending */}
                     <CollapsibleSection title="Household Spending" accent="teal">
+                        {showSpendNote && (
+                            <div role="status" className="flex items-start justify-between gap-2 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 mb-4">
+                                <p className="text-xs text-sky-800">{spendNote!.text}</p>
+                                <button
+                                    onClick={() => setSpendNote(null)}
+                                    className="text-xs font-medium text-sky-600 hover:text-sky-800 underline decoration-dotted whitespace-nowrap"
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <FinancialInput
                                 label="Pre-Retirement"

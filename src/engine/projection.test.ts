@@ -254,8 +254,8 @@ describe('withdrawal solvers price draws with the assessed credits', () => {
     it('RRSP top-ups beside a DB pension and RRIF minimums at 65+ land on the target', () => {
         // A modest DB pension plus RRIF minimums, no OAS: base income sits near the
         // zero-tax floor, so the pension credit decides how much of each top-up
-        // dollar is taxed. The credit covers the DB income and the RRIF minimum
-        // (72+); the top-up draw itself is ordinary income and never qualifies.
+        // dollar is taxed. The credit covers the DB income and, from 72, every RRIF
+        // withdrawal — the minimum and the top-up the solver is sizing alike.
         // The credit-blind estimate overshot this plan by up to ~$370 a year.
         const res = runSimulation(inputs({
             withdrawalStrategy: 'rrsp-first',
@@ -1807,5 +1807,119 @@ describe('one-time events are indexed to inflation', () => {
         expect(y).toBeDefined();
         expect(y.age > 67).toBe(true); // primary already dead
         expect(y.spending - y0.spending).toBeCloseTo(30_000 * Math.pow(1 + INFL, 5), 4);
+    });
+});
+
+describe('pension splitting beside a working spouse keeps the CPP/EI credit', () => {
+    // One spouse still earning (payroll credit, no pension), the other a sub-65 DB
+    // pensioner — splitting DB income to the earner can pay, because it stays
+    // creditable in their hands at any age. The split bills replace the real ones,
+    // and they used to drop the earner's payroll credit, so electing a split RAISED
+    // household tax by about that credit every working year.
+    // Zero returns: banked splitting savings earn nothing, so working-year tax
+    // differences can only come from the split itself.
+    const couple = (useIncomeSplitting: boolean) => inputs({
+        useIncomeSplitting,
+        preRetirementSpend: 40_000,
+        postRetirementSpend: 40_000,
+        person: person({
+            age: 50, retirementAge: 58, lifeExpectancy: 70, currentIncome: 90_000,
+            nonRegisteredAccounts: [nonReg({ receivesSurplus: true })]
+        }),
+        spouse: person({
+            age: 60, retirementAge: 60, lifeExpectancy: 80,
+            pension: { annualAmount: 40_000, startAge: 60, indexedToInflation: true },
+            nonRegisteredAccounts: [nonReg({ id: 'nr-s', receivesSurplus: true })]
+        })
+    });
+
+    it('household tax with splitting is never above tax without it, in every working year', () => {
+        const on = runSimulation(couple(true));
+        const off = runSimulation(couple(false));
+        let splitYears = 0;
+        for (let i = 0; i < on.length; i++) {
+            if (on[i].age >= 58) break; // working years only
+            if ((on[i].pensionSplitAmount ?? 0) > 0) {
+                splitYears++;
+                // The DB pensioner is the spouse, so the split runs spouse → person.
+                expect(on[i].pensionSplitFrom).toBe('spouse');
+            }
+            expect(on[i].taxPaid, `age ${on[i].age}`).toBeLessThanOrEqual(off[i].taxPaid + 1e-6);
+        }
+        expect(splitYears, 'expected working years with a split').toBeGreaterThan(0);
+        expect(off.every(r => r.pensionSplitFrom === undefined)).toBe(true);
+    });
+});
+
+describe('RRIF withdrawals above the minimum count as pension income from 72', () => {
+    // A retiree living on bond interest plus RRSP/RRIF draws (rrsp-first), no CPP,
+    // OAS or DB pension — so the only possible pension income is RRIF withdrawals.
+    const retiree = (age: number, rrsp: number) => inputs({
+        withdrawalStrategy: 'rrsp-first',
+        postRetirementSpend: 45_000,
+        returnRates: { bondReturn: 0.03, cashInterest: 0, dividend: 0, capitalGrowth: 0 },
+        person: person({
+            age, retirementAge: 60, lifeExpectancy: age + 1, oasStartAge: 99, cppStartAge: 99,
+            rrsp: { type: 'RRSP', balance: rrsp },
+            nonRegisteredAccounts: [nonReg({
+                balance: 1_000_000, adjustedCostBase: 1_000_000,
+                assetMix: { bonds: 1, cash: 0, dividend: 0, capitalGain: 0 }
+            })]
+        })
+    });
+    const assessedTax = (r: SimulationResult, eligible: number) => calculateTotalTax(
+        r.investmentIncome + r.totalRRSPWithdrawal, 0, 'ON', 1.0, r.age, eligible, 0, 0
+    ).total;
+
+    it('a 72+ retiree gets the full credit on a top-up even when the minimum is tiny', () => {
+        // $20k RRIF: the minimum is ~$1.2k, well under the $2,000 federal amount;
+        // the top-up carries eligible income past it.
+        const r = runSimulation(retiree(75, 20_000))[0];
+        expect(r.rrifMinimumWithdrawal).toBeGreaterThan(0);
+        expect(r.rrifMinimumWithdrawal).toBeLessThan(2_000);
+        expect(r.topUpWithdrawal).toBeGreaterThan(2_000);
+        expect(r.taxPaid).toBeCloseTo(assessedTax(r, r.totalRRSPWithdrawal), 4);
+        expect(r.taxPaid).toBeLessThan(assessedTax(r, r.rrifMinimumWithdrawal) - 100);
+        // The minimum alone is still what rrifMinimumWithdrawal reports.
+        expect(r.rrifMinimumWithdrawal + r.voluntaryMeltWithdrawal + r.topUpWithdrawal)
+            .toBeCloseTo(r.totalRRSPWithdrawal, 6);
+    });
+
+    it('before 72 a top-up is an ordinary RRSP withdrawal and gets no pension credit', () => {
+        const r = runSimulation(retiree(70, 20_000))[0];
+        expect(r.rrifMinimumWithdrawal).toBe(0);
+        expect(r.topUpWithdrawal).toBeGreaterThan(2_000);
+        expect(r.taxPaid).toBeCloseTo(assessedTax(r, 0), 4);
+    });
+
+    it('a couple can split post-72 top-ups, not just the minimum', () => {
+        // Person: a large RRIF funding the household; spouse: no income at all.
+        const res = runSimulation(inputs({
+            useIncomeSplitting: true,
+            withdrawalStrategy: 'rrsp-first',
+            postRetirementSpend: 80_000,
+            person: person({
+                age: 75, lifeExpectancy: 77, rrsp: { type: 'RRSP', balance: 600_000 },
+                nonRegisteredAccounts: [nonReg({ receivesSurplus: true })]
+            }),
+            spouse: person({
+                age: 75, lifeExpectancy: 77,
+                nonRegisteredAccounts: [nonReg({ id: 'nr-s', receivesSurplus: true })]
+            })
+        }));
+        const r = res[0];
+        expect(r.topUpWithdrawal).toBeGreaterThan(20_000);
+        expect(r.pensionSplitFrom).toBe('person');
+        // Half the minimum was the old ceiling; the top-up lifts it well past that.
+        expect(r.pensionSplitAmount!).toBeGreaterThan(r.rrifMinimumWithdrawal / 2 + 5_000);
+        expect(r.pensionSplitAmount!).toBeLessThanOrEqual(r.totalRRSPWithdrawal / 2 + 1);
+        // Every funded draw year still lands on its target with the new credit.
+        expect(Math.abs(r.netIncome - r.spending)).toBeLessThan(2);
+    });
+
+    it('the 72+ top-up year lands on its spending target (solver prices the credit it creates)', () => {
+        const r = runSimulation(retiree(75, 20_000))[0];
+        expect(r.shortfall).toBe(0);
+        expect(Math.abs(r.netIncome - r.spending)).toBeLessThan(2);
     });
 });

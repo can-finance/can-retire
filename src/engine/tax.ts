@@ -186,7 +186,13 @@ const QC_FEDERAL_ABATEMENT = 0.165;
 // des Finances "Parameters of the personal income tax system for 2026", Table 3.
 // ---------------------------------------------------------------------------
 
-/** Federal pension income amount (T1 line 31400) — confirmed still unindexed for 2026. */
+/**
+ * Federal pension income amount (T1 line 31400) — confirmed still unindexed for 2026.
+ *
+ * EXCEPTION to the "indexed at the point of use" rule above: the $2,000 is fixed in
+ * the Income Tax Act (s. 118(3)) and is NOT among the amounts s. 117.1(1) indexes,
+ * so it has been $2,000 nominal since 2006. It is applied as a flat nominal figure.
+ */
 export const FEDERAL_PENSION_INCOME_AMOUNT = 2000;
 
 /**
@@ -210,6 +216,14 @@ export const PROVINCIAL_PENSION_INCOME_AMOUNT: Record<string, number> = {
     'SK': 1000,
     'YT': 2000,
 };
+
+/**
+ * Jurisdictions whose pension (QC: retirement income) amount is indexed each year,
+ * per the comment above. Every other jurisdiction's amount is a flat nominal
+ * figure (the unindexed $1,000, or NU/YT's mirror of the unindexed federal
+ * $2,000), so it is NOT multiplied by inflationFactor.
+ */
+export const INDEXED_PROVINCIAL_PENSION_AMOUNT: ReadonlySet<string> = new Set(['AB', 'NS', 'ON', 'QC']);
 
 /** A max claim plus the net income above which it is clawed back. */
 export interface AgeAmount {
@@ -341,12 +355,18 @@ export function calculateIncomeTax(
     // Federal and provincial pension amounts are capped SEPARATELY: the provincial
     // cap is its own (usually smaller) figure, and each side is credited at its own
     // lowest bracket rate.
+    // The federal $2,000 is NOT indexed in law (see FEDERAL_PENSION_INCOME_AMOUNT), so
+    // it is a flat nominal cap; only the provinces that index theirs scale with
+    // inflationFactor. A province without its own amount mirrors the federal one,
+    // unindexed.
     if (eligiblePensionIncome > 0) {
-        const fedClaim = Math.min(eligiblePensionIncome, FEDERAL_PENSION_INCOME_AMOUNT * inflationFactor);
+        const fedClaim = Math.min(eligiblePensionIncome, FEDERAL_PENSION_INCOME_AMOUNT);
         fed -= fedClaim * FEDERAL_LOWEST_RATE;
 
-        const provMax = (PROVINCIAL_PENSION_INCOME_AMOUNT[province] ?? FEDERAL_PENSION_INCOME_AMOUNT)
-            * inflationFactor;
+        const provAmount = PROVINCIAL_PENSION_INCOME_AMOUNT[province];
+        const provMax = provAmount === undefined
+            ? FEDERAL_PENSION_INCOME_AMOUNT
+            : provAmount * (INDEXED_PROVINCIAL_PENSION_AMOUNT.has(province) ? inflationFactor : 1);
         prov -= Math.min(eligiblePensionIncome, provMax) * provBrackets[0].rate;
     }
 
@@ -596,6 +616,11 @@ export interface SplitPerson {
     rrifIncome: number;      // splittable & creditable only at 65+
     oasIncome: number;
     grossedUpDividends: number;
+    // Base CPP/QPP + EI contributions — a non-refundable credit on this person's
+    // own return. Splitting moves pension income, never payroll, so the credit
+    // stays with its earner on both the baseline and the split returns. Optional
+    // so callers without payroll (retirees) need not pass 0.
+    creditablePayroll?: number;
     age: number;
 }
 
@@ -622,12 +647,14 @@ export function calculateOptimalSplit(
     // BEFORE any OAS repayment — calculateTotalTax applies that deduction itself.
     const p1BaseTax = calculateTotalTax(
         person1.taxableIncome, person1.oasIncome, province, inflationFactor,
-        person1.age, ownQualified(person1), person1.grossedUpDividends
+        person1.age, ownQualified(person1), person1.grossedUpDividends,
+        person1.creditablePayroll ?? 0
     ).total;
 
     const p2BaseTax = calculateTotalTax(
         person2.taxableIncome, person2.oasIncome, province, inflationFactor,
-        person2.age, ownQualified(person2), person2.grossedUpDividends
+        person2.age, ownQualified(person2), person2.grossedUpDividends,
+        person2.creditablePayroll ?? 0
     ).total;
 
     const baselineCombinedTax = p1BaseTax + p2BaseTax;
@@ -652,12 +679,14 @@ export function calculateOptimalSplit(
 
         const fromTax = calculateTotalTax(
             fromNewTaxable, fromPerson.oasIncome, province, inflationFactor,
-            fromPerson.age, fromNewQualified, fromPerson.grossedUpDividends
+            fromPerson.age, fromNewQualified, fromPerson.grossedUpDividends,
+            fromPerson.creditablePayroll ?? 0
         ).total;
 
         const toTax = calculateTotalTax(
             toNewTaxable, toPerson.oasIncome, province, inflationFactor,
-            toPerson.age, toNewQualified, toPerson.grossedUpDividends
+            toPerson.age, toNewQualified, toPerson.grossedUpDividends,
+            toPerson.creditablePayroll ?? 0
         ).total;
 
         return { fromTax, toTax };

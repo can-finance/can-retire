@@ -135,10 +135,16 @@ interface PersonAnnualBase {
  * pension credit at 65+), drew too much, and left the surplus unspent and
  * unreinvested — a several-hundred-dollar cash-flow residual on the default plan.
  *
- * None of these depend on what Step 3 draws: a top-up RRSP draw or a voluntary melt
- * is an ordinary withdrawal that never qualifies for the pension credit (only the
- * mandatory RRIF minimum does, at 65+), and a non-registered sale realizes gains,
- * not dividends. So the solvers can take them as fixed for the year.
+ * Qualifying pension income DOES depend on what Step 3 draws from 72 on. The model
+ * keeps the account an RRSP until it converts to a RRIF at the end of the year the
+ * person turns 71, so from 72 every withdrawal — the mandatory minimum AND any
+ * top-up above it (`extraRRSP`) — comes out of a RRIF and qualifies (RRIF income
+ * qualifies at 65+, and 72 > 65). Before 72, the voluntary melt and top-ups are
+ * ordinary RRSP withdrawals and never qualify. So callers pass the top-up drawn so
+ * far; each solver prices its draw from yearCredits(base, age, drawnSoFar) to
+ * yearCredits(base, age, drawnSoFar + gross), which makes the sequential estimates
+ * telescope onto the final assessment exactly. Dividends and payroll are fixed for
+ * the year (a non-registered sale realizes gains, not dividends).
  */
 interface YearCredits {
     eligiblePensionIncome: number;
@@ -146,9 +152,19 @@ interface YearCredits {
     creditablePayroll: number;
 }
 
-function yearCredits(base: PersonAnnualBase, age: number): YearCredits {
+/**
+ * RRIF withdrawals that qualify as pension income (for the credit and for
+ * splitting): the minimum at 65+, plus any top-up above it from 72 — the age the
+ * model's RRSP has become a RRIF. Distinct from `rrifWithdrawal`, which stays the
+ * mandatory minimum alone (it is reported as `rrifMinimumWithdrawal`).
+ */
+function eligibleRrifIncome(base: PersonAnnualBase, age: number, extraRRSP: number): number {
+    return (age >= 65 ? base.rrifWithdrawal : 0) + (age >= 72 ? extraRRSP : 0);
+}
+
+function yearCredits(base: PersonAnnualBase, age: number, extraRRSP = 0): YearCredits {
     return {
-        eligiblePensionIncome: base.pensionIncome + (age >= 65 ? base.rrifWithdrawal : 0),
+        eligiblePensionIncome: base.pensionIncome + eligibleRrifIncome(base, age, extraRRSP),
         grossedUpDividends: base.divIncome * 1.38,
         creditablePayroll: base.payrollCreditable
     };
@@ -157,8 +173,10 @@ function yearCredits(base: PersonAnnualBase, age: number): YearCredits {
 // --- Helper: Solve Gross Withdrawal from Net Needed ---
 // Given a person's current taxable income, province, and a desired *NET* amount to extract,
 // calculate the required Gross RRSP withdrawal (accounting for marginal tax and OAS clawback).
-// `credits` must be the year's assessed credits (see yearCredits) — the marginal tax
-// is only right if it is differenced on the same tax function getFinalStats uses.
+// `creditsFor(gross)` must return the year's assessed credits with `gross` drawn on
+// top of everything so far (see yearCredits) — the marginal tax is only right if it
+// is differenced on the same tax function getFinalStats uses, and from 72 the draw
+// itself is qualifying RRIF income.
 function solveGrossWithdrawal(
     targetNet: number,
     currentTaxable: number,
@@ -166,14 +184,17 @@ function solveGrossWithdrawal(
     province: string,
     inflationFactor: number,
     age: number,
-    credits: YearCredits
+    creditsFor: (gross: number) => YearCredits
 ): { gross: number, tax: number } {
     if (targetNet <= 0) return { gross: 0, tax: 0 };
-    const taxAt = (taxable: number) => calculateTotalTax(
-        taxable, baseOAS, province, inflationFactor, age,
-        credits.eligiblePensionIncome, credits.grossedUpDividends, credits.creditablePayroll
-    ).total;
-    const originalTax = taxAt(currentTaxable);
+    const taxAt = (taxable: number, gross: number) => {
+        const credits = creditsFor(gross);
+        return calculateTotalTax(
+            taxable, baseOAS, province, inflationFactor, age,
+            credits.eligiblePensionIncome, credits.grossedUpDividends, credits.creditablePayroll
+        ).total;
+    };
+    const originalTax = taxAt(currentTaxable, 0);
 
     // Iterative Solver (Newton-Raphson-ish or Binary Search)
     // Since tax function is piecewise linear but complex, binary search is safer/easier.
@@ -190,7 +211,7 @@ function solveGrossWithdrawal(
 
         // Calculate tax with this specific add-on
         const newTaxable = currentTaxable + addedTaxable;
-        const marginalTax = taxAt(newTaxable) - originalTax;
+        const marginalTax = taxAt(newTaxable, mid) - originalTax;
         const netResult = mid - marginalTax;
 
         if (Math.abs(netResult - targetNet) < 1) {
@@ -206,7 +227,7 @@ function solveGrossWithdrawal(
 
     // Fallback if not perfectly converged
     const gross = (low + high) / 2;
-    const marginalTax = taxAt(currentTaxable + gross) - originalTax;
+    const marginalTax = taxAt(currentTaxable + gross, gross) - originalTax;
 
     return { gross, tax: marginalTax };
 }
@@ -651,8 +672,9 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
                         const priorGains = (isPrimary ? pRealizedGains : sRealizedGains) + totalGains;
 
                         // Priced with the year's assessed credits, so the sale's
-                        // marginal tax is the one getFinalStats will actually charge.
-                        const credits = yearCredits(base, age);
+                        // marginal tax is the one getFinalStats will actually charge
+                        // (including any qualifying RRIF top-up already drawn).
+                        const credits = yearCredits(base, age, isPrimary ? pExtraRRSPGross : sExtraRRSPGross);
                         const totalTaxAt = (realizedGains: number) => {
                             const taxable = taxableBase + calculateTaxableCapitalGains(realizedGains);
                             return calculateTotalTax(
@@ -764,9 +786,11 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
 
                     // Current-year age, not the Person's start age, and the year's assessed
                     // credits — the solver has to see the same tax function the year is
-                    // finally assessed with.
-                    const credits = yearCredits(base, age);
-                    const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, age, credits);
+                    // finally assessed with. From 72 the draw is itself qualifying RRIF
+                    // income, so the credits move with it (see yearCredits).
+                    const drawnSoFar = personObj === p ? pExtraRRSPGross : sExtraRRSPGross;
+                    const creditsFor = (g: number) => yearCredits(base, age, drawnSoFar + g);
+                    const { gross } = solveGrossWithdrawal(netReq, currentTaxable, base.oasIncome, province, inflationFactor, age, creditsFor);
 
                     // Check balance
                     const actualGross = Math.min(gross, personObj.rrsp.balance);
@@ -781,12 +805,15 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
 
                         // Calculate marginal tax on the *actual* gross we extracted
                         // (current-year age and assessed credits, as above)
-                        const taxAt = (taxable: number) => calculateTotalTax(
-                            taxable, base.oasIncome, province, inflationFactor, age,
-                            credits.eligiblePensionIncome, credits.grossedUpDividends, credits.creditablePayroll
-                        ).total;
-                        const originalTax = taxAt(currentTaxable);
-                        const newTax = taxAt(newTaxable);
+                        const taxAt = (taxable: number, g: number) => {
+                            const credits = creditsFor(g);
+                            return calculateTotalTax(
+                                taxable, base.oasIncome, province, inflationFactor, age,
+                                credits.eligiblePensionIncome, credits.grossedUpDividends, credits.creditablePayroll
+                            ).total;
+                        };
+                        const originalTax = taxAt(currentTaxable, 0);
+                        const newTax = taxAt(newTaxable, actualGross);
 
                         const actualTax = newTax - originalTax;
                         actualNet = actualGross - actualTax;
@@ -912,14 +939,18 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
         const getFinalStats = (base: PersonAnnualBase, extraRRSP: number, realizedGains: number, age: number, rrspContribution = 0) => {
             const totalRRSP = base.rrifWithdrawal + base.voluntaryRRSPWithdrawal + extraRRSP;
             // Qualifying pension income for the $2,000 credit AND for income splitting:
-            // DB pension qualifies at any age; RRIF withdrawals qualify only at 65+. The
-            // voluntary melt and extra RRSP draws are ordinary withdrawals — never qualifying.
-            // dbPensionIncome / rrifIncome are surfaced separately so Step 5.5 can build the
-            // SplitPerson buckets (DB splittable at any age, RRIF only at 65+).
+            // DB pension qualifies at any age; RRIF withdrawals at 65+. The model's
+            // RRSP becomes a RRIF at 72, so from then on every withdrawal — the minimum
+            // and any top-up above it — qualifies; before 72 the voluntary melt and
+            // top-ups are ordinary RRSP withdrawals and never do.
+            // dbPensionIncome / splittableRrifIncome are surfaced separately so Step 5.5
+            // can build the SplitPerson buckets. `rrifIncome` stays the mandatory
+            // minimum alone — it is what rrifMinimumWithdrawal reports.
             const dbPensionIncome = base.pensionIncome;
             const rrifIncome = base.rrifWithdrawal;
+            const splittableRrifIncome = eligibleRrifIncome(base, age, extraRRSP);
             // Same credit inputs the Step 3 solvers priced their draws with (yearCredits).
-            const credits = yearCredits(base, age);
+            const credits = yearCredits(base, age, extraRRSP);
             const qualifiedPension = credits.eligiblePensionIncome;
             const taxableGains = calculateTaxableCapitalGains(realizedGains);
             const grossedUpDivs = credits.grossedUpDividends;
@@ -972,6 +1003,7 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
                 topUpWithdrawal: extraRRSP,
                 dbPensionIncome,
                 rrifIncome,
+                splittableRrifIncome,
                 qualifiedPension,
                 rrspDeductionRefund,
                 grossedUpDivs,
@@ -1010,6 +1042,8 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
         let pTaxableFiled = pFinal?.finalTaxable || 0;
         let sTaxableFiled = sFinal?.finalTaxable || 0;
         let pensionSplitAmount = 0;
+        // Whose pension income was split away this year; undefined when none was.
+        let pensionSplitFrom: 'person' | 'spouse' | undefined;
         let taxSavingsFromSplit = 0;
         // Splitting saving the engine could not put anywhere (neither spouse holds a
         // non-registered account). Reported so the year audit can name it instead of
@@ -1022,17 +1056,19 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
             const pSplitInfo: SplitPerson = {
                 taxableIncome: pFinal.finalTaxable,
                 dbPensionIncome: pFinal.dbPensionIncome,
-                rrifIncome: pFinal.rrifIncome,
+                rrifIncome: pFinal.splittableRrifIncome,
                 oasIncome: pBase.oasIncome,
                 grossedUpDividends: pBase.divIncome * 1.38,
+                creditablePayroll: pBase.payrollCreditable,
                 age: pAge
             };
             const sSplitInfo: SplitPerson = {
                 taxableIncome: sFinal.finalTaxable,
                 dbPensionIncome: sFinal.dbPensionIncome,
-                rrifIncome: sFinal.rrifIncome,
+                rrifIncome: sFinal.splittableRrifIncome,
                 oasIncome: sBase.oasIncome,
                 grossedUpDividends: sBase.divIncome * 1.38,
+                creditablePayroll: sBase.payrollCreditable,
                 age: sAge!
             };
 
@@ -1040,6 +1076,8 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
 
             if (splitResult.taxSavings > 0) {
                 pensionSplitAmount = splitResult.splitAmount;
+                // calculateOptimalSplit was called (pSplitInfo, sSplitInfo): 1 = person.
+                pensionSplitFrom = splitResult.fromPerson === 1 ? 'person' : 'spouse';
                 taxSavingsFromSplit = splitResult.taxSavings;
                 // Apply the new optimized tax amounts
                 totalTaxPaid = splitResult.person1NewTax + splitResult.person2NewTax;
@@ -1099,13 +1137,13 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
         // undefined there, and for anyone not alive this year: a dead person has no
         // rate, which is not the same fact as a 0% rate.
         // Same credit arguments getFinalStats passes to calculateTotalTax, struck the
-        // same way — qualifiedPension applies the age-65 rule to RRIF income, and the
+        // same way — qualifiedPension (DB at any age, RRIF withdrawals at 65+ incl. top-ups from 72), and the
         // dividend gross-up is 1.38. They only move the zero-tax floor (see
         // marginalTaxRate), but that floor is where a melt-window year sits.
         const personMarginalRate = !stochastic && pAlive && pBase && pFinal
             ? marginalTaxRate(
                 pTaxableFiled, pBase.oasIncome, province, inflationFactor, pAge,
-                pFinal.dbPensionIncome + (pAge >= 65 ? pFinal.rrifIncome : 0),
+                pFinal.qualifiedPension,
                 pBase.divIncome * 1.38,
                 pBase.payrollCreditable,
             )
@@ -1113,7 +1151,7 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
         const spouseMarginalRate = !stochastic && sAlive && sBase && sFinal
             ? marginalTaxRate(
                 sTaxableFiled, sBase.oasIncome, province, inflationFactor, sAge!,
-                sFinal.dbPensionIncome + (sAge! >= 65 ? sFinal.rrifIncome : 0),
+                sFinal.qualifiedPension,
                 sBase.divIncome * 1.38,
                 sBase.payrollCreditable,
             )
@@ -1511,6 +1549,7 @@ export function runSimulation(rawInputs: SimulationInputs, stochastic: boolean =
 
             // Income Splitting
             pensionSplitAmount,
+            pensionSplitFrom,
             taxSavingsFromSplit,
             unallocatedSplitSaving,
 

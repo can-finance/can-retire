@@ -270,6 +270,27 @@ describe('provincial age and pension credits use each province\'s own rate and a
         expect(PROVINCIAL_PENSION_INCOME_AMOUNT['ON']).toBe(1_796);
     });
 
+    // The federal $2,000 is fixed in the Income Tax Act and not indexed, so it stays
+    // $2,000 nominal however far out the year is. Only provinces that index their own
+    // amount (ON here) grow with inflation; BC's $1,000 and the federal-mirror
+    // fallback stay flat.
+    const pensionSaving = (prov: string, factor: number) =>
+        calculateIncomeTax(60_000, prov, factor, undefined, 60, 0)
+        - calculateIncomeTax(60_000, prov, factor, undefined, 60, 50_000);
+
+    it('the federal pension amount is not indexed: still $2,000 at inflationFactor 2', () => {
+        const onRate = TAX_CONSTANTS.provincialBrackets['ON'][0].rate;
+        expect(pensionSaving('ON', 2)).toBeCloseTo(2_000 * 0.14 + 1_796 * 2 * onRate, 2);
+    });
+
+    it('unindexed provincial amounts and the federal-mirror fallback stay flat too', () => {
+        const bcRate = TAX_CONSTANTS.provincialBrackets['BC'][0].rate;
+        expect(pensionSaving('BC', 2)).toBeCloseTo(2_000 * 0.14 + 1_000 * bcRate, 2);
+        // 'XX' uses Ontario's brackets but no amount of its own → mirrors the flat $2,000.
+        const onRate = TAX_CONSTANTS.provincialBrackets['ON'][0].rate;
+        expect(pensionSaving('XX', 2)).toBeCloseTo(2_000 * 0.14 + 2_000 * onRate, 2);
+    });
+
     it('unknown provinces fall back to the federal amounts', () => {
         // 'XX' borrows Ontario's brackets, so the RATE is ON's, but the claim amounts
         // fall back to federal rather than silently inheriting Ontario's.
@@ -649,5 +670,47 @@ describe('calculateOptimalSplit', () => {
         const result = calculateOptimalSplit(splitP(60_000, { rrif: 30_000 }), splitP(60_000, { rrif: 30_000 }), 'ON', 1.0);
         // Symmetric household: any split moves income the wrong way; savings ~0
         expect(result.taxSavings).toBeLessThan(50);
+    });
+
+    describe('keeps each spouse\'s CPP/EI payroll credit', () => {
+        // A working spouse (payroll credit, no pension) beside a sub-65 DB pensioner:
+        // the shape where a split to the earner (whose split DB income is creditable
+        // at any age) can pay. The new tax bills REPLACE the real ones in the
+        // projection, so they must carry the earner's payroll credit — dropping it
+        // overstated the household's tax by roughly that credit every working year.
+        const PAYROLL = 4_500;
+        const earner: SplitPerson = { ...splitP(90_000, {}, 52), creditablePayroll: PAYROLL };
+        const pensioner = splitP(48_000, { db: 40_000 }, 60);
+        const realTax = (per: SplitPerson, qualified: number) => calculateTotalTax(
+            per.taxableIncome, 0, 'ON', 1.0, per.age, qualified, 0, per.creditablePayroll ?? 0
+        ).total;
+        const realBaseline = realTax(earner, 0) + realTax(pensioner, 40_000);
+
+        it('baseline (no split) bills equal calculateTotalTax with the credit', () => {
+            // Neither side has pension income, so nothing can be split.
+            const noSplit = calculateOptimalSplit(earner, splitP(48_000, {}, 60), 'ON', 1.0);
+            expect(noSplit.splitAmount).toBe(0);
+            expect(noSplit.person1NewTax).toBeCloseTo(realTax(earner, 0), 6);
+        });
+
+        it('a chosen split never costs more than not splitting, on the real (credited) bills', () => {
+            for (const [a, b] of [[earner, pensioner], [pensioner, earner]] as const) {
+                const r = calculateOptimalSplit(a, b, 'ON', 1.0);
+                expect(r.person1NewTax + r.person2NewTax).toBeLessThanOrEqual(realBaseline + 1e-6);
+                expect(r.taxSavings).toBeCloseTo(realBaseline - (r.person1NewTax + r.person2NewTax), 6);
+            }
+        });
+
+        it('the earner\'s post-split bill still carries the credit', () => {
+            const r = calculateOptimalSplit(pensioner, earner, 'ON', 1.0);
+            expect(r.fromPerson).toBe(1);
+            expect(r.splitAmount).toBeGreaterThan(0);
+            // Split DB income stays creditable in the under-65 earner's hands.
+            const earnerAfter = calculateTotalTax(
+                earner.taxableIncome + r.splitAmount, 0, 'ON', 1.0, earner.age,
+                r.splitAmount, 0, PAYROLL
+            ).total;
+            expect(r.person2NewTax).toBeCloseTo(earnerAfter, 6);
+        });
     });
 });

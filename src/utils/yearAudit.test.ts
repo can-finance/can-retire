@@ -735,12 +735,60 @@ describe('gross income section (section 1)', () => {
         const i = results.findIndex(r => (r.pensionSplitAmount ?? 0) > 1);
         expect(i, 'expected a pension-split year in COUPLE').toBeGreaterThanOrEqual(0);
         const audit = buildYearAudit(COUPLE, results, i);
-        const LABEL = 'Pension income split to spouse';
+        expect(results[i].pensionSplitFrom).toBeDefined();
+        const LABEL = results[i].pensionSplitFrom === 'spouse'
+            ? 'Pension income your spouse split to you'
+            : 'Pension income you split to your spouse';
 
         expect(sectionOf(audit, 'incomeSources')!.lines.some(l => l.label === LABEL)).toBe(false);
         const line = sectionOf(audit, 'taxes')!.lines.find(l => l.label === LABEL)!;
         expect(line.kind).toBe('info');
         expect(line.amount).toBeCloseTo(results[i].pensionSplitAmount!, 6);
+    });
+
+    it('a split beside a working spouse leaves no cash residual (payroll credit kept)', () => {
+        // Earner + sub-65 DB pensioner: dropping the earner's CPP/EI credit from the
+        // split bills used to leave a residual of about that credit (~−$1,200/yr on
+        // the reference couple) in every working year with a split.
+        const ins = inputs({
+            useIncomeSplitting: true,
+            preRetirementSpend: 40_000,
+            postRetirementSpend: 40_000,
+            person: person({
+                age: 50, retirementAge: 58, lifeExpectancy: 70, currentIncome: 90_000,
+                nonRegisteredAccounts: [nonReg({ receivesSurplus: true })]
+            }),
+            spouse: person({
+                age: 60, retirementAge: 60, lifeExpectancy: 80,
+                pension: { annualAmount: 40_000, startAge: 60, indexedToInflation: true },
+                nonRegisteredAccounts: [nonReg({ id: 'nr-s', receivesSurplus: true })]
+            })
+        });
+        const results = runSimulation(ins);
+        let checked = 0;
+        results.forEach((r, i) => {
+            if (r.age >= 58 || (r.pensionSplitAmount ?? 0) <= 0) return;
+            const check = sectionOf(buildYearAudit(ins, results, i), 'cashFlow')!.check!;
+            expect(Math.abs(check.residual), `age ${r.age}`).toBeLessThan(1);
+            checked++;
+        });
+        expect(checked).toBeGreaterThan(0);
+    });
+
+    it('labels the split by its direction, which can differ from year to year', () => {
+        const results = runSimulation(COUPLE);
+        const i = results.findIndex(r => (r.pensionSplitAmount ?? 0) > 1);
+        expect(i).toBeGreaterThanOrEqual(0);
+        const labelsFor = (from: 'person' | 'spouse') => {
+            const rows = results.map((r, j) => j === i ? { ...r, pensionSplitFrom: from } : r);
+            return sectionOf(buildYearAudit(COUPLE, rows, i), 'taxes')!.lines.map(l => l.label);
+        };
+        const fromPerson = labelsFor('person');
+        expect(fromPerson).toContain('Pension income you split to your spouse');
+        expect(fromPerson).not.toContain('Pension income your spouse split to you');
+        const fromSpouse = labelsFor('spouse');
+        expect(fromSpouse).toContain('Pension income your spouse split to you');
+        expect(fromSpouse).not.toContain('Pension income you split to your spouse');
     });
 });
 

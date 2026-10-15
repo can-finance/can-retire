@@ -8,6 +8,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Pension splitting no longer drops a working spouse's CPP/EI credit.** In
+  years when one spouse still worked and the other split a pension, the split
+  tax left out the earner's CPP/EI credit, so electing a split could raise the
+  household's tax by about $1,000 a year instead of lowering it. Previously
+  computed lifetime tax falls for those couples.
+- **RRIF withdrawals above the minimum now count as pension income from 72,**
+  for pension splitting and the pension income credit. Before, only the
+  mandatory minimum counted. Plans that draw extra from a RRIF after 72 may show
+  slightly lower tax.
+- **The federal pension income credit is no longer increased with inflation.**
+  The $2,000 federal amount is fixed in law, and so are most provinces' $1,000
+  amounts (Alberta, Nova Scotia, Ontario and Quebec still index theirs). Tax in
+  later retirement years rises slightly in previously computed projections
+  (about $200–$300 a year per person on the default plan by the 2050s).
+- **Adding a spouse no longer overwrites spending you typed.** It switches
+  household spending to the couple default only when both amounts are still at
+  the single default, and tells you when it does (removing a spouse works the
+  same way in reverse).
+- The year breakdown now says which spouse pension income was split from.
 - **Withdrawals no longer overshoot your spending in years with dividend or
   pension tax credits.** When the plan sized an RRSP withdrawal or a
   non-registered sale to cover spending, it estimated the tax without the
@@ -59,6 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Compare Plans splits lifetime tax into tax while working, in retirement and at
   death, and each tax total now says what it covers.
+- How It Works and the pension splitting tooltip now say what income can be
+  split: a workplace pension at any age and RRIF withdrawals from 72, not RRSP
+  withdrawals (including the melt), CPP or OAS.
 
 ## [0.14.0] - 2026-10-14
 
