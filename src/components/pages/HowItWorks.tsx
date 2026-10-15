@@ -168,7 +168,7 @@ export function HowItWorks() {
                         Neither order always wins. Paying less tax over your lifetime doesn't guarantee a bigger estate — in our test plans, the order with the lowest total tax sometimes left less behind. The <strong>RRSP Meltdown Optimizer</strong> tries both on your own numbers.
                     </p>
                     <p>
-                        These two options only set which account pays for your spending first. You change it with the <strong>Fund spending from RRSP first</strong> switch in Settings. They are not the RRSP meltdown. The meltdown is the separate <strong>RRSP Melt Amount</strong> for each person: a fixed withdrawal every year from its start age to 71, whether you need the money or not. It is the same dollar amount each year and is not adjusted for inflation. You can use both. The meltdown comes out first, and anything still needed for spending is drawn in the order you picked.
+                        These two options only set which account pays for your spending first. You change it with the <strong>Fund spending from RRSP first</strong> switch in Settings. They are not the RRSP meltdown. The meltdown is the separate <strong>RRSP Melt Amount</strong> for each person: a fixed withdrawal every year from its start age to 71, whether you need the money or not. It is the same dollar amount each year and is not adjusted for inflation. The tool keeps your RRSP as an RRSP until it becomes a RRIF at 71, so melt withdrawals don't get the pension income credit and can't be split with a spouse. (Converting to a RRIF earlier, from 65, would make them eligible. The tool doesn't model that yet.) You can use both. The meltdown comes out first, and anything still needed for spending is drawn in the order you picked.
                     </p>
                 </div>
             </details>
@@ -190,7 +190,7 @@ export function HowItWorks() {
                         <div className="space-y-2">
                             <h4 className="font-bold text-slate-900">Income tax</h4>
                             <p className="text-slate-600 leading-relaxed">
-                                Applies federal and provincial brackets, the Basic Personal Amount, Age Amount (65+), and Pension Income Credit (RRIF income, 65+). Brackets and credits are indexed to your projected inflation rate.
+                                Applies federal and provincial brackets, the Basic Personal Amount, Age Amount (65+), and Pension Income Credit (a workplace pension at any age, and RRIF withdrawals from 72). Brackets and most credits rise with your projected inflation rate. The federal $2,000 pension amount doesn't, because the tax rules fix it at $2,000.
                             </p>
                         </div>
                         <div className="space-y-2">
@@ -231,7 +231,7 @@ export function HowItWorks() {
                 </summary>
                 <div className="px-8 pb-8 -mt-2 max-w-none text-base text-slate-600 leading-relaxed">
                     <p>
-                        For couples, the engine automatically calculates the optimal amount of eligible pension income (like RRIF withdrawals) to "split" with a lower-earning spouse.
+                        For couples, the engine works out each year how much eligible pension income to "split": up to half of one spouse's eligible pension income can be taxed in the other spouse's hands, when that lowers your combined tax. Eligible here means a workplace (defined-benefit) pension at any age, and RRIF withdrawals from 72, the first year after the tool converts your RRSP to a RRIF. RRSP withdrawals, including the melt, aren't eligible. Neither are CPP and OAS. (Couples can share CPP through a separate application to Service Canada, which the tool doesn't model.)
                     </p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li><strong>Optimization:</strong> tests splitting percentages up to 50% to minimize the household's combined tax bill.</li>

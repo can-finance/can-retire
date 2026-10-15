@@ -402,7 +402,11 @@ function taxesSection(inputs: SimulationInputs, r: SimulationResult, hasSpouse: 
     // gross cash-in section.
     if ((r.pensionSplitAmount ?? 0) > EPS) {
         lines.push({
-            label: 'Pension income split to spouse',
+            // The direction can flip over a plan (e.g. a DB pensioner early on, the
+            // other spouse's RRIF later), so the label follows the engine's record.
+            label: r.pensionSplitFrom === 'spouse'
+                ? 'Pension income your spouse split to you'
+                : 'Pension income you split to your spouse',
             amount: r.pensionSplitAmount!,
             kind: 'info',
             note: 'Moves taxable income between spouses; household cash is unchanged'

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeSimulationInputs, INITIAL_INPUTS, createDefaultPerson } from './inputSanitizer';
+import { sanitizeSimulationInputs, INITIAL_INPUTS, createDefaultPerson, spendForSpouseToggle, spouseToggleSpendNote, DEFAULT_SPEND } from './inputSanitizer';
 
 describe('sanitizeSimulationInputs', () => {
     it('rejects payloads that are not an object with a person', () => {
@@ -477,5 +477,39 @@ describe('sanitizeSimulationInputs', () => {
         // A stored value round-trips unchanged.
         const kept = sanitizeSimulationInputs({ person: { rrspMeltStartAge: 63 } })!;
         expect(sanitizeSimulationInputs(JSON.parse(JSON.stringify(kept)))!.person.rrspMeltStartAge).toBe(63);
+    });
+});
+
+describe('spendForSpouseToggle', () => {
+    const { single, couple } = DEFAULT_SPEND;
+
+    it('adding a spouse swaps both figures to the couple defaults when both are at the single defaults', () => {
+        expect(spendForSpouseToggle(single.pre, single.post, true))
+            .toEqual({ pre: couple.pre, post: couple.post, swapped: true });
+    });
+
+    it('swaps nothing when either figure was typed', () => {
+        // A typed pre-retirement figure that happens to sit beside the default post figure:
+        // swapping the untouched one alone used to pair $95k with the couple $77k.
+        expect(spendForSpouseToggle(95_000, single.post, true)).toEqual({ pre: 95_000, post: single.post, swapped: false });
+        expect(spendForSpouseToggle(single.pre, 40_000, true)).toEqual({ pre: single.pre, post: 40_000, swapped: false });
+        expect(spendForSpouseToggle(couple.pre, 50_000, false)).toEqual({ pre: couple.pre, post: 50_000, swapped: false });
+    });
+
+    it('removing a spouse reverses the swap', () => {
+        expect(spendForSpouseToggle(couple.pre, couple.post, false))
+            .toEqual({ pre: single.pre, post: single.post, swapped: true });
+    });
+
+    it('adding when already at the couple defaults is a no-op', () => {
+        expect(spendForSpouseToggle(couple.pre, couple.post, true))
+            .toEqual({ pre: couple.pre, post: couple.post, swapped: false });
+    });
+
+    it('the note names the defaults it set', () => {
+        expect(spouseToggleSpendNote(true)).toBe(
+            'We set household spending to the couple default ($84,000 before / $77,000 after retirement). Change it if yours differ.'
+        );
+        expect(spouseToggleSpendNote(false)).toContain('single default ($60,000 before / $55,000 after retirement)');
     });
 });

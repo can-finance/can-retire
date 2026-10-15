@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { SimulationInputs } from '../../engine/types';
 import { FinancialInput } from '../inputs/FinancialInput';
 import { formatCurrencyApprox } from '../../utils/formatters';
 import { preRetirementDeficit } from '../../utils/preRetirementDeficit';
 import { Toggle } from '../ui/Toggle';
-import { DEFAULT_SPEND } from '../../utils/inputSanitizer';
+import { spendForSpouseToggle, spouseToggleSpendNote } from '../../utils/inputSanitizer';
 import { SUCCESS_TARGETS } from '../optimizer/successTargets';
 import type { CalculatorForm } from './when-can-i-retire-inputs';
 
@@ -68,22 +68,28 @@ type SpouseFormFields = Pick<CalculatorForm,
 /**
  * The "Include a spouse / partner" switch and, when it's on, the spouse's
  * fields and note. Adding or removing a spouse also moves the household
- * spending defaults (see DEFAULT_SPEND) — but only while they still sit at the
- * other size's default, exactly like the dashboard's spouse toggle.
+ * spending defaults (see spendForSpouseToggle) — but only while both still sit
+ * at the other size's defaults, exactly like the dashboard's spouse toggle —
+ * and says so under the switch until either spending figure is edited.
  */
 export function SpouseSection({ form, update }: {
     form: SpouseFormFields;
     update: (patch: Partial<SpouseFormFields>) => void;
 }) {
+    const [spendNote, setSpendNote] = useState<{ pre: number; post: number; text: string } | null>(null);
     const toggleSpouse = (on: boolean) => {
-        const from = on ? DEFAULT_SPEND.single : DEFAULT_SPEND.couple;
-        const to = on ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
+        const spend = spendForSpouseToggle(form.preRetirementSpend, form.postRetirementSpend, on);
+        setSpendNote(spend.swapped ? { pre: spend.pre, post: spend.post, text: spouseToggleSpendNote(on) } : null);
         update({
             includeSpouse: on,
-            preRetirementSpend: form.preRetirementSpend === from.pre ? to.pre : form.preRetirementSpend,
-            postRetirementSpend: form.postRetirementSpend === from.post ? to.post : form.postRetirementSpend,
+            preRetirementSpend: spend.pre,
+            postRetirementSpend: spend.post,
         });
     };
+    // Shown only while both figures still equal what the toggle set.
+    const showSpendNote = spendNote !== null
+        && form.preRetirementSpend === spendNote.pre
+        && form.postRetirementSpend === spendNote.post;
 
     return (
         <div className="space-y-4">
@@ -92,6 +98,11 @@ export function SpouseSection({ form, update }: {
                 onChange={toggleSpouse}
                 label="Include a spouse / partner"
             />
+            {showSpendNote && (
+                <p role="status" className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                    {spendNote!.text}
+                </p>
+            )}
             {form.includeSpouse && (
                 <div className="space-y-4 rounded-2xl bg-slate-50 border border-slate-100 p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

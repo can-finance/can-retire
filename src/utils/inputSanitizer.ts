@@ -58,6 +58,34 @@ export const DEFAULT_SPEND = {
     couple: { pre: 84000, post: 77000 }
 } as const;
 
+/**
+ * Household spending after adding (`adding` true) or removing a spouse.
+ *
+ * Swaps to the other household size's defaults ONLY when both figures still sit
+ * at the current size's defaults, and then swaps them together. If either one
+ * has been typed, both are the user's and neither moves — swapping the untouched
+ * one alone would quietly pair a typed figure with a default it was never meant
+ * to sit beside (e.g. a typed $60k pre-retirement next to the couple $77k after).
+ * `swapped` tells the caller to say so to the user.
+ */
+export function spendForSpouseToggle(
+    pre: number,
+    post: number,
+    adding: boolean
+): { pre: number; post: number; swapped: boolean } {
+    const from = adding ? DEFAULT_SPEND.single : DEFAULT_SPEND.couple;
+    const to = adding ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
+    if (pre === from.pre && post === from.post) return { pre: to.pre, post: to.post, swapped: true };
+    return { pre, post, swapped: false };
+}
+
+/** The note shown after spendForSpouseToggle swapped the spending defaults. */
+export function spouseToggleSpendNote(adding: boolean): string {
+    const to = adding ? DEFAULT_SPEND.couple : DEFAULT_SPEND.single;
+    const fmt = (v: number) => `$${v.toLocaleString('en-CA')}`;
+    return `We set household spending to the ${adding ? 'couple' : 'single'} default (${fmt(to.pre)} before / ${fmt(to.post)} after retirement). Change it if yours differ.`;
+}
+
 export const INITIAL_INPUTS: SimulationInputs = {
     person: createDefaultPerson(),
     spouse: undefined,
