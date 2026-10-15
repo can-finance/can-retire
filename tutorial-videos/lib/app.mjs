@@ -44,7 +44,7 @@ export const yearDrawer = (page) => page.getByRole('dialog').filter({ has: page.
  * The pilot's fictional persona (create-a-plan.mjs types the same values).
  * Strings, because they are typed into inputs.
  */
-export const ALEX = {
+export const MARIA = {
     age: '45',
     retirementAge: '62',
     income: '95000',
@@ -59,7 +59,7 @@ export const ALEX = {
  * Run Guided Setup's Quick start straight through (no pacing, no video) and land
  * on the dashboard. Used to build a saved-plan fixture (see fixture.mjs).
  */
-export async function quickStartPlan(page, p = ALEX) {
+export async function quickStartPlan(page, p = MARIA) {
     const dlg = guidedSetup(page);
     const set = async (label, value) => {
         // Same keystrokes as Tutor.type: FinancialInput reformats on focus, so

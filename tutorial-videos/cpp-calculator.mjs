@@ -7,14 +7,14 @@
 // numbers typed at the start, so re-recording the whole thing (about two
 // minutes) is simpler than seeding each scene's state.
 //
-// Persona (fictional): Sam, 50, worked from 22 to 62 at an average $70,000 in
+// Persona (fictional): David, 50, worked from 22 to 62 at an average $70,000 in
 // today's dollars. Starts from the calculator's defaults (fresh browser, no
 // saved state), so the start age is 65.
 
 import { record } from './lib/recorder.mjs';
 import { field } from './lib/app.mjs';
 
-const SAM = { age: '50', workEnd: '62', salary: '70000' };
+const DAVID = { age: '50', workEnd: '62', salary: '70000' };
 
 /** How long a caption stays up: long enough to read twice at a calm pace. */
 const readMs = (text) => Math.max(2300, 700 + text.length * 46);
@@ -61,7 +61,7 @@ async function clickBar(t, page, age, { above = false } = {}) {
 }
 
 /**
- * The captions quote Sam's numbers. If the app's answer changes, fail rather
+ * The captions quote David's numbers. If the app's answer changes, fail rather
  * than film captions that no longer match the screen.
  */
 async function expectResult(page) {
@@ -106,8 +106,8 @@ await record({
         await explain(t, page.getByRole('heading', { name: 'CPP Retirement Pension Calculator' }),
             'Estimate your CPP pension from your own earnings history.', { dy: 0.9 });
         await explain(t, field(page, 'Current Age'),
-            'Sam is 50. CPP counts every year from age 18.', { dwell: 1200 });
-        await t.type(field(page, 'Current Age'), SAM.age);
+            'David is 50. CPP counts every year from age 18.', { dwell: 1200 });
+        await t.type(field(page, 'Current Age'), DAVID.age);
         await t.pause(1200);
         // --- The three ways to enter earnings: tour the other two, back to Simple
         const tab = (name) => page.getByRole('button', { name: new RegExp(`^${name}`) });
@@ -136,20 +136,20 @@ await record({
         await t.hideCaption();
         await scrollTo(t, page, 0, { ms: 700 });
         await pick('Simple');
-        await explain(t, null, 'Sam only knows an average salary, so Simple it is.', { dwell: 2300 });
+        await explain(t, null, 'David only knows an average salary, so Simple it is.', { dwell: 2300 });
         await t.hideCaption();
 
         // --- Working ages and salary -----------------------------------------
         await t.move(PARK_X, 420, { ms: 500 });
         await scrollTo(t, page, 180, { ms: 1200 });
         await glide(t, field(page, 'Starting Working Age'), { dx: 0.3 });
-        await t.caption('Sam worked from 22 to 62.', 0);
+        await t.caption('David worked from 22 to 62.', 0);
         await t.pause(900);
-        await t.type(field(page, 'Ending Working Age'), SAM.workEnd);
+        await t.type(field(page, 'Ending Working Age'), DAVID.workEnd);
         await t.pause(1000);
         await explain(t, field(page, 'Average Salary (today\'s dollars)'),
             'Average salary, in today\'s dollars: $70,000.', { dwell: 900, dx: 0.3 });
-        await t.type(field(page, 'Average Salary (today\'s dollars)'), SAM.salary);
+        await t.type(field(page, 'Average Salary (today\'s dollars)'), DAVID.salary);
         await t.pause(1400);
         await expectResult(page);
 
@@ -183,9 +183,9 @@ await record({
         // --- How it was calculated -------------------------------------------
         const howHead = page.getByRole('heading', { name: 'How this was calculated' });
         await scrollTo(t, page, (await absTop(page, howHead)) - 100, { ms: 1600 });
-        await explain(t, howHead, 'How this was calculated shows each step with Sam\'s numbers.', { dx: 0.3 });
+        await explain(t, howHead, 'How this was calculated shows each step with David\'s numbers.', { dx: 0.3 });
         await explain(t, page.getByText('Lowest years dropped', { exact: false }).first(),
-            'The lowest 17% of years are dropped: 8 of Sam\'s 47.', { dy: -0.6 });
+            'The lowest 17% of years are dropped: 8 of David\'s 47.', { dy: -0.6 });
         await t.hideCaption();
 
         // --- Use it in the plan ----------------------------------------------

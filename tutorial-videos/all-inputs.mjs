@@ -15,10 +15,10 @@
 // cursor glides across labels and shown only where a scene hovers one on purpose.
 
 import { recordScenes, BASE_URL, SIZE } from './lib/recorder.mjs';
-import { ALEX, field, guidedSetup, quickStartPlan } from './lib/app.mjs';
+import { MARIA, field, guidedSetup, quickStartPlan } from './lib/app.mjs';
 import { ensureFixture } from './lib/fixture.mjs';
 
-const storage = await ensureFixture('dashboard-alex', (page) => quickStartPlan(page, ALEX), {
+const storage = await ensureFixture('dashboard-alex', (page) => quickStartPlan(page, MARIA), {
     baseUrl: BASE_URL,
     size: SIZE,
     refresh: process.argv.includes('--refresh-fixture'),

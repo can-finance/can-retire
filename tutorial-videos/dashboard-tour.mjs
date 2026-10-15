@@ -7,14 +7,14 @@
 //
 // Starts on the dashboard with a saved plan (fixtures/dashboard-alex.json,
 // built from Guided Setup's Quick start on first run). Persona: the pilot's
-// Alex, except retirement spending is $40,000 rather than $52,000 so that
+// Maria, except retirement spending is $40,000 rather than $52,000 so that
 // RRIF minimums from 72 exceed spending and a retirement surplus appears.
 
 import { recordScenes, BASE_URL, SIZE } from './lib/recorder.mjs';
-import { ALEX, chartCard, chartPoint, guidedSetup, quickStartPlan, yearDrawer } from './lib/app.mjs';
+import { MARIA, chartCard, chartPoint, guidedSetup, quickStartPlan, yearDrawer } from './lib/app.mjs';
 import { ensureFixture } from './lib/fixture.mjs';
 
-const PERSONA = ALEX;
+const PERSONA = MARIA;
 
 const storage = await ensureFixture('dashboard-alex', (page) => quickStartPlan(page, PERSONA), {
     baseUrl: BASE_URL,

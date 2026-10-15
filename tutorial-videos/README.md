@@ -116,7 +116,7 @@ and never upscales.
 - `lib/fixture.mjs` — `ensureFixture` (build or load a localStorage fixture) and `seedStorage`.
 - `lib/versions.mjs` — `versions.json` read/write helpers and the footer version reader; the recorder calls them after each take, scene and join.
 - `record.ps1` — the usual way to record: passes the main checkout's commit into the container.
-- `lib/app.mjs` — app-specific helpers: `field(scope, label)` for the unlabelled `FinancialInput`s, `guidedSetup(page)`, `quickStartPlan(page, persona)`, the pilot persona `ALEX`, and for the dashboard `chartCard(page, title)`, `chartPoint(card, age, yFrac)` (a point on a chart's age axis) and `yearDrawer(page)`.
+- `lib/app.mjs` — app-specific helpers: `field(scope, label)` for the unlabelled `FinancialInput`s, `guidedSetup(page)`, `quickStartPlan(page, persona)`, the pilot persona `MARIA`, and for the dashboard `chartCard(page, title)`, `chartPoint(card, age, yFrac)` (a point on a chart's age axis) and `yearDrawer(page)`.
 - `create-a-plan.mjs` — single-take tutorial. Copy it to start a short one.
 - `dashboard-tour.mjs` — scene-based tutorial starting from a saved plan. Copy it to start a long one.
 - `rrsp-optimizer.mjs` — scene-based optimizer walkthrough. Scenes that start inside the optimizer re-open it and re-run the search under the black cover; `Math.random` is seeded so Monte Carlo rates match across scenes, and the script stops if the recommendation it quotes changes.
@@ -135,6 +135,8 @@ being adjusted for inflation and the RRSP melt starting at 60.
 
 ## Notes for new tutorials
 
+- Personas are fictional. Alternate between male and female names across videos,
+  and avoid pronouns in captions.
 - The run prints each click and caption with an approximate timestamp in the final
   video. Under load the recorded video runs somewhat longer than wall-clock time,
   so later timestamps drift early; use them to find frames, not as exact cues.

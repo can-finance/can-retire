@@ -1,12 +1,12 @@
 // Tutorial: Create a plan — Guided Setup "Quick start" from a first visit
 // through to the dashboard. Output: out/create-a-plan.mp4
 //
-// Persona (fictional): Alex, 45, Ontario, $95k income, retiring at 62.
+// Persona (fictional): Maria, 45, Ontario, $95k income, retiring at 62.
 
 import { record } from './lib/recorder.mjs';
 import { field, guidedSetup } from './lib/app.mjs';
 
-const ALEX = {
+const MARIA = {
     age: '45',
     retirementAge: '62',
     income: '95000',
@@ -46,10 +46,10 @@ await record({
         // --- Step 1: household ------------------------------------------------
         await dlg.getByRole('heading', { name: 'About your household' }).waitFor();
         await t.pause(600);
-        await t.type(field(dlg, 'Current age'), ALEX.age);
-        await t.type(field(dlg, 'Retirement age'), ALEX.retirementAge);
+        await t.type(field(dlg, 'Current age'), MARIA.age);
+        await t.type(field(dlg, 'Retirement age'), MARIA.retirementAge);
         await t.caption("Enter amounts in today's dollars. Inflation is handled for you.");
-        await t.type(field(dlg, 'Annual income (before tax)'), ALEX.income);
+        await t.type(field(dlg, 'Annual income (before tax)'), MARIA.income);
         await t.pause(1200);
         await t.hideCaption();
         // Province already defaults to Ontario; just point it out.
@@ -63,12 +63,12 @@ await record({
         await dlg.getByRole('heading', { name: 'Savings and spending' }).waitFor();
         await t.pause(600);
         await t.caption('Rough balances are fine. You can refine everything later.');
-        await t.type(field(dlg, 'RRSP'), ALEX.rrsp);
-        await t.type(field(dlg, 'TFSA'), ALEX.tfsa);
-        await t.type(field(dlg, 'Non-registered'), ALEX.nonReg);
+        await t.type(field(dlg, 'RRSP'), MARIA.rrsp);
+        await t.type(field(dlg, 'TFSA'), MARIA.tfsa);
+        await t.type(field(dlg, 'Non-registered'), MARIA.nonReg);
         await t.hideCaption();
-        await t.type(field(dlg, 'Before retirement'), ALEX.spendBefore);
-        await t.type(field(dlg, 'After retirement'), ALEX.spendAfter);
+        await t.type(field(dlg, 'Before retirement'), MARIA.spendBefore);
+        await t.type(field(dlg, 'After retirement'), MARIA.spendAfter);
         await t.pause(400);
         await t.click(dlg.getByRole('button', { name: 'Save' }));
 

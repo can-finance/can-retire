@@ -1,5 +1,5 @@
 // Tutorial: RRSP meltdown optimizer — what it is for, the goals it offers,
-// running "Leave the largest estate" on Alex's plan and reading the result,
+// running "Leave the largest estate" on Maria's plan and reading the result,
 // then applying it and seeing the dashboard update.
 // Output: out/rrsp-optimizer.mp4
 //
@@ -16,10 +16,10 @@
 // figures, and the delta tiles and comparison table both follow the toggle.
 
 import { recordScenes, BASE_URL, SIZE } from './lib/recorder.mjs';
-import { ALEX, field, guidedSetup, quickStartPlan } from './lib/app.mjs';
+import { MARIA, field, guidedSetup, quickStartPlan } from './lib/app.mjs';
 import { ensureFixture } from './lib/fixture.mjs';
 
-const storage = await ensureFixture('dashboard-alex', (page) => quickStartPlan(page, ALEX), {
+const storage = await ensureFixture('dashboard-alex', (page) => quickStartPlan(page, MARIA), {
     baseUrl: BASE_URL,
     size: SIZE,
     refresh: process.argv.includes('--refresh-fixture'),
@@ -85,7 +85,7 @@ async function runEstate(page) {
 
 /**
  * The captions quote the recommendation's deterministic numbers. If the app's
- * answer for Alex changes, fail rather than film captions that no longer match.
+ * answer for Maria changes, fail rather than film captions that no longer match.
  */
 async function expectResult(page) {
     const cell = (label) => row(page, label).locator('td').last().innerText();
@@ -133,12 +133,12 @@ await recordScenes({
     },
 
     scenes: [
-        // --- 1. Alex's plan, and the two ways in ------------------------------
+        // --- 1. Maria's plan, and the two ways in ------------------------------
         {
             id: 'intro',
             async run(t, page) {
                 await explain(t, page.getByText('Net Estate', { exact: true }).first(),
-                    'Alex retires at 62 with a $320k RRSP, and melts none of it.', { pos: 'right', dx: 0.97, dy: 2.2 });
+                    'Maria retires at 62 with a $320k RRSP, and melts none of it.', { pos: 'right', dx: 0.97, dy: 2.2 });
                 await explain(t, null,
                     'Net estate: $2,310,089, after $432,757 of tax at death.', { pos: 'right' });
                 await t.hideCaption();
@@ -251,7 +251,7 @@ await recordScenes({
                 await explain(t, sugg('Withdrawal order'),
                     'Withdrawal order stays RRSP last.', { dx: 1.01 });
                 await explain(t, sugg('CPP start age'),
-                    'Why: from 62 to 70, before CPP and OAS start, Alex has little other income.', { dx: 1.01, ms: 700 });
+                    'Why: from 62 to 70, before CPP and OAS start, Maria has little other income.', { dx: 1.01, ms: 700 });
                 await explain(t, sugg('RRSP melt amount'),
                     'The melt is taxed in those years, at lower rates than later.', { dx: 1.01, ms: 700 });
                 await t.hideCaption();
@@ -304,7 +304,7 @@ await recordScenes({
                     'Tax at death falls from $432,757 to $180,524.', { pos: 'top', dx: 1.03 });
                 await t.hideCaption();
 
-                const life = row(page, 'Lifetime tax paid');
+                const life = row(page, 'Lifetime tax paid (all three)');
                 await scrollTo(t, page, (await abs(life)) - 260, { ms: 1400 });
                 await explain(t, life.locator('td').nth(2),
                     'Lifetime tax paid, tax at death included, falls by $293,175.', { pos: 'top', dx: 1.03 });
