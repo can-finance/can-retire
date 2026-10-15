@@ -26,7 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   household spending to the couple default only when both amounts are still at
   the single default, and tells you when it does (removing a spouse works the
   same way in reverse).
-- The year breakdown now says which spouse pension income was split from.
 - **Withdrawals no longer overshoot your spending in years with dividend or
   pension tax credits.** When the plan sized an RRSP withdrawal or a
   non-registered sale to cover spending, it estimated the tax without the
@@ -40,13 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the default plan's after-tax estate rises by about $10,000).
 - **The RRSP optimizer's "Net estate" and "Lifetime tax paid" tiles now follow the
   Today's Dollars toggle,** matching the comparison table below them. They
-  previously always showed future dollars. The tax tile was renamed from "Total
-  tax paid" to match the table, since it counts tax over your whole life (not the
-  dashboard's retirement-plus-estate total), and the success tile now reads
-  current plan → suggested.
-- Leaving the optimizer or plan comparison returns you to where you were on the
-  dashboard, and opening either starts at the top, instead of keeping a leftover
-  scroll position.
+  previously always showed future dollars.
 - Success rates are now rounded down to a whole percent the same way everywhere:
   the dashboard, the optimizer, plan comparison, and the "When can I retire?"
   and "How much do I need?" pages. A rate that misses your target is never shown
@@ -57,9 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (or, in the optimizer, your plan's age), even when the earliest age is several
   years away from it. Target ages are now limited to 75, the latest age the
   search checks.
-- The optimizer's CPP/OAS timing tip now says which start ages it actually
-  tries (CPP at 60, 65 or 70 and OAS at 65 or 70, plus your current ages), and
-  the dashboard's optimizer tips mention all four goals.
 - The "Retiring earlier or later" table on "How much do I need?" no longer
   shows savings needed at earlier ages when you need none (low spending after
   retirement or a well-funded plan). On the default plan with little or no
@@ -68,19 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read "None", with everything you're on track for to spare.
 
 ### Added
-- The RRSP optimizer's results note that the Guaranteed Income Supplement isn't
-  modelled, since RRSP and RRIF withdrawals can reduce it.
 - "When can I retire?" and "How much do I need?" note when your spending before
   retirement is more than your take-home pay, since the calculator takes the
   difference from your savings each year. When that makes today's savings
   figure larger than the one needed at retirement, the answer says why.
-
-### Changed
-- Compare Plans splits lifetime tax into tax while working, in retirement and at
-  death, and each tax total now says what it covers.
-- How It Works and the pension splitting tooltip now say what income can be
-  split: a workplace pension at any age and RRIF withdrawals from 72, not RRSP
-  withdrawals (including the melt), CPP or OAS.
 
 ## [0.14.0] - 2026-10-14
 
