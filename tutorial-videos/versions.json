@@ -247,43 +247,43 @@
     }
   },
   "planning-as-a-couple": {
-    "joined": "2026-10-15T07:40:21-04:00",
+    "joined": "2026-10-15T08:16:57-04:00",
     "scenes": {
       "title": {
         "appVersion": "0.14.0",
-        "appCommit": "826e183",
+        "appCommit": "51538a1",
         "dirty": false,
-        "recordedAt": "2026-10-15T07:36:51-04:00"
+        "recordedAt": "2026-10-15T08:13:02-04:00"
       },
       "add": {
         "appVersion": "0.14.0",
-        "appCommit": "826e183",
+        "appCommit": "51538a1",
         "dirty": false,
-        "recordedAt": "2026-10-15T07:39:56-04:00"
+        "recordedAt": "2026-10-15T08:14:05-04:00"
       },
       "household": {
         "appVersion": "0.14.0",
-        "appCommit": "826e183",
+        "appCommit": "51538a1",
         "dirty": false,
-        "recordedAt": "2026-10-15T07:30:49-04:00"
+        "recordedAt": "2026-10-15T08:14:36-04:00"
       },
       "split": {
         "appVersion": "0.14.0",
-        "appCommit": "826e183",
+        "appCommit": "51538a1",
         "dirty": false,
-        "recordedAt": "2026-10-15T07:31:34-04:00"
+        "recordedAt": "2026-10-15T08:15:26-04:00"
       },
       "year": {
         "appVersion": "0.14.0",
-        "appCommit": "826e183",
+        "appCommit": "51538a1",
         "dirty": false,
-        "recordedAt": "2026-10-15T07:32:08-04:00"
+        "recordedAt": "2026-10-15T08:16:02-04:00"
       },
       "end": {
         "appVersion": "0.14.0",
-        "appCommit": "826e183",
+        "appCommit": "51538a1",
         "dirty": false,
-        "recordedAt": "2026-10-15T07:32:23-04:00"
+        "recordedAt": "2026-10-15T08:16:18-04:00"
       }
     }
   }
