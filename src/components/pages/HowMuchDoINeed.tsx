@@ -14,6 +14,7 @@ import {
     EducationalDisclaimer,
     PensionFields,
     RunStatusBlock,
+    SpendOverPayNote,
     SpouseSection,
     primaryBtn,
 } from './calculatorParts';
@@ -87,6 +88,7 @@ export function HowMuchDoINeed() {
     const update = (patch: Partial<NeedForm>) => setForm((f) => ({ ...f, ...patch }));
 
     const errors = useMemo(() => needFormErrors(form), [form]);
+    const spendPlan = useMemo(() => (errors.length > 0 ? null : buildNeedInputs(form)), [errors, form]);
     const formKey = JSON.stringify([form, successTarget]);
     const stale = answer !== null && answer.key !== formKey;
 
@@ -233,12 +235,15 @@ export function HowMuchDoINeed() {
                 <div className="space-y-4">
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Household spending per year</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FinancialInput
-                            label="Before retirement"
-                            tooltip="What you spend each year while you're still working. Whatever is left of your pay after tax and this spending is saved."
-                            value={form.preRetirementSpend}
-                            onChange={(e) => update({ preRetirementSpend: Number(e.target.value) })}
-                        />
+                        <div className="space-y-1.5">
+                            <FinancialInput
+                                label="Before retirement"
+                                tooltip="What you spend each year while you're still working. Whatever is left of your pay after tax and this spending is saved."
+                                value={form.preRetirementSpend}
+                                onChange={(e) => update({ preRetirementSpend: Number(e.target.value) })}
+                            />
+                            <SpendOverPayNote plan={spendPlan} />
+                        </div>
                         <FinancialInput
                             label="After retirement"
                             tooltip="What you plan to spend each year once retired. It stays the same every year, apart from inflation."

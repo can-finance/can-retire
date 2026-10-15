@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { SimulationInputs } from '../../engine/types';
 import type { SavingsNeededResult, SavingsPerYearResult } from '../../utils/meltdownOptimizer';
-import { formatCurrencyApprox, formatCurrencyCAD, roundCurrencyApprox } from '../../utils/formatters';
+import { formatCurrencyApprox, formatCurrencyCAD, formatSuccessRate, roundCurrencyApprox } from '../../utils/formatters';
 import {
     SAVE_AS_YOU_GO_SMALL,
     saveAsYouGoAmount,
@@ -47,8 +47,8 @@ const ODDS_GAP_PP = 5;
 
 const money = formatCurrencyApprox;
 
-function pct(rate: number | null): string {
-    return rate === null ? '—' : `${rate.toFixed(0)}%`;
+function pct(rate: number | null, target?: number): string {
+    return formatSuccessRate(rate, target);
 }
 
 function capitalize(s: string): string {
@@ -104,7 +104,7 @@ function headlineCopy(r: SavingsAnswer, sn: SavingsNeededResult, spendTip?: stri
                 fix,
             };
         }
-        const best = `The best, ${money(sn.neededSavings!)}, lasts in ${pct(sn.achievedSuccessRate)} of market simulations at ${spend}.`;
+        const best = `The best, ${money(sn.neededSavings!)}, lasts in ${pct(sn.achievedSuccessRate, target)} of market simulations at ${spend}.`;
         return {
             tone: 'warn',
             title: `Savings alone can’t fund this spending at your ${target}% target`,
@@ -125,15 +125,21 @@ function headlineCopy(r: SavingsAnswer, sn: SavingsNeededResult, spendTip?: stri
             const gap = roundCurrencyApprox(neededAtRet) - roundCurrencyApprox(currentAtRet);
             if (gap > 0) {
                 const by = isSpouse ? `when your spouse retires at ${age}` : `by ${age}`;
+                const likeToday = current > 0
+                    ? `That’s like having ${money(needed)} today instead of ${money(current)}.`
+                    : `That’s like having ${money(needed)} today.`;
+                // Spending above take-home pay is drawn from savings until
+                // retirement, so today's figure can exceed the at-retirement one.
+                const moreToday = roundCurrencyApprox(needed) > roundCurrencyApprox(neededAtRet)
+                    ? ` It’s more than you’d need ${by} because it also pays for your spending above your pay until then.`
+                    : '';
                 return {
                     tone: 'warn',
                     title: `You need about ${money(neededAtRet)} saved ${by}`,
                     lead: roundCurrencyApprox(currentAtRet) > 0
                         ? `You’re on track for about ${money(currentAtRet)}, so about ${money(gap)} more.`
                         : 'You’re not on track to have any savings by then.',
-                    sub: current > 0
-                        ? `That’s like having ${money(needed)} today instead of ${money(current)}.`
-                        : `That’s like having ${money(needed)} today.`,
+                    sub: likeToday + moreToday,
                 };
             }
         }
@@ -156,7 +162,7 @@ function headlineCopy(r: SavingsAnswer, sn: SavingsNeededResult, spendTip?: stri
         return {
             tone: 'good',
             title: `You have about enough ${enoughFor}`,
-            lead: `As entered, your money lasts in ${pct(r.baselineSuccessRate)} of market simulations, under your ${target}% target. Results shift a few points between runs, so this is about as close as the calculator can tell.`,
+            lead: `As entered, your money lasts in ${pct(r.baselineSuccessRate, target)} of market simulations, under your ${target}% target. Results shift a few points between runs, so this is about as close as the calculator can tell.`,
         };
     }
 
@@ -225,7 +231,7 @@ function saveAsYouGoLine(r: SavingsAnswer, sn: SavingsNeededResult, lumpNote: st
             return `Saving from your pay alone can’t close the gap: saving everything you now spend ${until} isn’t enough, even with average returns.`;
         }
         if (p.boundHit) {
-            return `Saving from your pay alone can’t close the gap: even saving everything you now spend ${until}, your money lasts in ${pct(p.achievedSuccessRate)} of market simulations (target ${target}%).`;
+            return `Saving from your pay alone can’t close the gap: even saving everything you now spend ${until}, your money lasts in ${pct(p.achievedSuccessRate, target)} of market simulations (target ${target}%).`;
         }
         return `Saving from your pay instead: the calculator stopped checking before any yearly amount met your ${target}% target.`;
     }
@@ -255,8 +261,8 @@ function contextLines(r: SavingsAnswer, sn: SavingsNeededResult): string[] {
     const target = sn.mcSuccessTarget;
 
     out.push(sn.needIsZero
-        ? `With no savings, your spending is covered in ${pct(sn.achievedSuccessRate)} of market simulations (target ${target}%).`
-        : `With the savings needed, your money lasts in ${pct(sn.achievedSuccessRate)} of market simulations (target ${target}%).`);
+        ? `With no savings, your spending is covered in ${pct(sn.achievedSuccessRate, target)} of market simulations (target ${target}%).`
+        : `With the savings needed, your money lasts in ${pct(sn.achievedSuccessRate, target)} of market simulations (target ${target}%).`);
 
     const today = r.baselineSuccessRate;
     if (!isNoise(r, sn) && today !== null && sn.achievedSuccessRate !== null

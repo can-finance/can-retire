@@ -1,4 +1,8 @@
+import { useMemo } from 'react';
+import type { SimulationInputs } from '../../engine/types';
 import { FinancialInput } from '../inputs/FinancialInput';
+import { formatCurrencyApprox } from '../../utils/formatters';
+import { preRetirementDeficit } from '../../utils/preRetirementDeficit';
 import { Toggle } from '../ui/Toggle';
 import { DEFAULT_SPEND } from '../../utils/inputSanitizer';
 import { SUCCESS_TARGETS } from '../optimizer/successTargets';
@@ -167,6 +171,27 @@ export function ConfidencePicker({ value, onChange, blurb }: {
             </div>
             {blurb && <p className="text-xs text-slate-500">{blurb}</p>}
         </div>
+    );
+}
+
+/** Below this, spending over take-home pay is rounding, not worth a note. */
+const SPEND_OVER_PAY_MIN = 1_000;
+
+/**
+ * A soft note under "Before retirement" when that spending is more than the
+ * household's take-home pay: the calculator draws the difference from savings
+ * every working year. Not an error — the run still goes ahead. `plan` is null
+ * while the form has errors.
+ */
+export function SpendOverPayNote({ plan }: { plan: SimulationInputs | null }) {
+    const d = useMemo(() => (plan ? preRetirementDeficit(plan) : null), [plan]);
+    if (!d || d.deficit <= SPEND_OVER_PAY_MIN) return null;
+    return (
+        <p className="text-xs text-amber-800 leading-relaxed">
+            That's about {formatCurrencyApprox(d.deficit)} more than your take-home pay of
+            about {formatCurrencyApprox(d.takeHome)}. The calculator takes the difference from your
+            savings each year until you retire.
+        </p>
     );
 }
 

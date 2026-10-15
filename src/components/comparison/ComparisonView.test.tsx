@@ -7,6 +7,7 @@ import { ComparisonView } from './ComparisonView';
 import { INITIAL_INPUTS } from '../../utils/inputSanitizer';
 import type { SavedPlan } from '../../hooks/usePlans';
 import type { SimulationResult } from '../../engine/types';
+import { formatSuccessRate } from '../../utils/formatters';
 
 // React's act() warns unless it knows it's running in a test environment.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -146,18 +147,21 @@ function makeRows(f: number): SimulationResult[] {
     ];
 }
 
+// Monte Carlo success rate per plan, keyed by preRetirementSpend; 87 when unset.
+const mcRates = vi.hoisted(() => ({ bySpend: {} as Record<number, number> }));
+
 vi.mock('../../engine/projection', async importOriginal => ({
     ...(await importOriginal<typeof import('../../engine/projection')>()),
     runSimulation: vi.fn(
         (inputs: { preRetirementSpend?: number }): SimulationResult[] =>
             makeRows((inputs?.preRetirementSpend ?? 60000) / 60000),
     ),
-    runMonteCarlo: vi.fn(() => ({
+    runMonteCarlo: vi.fn((inputs: { preRetirementSpend?: number }) => ({
         percentiles: [
             { year: 2026, age: 60, p5: 700000, p25: 800000, p50: 900000, p75: 950000, p95: 1000000 },
             { year: 2027, age: 61, p5: 650000, p25: 780000, p50: 870000, p75: 930000, p95: 980000 },
         ],
-        successRate: 87,
+        successRate: mcRates.bySpend[inputs?.preRetirementSpend ?? 60000] ?? 87,
         medianEndOfPlanAssets: 500000,
     })),
 }));
@@ -199,6 +203,7 @@ function metricRow(label: string): HTMLElement | null {
 afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    mcRates.bySpend = {};
 });
 
 describe('ComparisonView', () => {
@@ -344,6 +349,63 @@ describe('ComparisonView', () => {
 
         // The Net estate card lists one value per selected plan (2 plans → 2 values).
         expect(within(card).getAllByText('$850,000')).toHaveLength(2);
+    });
+
+    it('rounds success rates down like the optimizer tile, and the delta follows the shown numbers', () => {
+        vi.useFakeTimers();
+        try {
+            mcRates.bySpend = { 60000: 86.1, 120000: 93.9 };
+            const base = makePlan({ name: 'Base', lastSaved: '2026-06-01T00:00:00.000Z' });
+            const rich = makePlan({
+                name: 'Rich',
+                lastSaved: '2026-01-01T00:00:00.000Z',
+                inputs: { ...INITIAL_INPUTS, preRetirementSpend: 120000 },
+            });
+            renderView([base, rich], null);
+            act(() => {
+                vi.runAllTimers();
+            });
+
+            // The optimizer tile formats with formatSuccessRate; the same rate
+            // must read the same here (toFixed(0) would have shown 94%).
+            expect(formatSuccessRate(93.9)).toBe('93%');
+            const row = metricRow('Success rate')!;
+            expect(within(row).getByText('86%')).toBeInTheDocument();
+            expect(within(row).getByText('93%')).toBeInTheDocument();
+            // 93% − 86% as shown, not the raw 7.8 rounded to 8.
+            expect(within(row).getByText('+7 pts')).toBeInTheDocument();
+
+            const card = screen.getByText('Monte Carlo success').closest('div') as HTMLElement;
+            expect(within(card).getByText('86%')).toBeInTheDocument();
+            expect(within(card).getByText('93%')).toBeInTheDocument();
+            expect(screen.queryByText('94%')).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('does not highlight a best success rate when both plans show the same whole percent', () => {
+        vi.useFakeTimers();
+        try {
+            mcRates.bySpend = { 60000: 93.0, 120000: 93.5 };
+            const base = makePlan({ name: 'Base', lastSaved: '2026-06-01T00:00:00.000Z' });
+            const rich = makePlan({
+                name: 'Rich',
+                lastSaved: '2026-01-01T00:00:00.000Z',
+                inputs: { ...INITIAL_INPUTS, preRetirementSpend: 120000 },
+            });
+            renderView([base, rich], null);
+            act(() => {
+                vi.runAllTimers();
+            });
+
+            const row = metricRow('Success rate')!;
+            const cells = within(row).getAllByText('93%');
+            expect(cells).toHaveLength(2);
+            for (const c of cells) expect(c).not.toHaveClass('bg-emerald-50');
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('renders a DB pension row in the lifetime-income group', () => {

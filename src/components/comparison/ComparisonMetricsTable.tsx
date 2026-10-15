@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ComparisonRun } from '../../utils/comparison';
 import { bestIndex } from '../../utils/comparison';
-import { formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyCAD, formatSuccessRate, wholeSuccessRate } from '../../utils/formatters';
 
 interface ComparisonMetricsTableProps {
     runs: ComparisonRun[];
@@ -59,7 +59,9 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
     const showDelta = runs.length === 2;
 
     // Pre-compute best-in-row indices for the rows that get a highlight.
-    const successVals = runs.map(r => (r.monteCarlo ? r.monteCarlo.successRate : null));
+    // Whole-percent rates, as shown: the highlight and delta follow the numbers on screen.
+    const shownSuccess = (r: ComparisonRun) => (r.monteCarlo ? wholeSuccessRate(r.monteCarlo.successRate) : null);
+    const successVals = runs.map(shownSuccess);
     const netEstateVals = runs.map(r => r.metrics.netEstateValue);
     const lifetimeTaxVals = runs.map(r => r.metrics.lifetimeTaxPaid);
     const shortfallVals = runs.map(r => r.metrics.totalShortfall);
@@ -261,13 +263,13 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             label: 'Success rate',
             cell: run =>
                 run.monteCarlo ? (
-                    `${run.monteCarlo.successRate.toFixed(0)}%`
+                    formatSuccessRate(run.monteCarlo.successRate)
                 ) : (
                     <span className="text-slate-300">…</span>
                 ),
             highlight: bestSuccess,
-            // Integer precision (success rate is shown with 0 decimals → "+7 pts").
-            delta: { kind: 'pct', dir: 'higher', decimals: 0, value: r => (r.monteCarlo ? r.monteCarlo.successRate : null) },
+            // Difference of the whole percents shown in the cells, so 93% vs 86% reads "+7 pts".
+            delta: { kind: 'pct', dir: 'higher', decimals: 0, value: shownSuccess },
         },
         {
             kind: 'data',

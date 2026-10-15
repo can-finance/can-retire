@@ -2731,7 +2731,10 @@ async function estimateSavingsAgeRows(args: SavingsAgeRowsArgs): Promise<Savings
             const w = work.get(d);
             if (w) {
                 const r = w.draft;
-                if (!r.clears || r.neededSavings === null || !r.heldDeterministic) return null;
+                // No usable ratio when the neighbour didn't clear, or its
+                // deterministic answer is missing or 0 (nothing to scale by).
+                if (!r.clears || r.neededSavings === null
+                    || r.heldDeterministic === null || r.heldDeterministic === 0) return null;
                 return Math.max(1, r.neededSavings / r.heldDeterministic);
             }
             if (d === 0) return null;
@@ -2782,7 +2785,11 @@ async function estimateSavingsAgeRows(args: SavingsAgeRowsArgs): Promise<Savings
             const ratio = ratioToward(delta);
             const stepPlan = {
                 target: mcSuccessTarget, start: heldDeterministic, cap: searchCap, minStepBase: scale,
-                firstProbe: ratio === null ? undefined : heldDeterministic * ratio,
+                // No neighbour ratio: guess the row's own start, so a clear
+                // handed in at current savings is checked against the start
+                // first instead of stepping down from it a little at a time
+                // (which could run out of probes far above a start of 0).
+                firstProbe: ratio === null ? heldDeterministic : heldDeterministic * ratio,
                 maxProbes: SAVINGS_ROW_MAX_STEPUP_PROBES,
                 precisionAbs: SAVINGS_ROW_MC_PRECISION_ABS, precisionRel: SAVINGS_ROW_MC_PRECISION_REL,
             };

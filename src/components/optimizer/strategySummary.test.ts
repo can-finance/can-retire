@@ -31,6 +31,32 @@ const CASES: Case[] = [
     ['spouse CPP moved', [decision(), decision({ who: 'spouse', label: 'Spouse', cppStartAge: 60, cppChanged: true })], 'tax-efficient'],
 ];
 
+describe('describeStrategyChanges wording', () => {
+    it('one change reads as a plain sentence', () => {
+        expect(describeStrategyChanges([decision({ cppStartAge: 70, cppChanged: true })], 'tax-efficient', 'tax-efficient'))
+            .toBe('To get there: start your CPP at 70 instead of 65.');
+    });
+
+    it('keeps the melt’s reason from running into the next change', () => {
+        const line = describeStrategyChanges([decision({ meltAmount: 35_000 })], 'tax-efficient', 'rrsp-first')!;
+        expect(line).toBe('To get there: take $35,000/yr from your RRSP from 60 to 71 (to lower the tax on it later); '
+            + 'and take money from your RRSP before your other savings.');
+        expect(line).not.toContain('later and take');
+    });
+
+    it('separates three or more changes with semicolons', () => {
+        const line = describeStrategyChanges(
+            [decision({ cppStartAge: 70, cppChanged: true, meltAmount: 35_000 }),
+                decision({ who: 'spouse', label: 'Spouse', oasStartAge: 70, oasChanged: true })],
+            'tax-efficient', 'rrsp-first',
+        )!;
+        expect(line).toBe('To get there: start your CPP at 70 instead of 65; '
+            + 'take $35,000/yr from your RRSP from 60 to 71 (to lower the tax on it later); '
+            + 'start your spouse’s OAS at 70 instead of 65; '
+            + 'and take money from your RRSP before your other savings.');
+    });
+});
+
 describe('strategyDiffersFromPlan agrees with describeStrategyChanges', () => {
     it.each(CASES)('%s', (_name, decisions, suggested) => {
         const differs = strategyDiffersFromPlan(decisions, 'tax-efficient', suggested);

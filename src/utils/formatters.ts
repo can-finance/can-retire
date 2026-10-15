@@ -34,6 +34,35 @@ export const formatCurrencyApprox = (val: number): string => {
 };
 
 /**
+ * A Monte Carlo success rate (0–100) as a whole percent, rounded DOWN so a rate
+ * that misses a target is never shown at or above it: 84.6% against an 85%
+ * target reads "84%", not "85%" next to a ✗. Every pass/fail mark compares the
+ * unrounded rate (rate >= target), and a passing rate floors to at least the
+ * target, so the number and the mark always agree. The tiny allowance absorbs
+ * float noise from successes / iterations × 100 (29 / 100 × 100 is
+ * 28.999…), so an exact rate isn't shown a point low. Pass `target` wherever a
+ * mark sits next to the number: it caps a missing rate below the target even
+ * inside that allowance. null shows a dash.
+ *
+ * Use this for every success rate on screen, so the same plan never reads 93%
+ * in one place and 94% (or 93.5%) in another.
+ */
+export const formatSuccessRate = (rate: number | null, target?: number): string => {
+    if (rate === null || !Number.isFinite(rate)) return '—';
+    let shown = wholeSuccessRate(rate);
+    if (target !== undefined && rate < target && shown >= target) shown = Math.ceil(target) - 1;
+    return `${Math.max(0, shown)}%`;
+};
+
+/**
+ * The whole number formatSuccessRate shows (without a target). Compare or
+ * subtract these, not the raw rates, wherever the result sits beside the
+ * displayed numbers — a "+7 pts" delta or a best-of highlight then always
+ * matches what the reader sees.
+ */
+export const wholeSuccessRate = (rate: number): number => Math.max(0, Math.floor(rate + 1e-9));
+
+/**
  * Full CAD currency for tooltip rows: $1,234
  */
 export const formatCurrencyCAD = (val: number): string =>

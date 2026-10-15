@@ -4,11 +4,12 @@ import {
     initialRetireForm,
     planRetirementAge,
     retireFormErrors,
+    targetAgeError,
     DEFAULT_PLAN_RETIREMENT_AGE,
 } from './when-can-i-retire-inputs';
 import type { RetireForm } from './when-can-i-retire-inputs';
 import { INITIAL_INPUTS, sanitizeSimulationInputs } from '../../utils/inputSanitizer';
-import { planAgeShift } from '../../utils/retirementAgeSearch';
+import { MAX_SEARCH_RETIREMENT_AGE, planAgeShift } from '../../utils/retirementAgeSearch';
 
 const form = (over: Partial<RetireForm> = {}): RetireForm => ({ ...initialRetireForm(), ...over });
 
@@ -121,11 +122,33 @@ describe('/when-can-i-retire/ form → plan', () => {
     });
 
     describe('errors', () => {
-        it('needs a target later than today, and no later than 99', () => {
+        it('needs a target later than today, and no later than the search goes', () => {
+            const max = MAX_SEARCH_RETIREMENT_AGE;
             expect(retireFormErrors(form({ age: 50, targetAge: 50 }))).toHaveLength(1);
             expect(retireFormErrors(form({ age: 50, targetAge: 45 }))).toHaveLength(1);
             expect(retireFormErrors(form({ age: 50, targetAge: 100 }))).toHaveLength(1);
             expect(retireFormErrors(form({ age: 50, targetAge: 51 }))).toEqual([]);
+            expect(retireFormErrors(form({ age: 50, targetAge: max }))).toEqual([]);
+            expect(retireFormErrors(form({ age: 50, targetAge: max + 1 })))
+                .toEqual([`Your target retirement age must be between 51 and ${max}`]);
+        });
+
+        it('says plainly when no target can be compared at your age', () => {
+            const max = MAX_SEARCH_RETIREMENT_AGE;
+            const errs = retireFormErrors(form({ age: max, targetAge: max + 2 }));
+            expect(errs).toHaveLength(1);
+            expect(errs[0]).toContain(`only be compared up to ${max}`);
+            expect(retireFormErrors(form({ age: max, targetAge: null }))).toEqual([]);
+        });
+
+        it('gives the field the same target message the list shows, and nothing else', () => {
+            const max = MAX_SEARCH_RETIREMENT_AGE;
+            const bad = form({ age: 50, targetAge: max + 1 });
+            expect(targetAgeError(bad)).toBe(retireFormErrors(bad)[0]);
+            expect(targetAgeError(form({ age: 50, targetAge: null }))).toBeNull();
+            expect(targetAgeError(form({ age: 50, targetAge: max }))).toBeNull();
+            // Another field's problem is not the target's.
+            expect(targetAgeError(form({ age: 17, targetAge: null }))).toBeNull();
         });
 
         it('uses onboarding’s age checks for you and your spouse', () => {

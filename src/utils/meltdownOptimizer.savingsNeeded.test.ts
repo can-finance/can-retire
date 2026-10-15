@@ -38,6 +38,7 @@ import {
     PER_YEAR_PRECISION_REL,
 } from './savingsSearch';
 import { planAgeShift, applyRetirementShift, personOf } from './retirementAgeSearch';
+import { buildNeedInputs, initialNeedForm } from '../components/pages/how-much-do-i-need-inputs';
 
 const mcHooks = vi.hoisted(() => ({
     rate: null as null | ((inputs: SimulationInputs) => number),
@@ -836,6 +837,59 @@ describe('optimizeMeltdown (savings-needed follow-ups)', () => {
             onProgress: (done, total) => { if (done / total > 0.75) controller.abort(); },
         });
         await expect(run).rejects.toMatchObject({ name: 'AbortError' });
+    }, 60_000);
+
+    // The "How much do I need to retire?" page's defaults, retiring at 62.
+    const pageDefaults = (postRetirementSpend: number): SimulationInputs => buildNeedInputs({
+        ...initialNeedForm(),
+        age: 48, province: 'ON', currentIncome: 85_000, includeSpouse: false,
+        rrsp: 500_000, tfsa: 150_000, nonReg: 200_000,
+        preRetirementSpend: 60_000, postRetirementSpend, retirementAge: 62,
+    });
+    const PAGE_OPTS: OptimizeMeltdownOptions = {
+        objective: 'savings-needed', mcIterations: 200, mcSuccessTarget: 90, savingsPerYear: false,
+    };
+
+    // Regression: rows next to a plan row with a deterministic need of 0 got
+    // no starting guess and stepped down from the clear at current savings
+    // ($850k), running out of probes at ~$375k.
+    it('age rows, real MC: nothing needed at any age when spending nothing after retiring', async () => {
+        const res = await optimizeMeltdown(pageDefaults(0), PAGE_OPTS);
+        const s = res.savingsNeeded!;
+        expect(s.neededSavings).toBe(0);
+        const rows = s.ageRows!;
+        expect(rows.length).toBeGreaterThan(1);
+        for (const r of rows) expect(r.neededSavings).toBe(0);
+    }, 60_000);
+
+    it('age rows, real MC: a low spend needs little or nothing at any age, less at later ages', async () => {
+        // $10k a year: retiring at 62 or later needs nothing; earlier, only
+        // enough to bridge the years before CPP/OAS — nowhere near $375k.
+        const res = await optimizeMeltdown(pageDefaults(10_000), PAGE_OPTS);
+        const s = res.savingsNeeded!;
+        expect(s.neededSavings).toBe(0);
+        const rows = s.ageRows!;
+        expect(rows.length).toBeGreaterThan(1);
+        for (const r of rows) {
+            expect(r.clears).toBe(true);
+            expect(r.neededSavings!).toBeLessThan(150_000);
+            if (r.delta >= 0) expect(r.neededSavings).toBe(0);
+        }
+        for (let i = 1; i < rows.length; i++) {
+            expect(rows[i].neededSavings!).toBeLessThanOrEqual(rows[i - 1].neededSavings!);
+        }
+    }, 60_000);
+
+    it('age rows, real MC: normal spending still needs savings, less at later ages', async () => {
+        const res = await optimizeMeltdown(pageDefaults(55_000), PAGE_OPTS);
+        const rows = res.savingsNeeded!.ageRows!;
+        expect(rows.length).toBeGreaterThan(1);
+        for (const r of rows) expect(r.neededSavings!).toBeGreaterThan(0);
+        for (let i = 1; i < rows.length; i++) {
+            if (rows[i].clears && rows[i - 1].clears) {
+                expect(rows[i].neededSavings!).toBeLessThanOrEqual(rows[i - 1].neededSavings!);
+            }
+        }
     }, 60_000);
 });
 

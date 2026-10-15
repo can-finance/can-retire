@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ComparisonRun } from '../../utils/comparison';
 import { bestIndex } from '../../utils/comparison';
-import { formatCurrencyCAD } from '../../utils/formatters';
+import { formatCurrencyCAD, formatSuccessRate, wholeSuccessRate } from '../../utils/formatters';
 
 interface ComparisonSummaryCardsProps {
     runs: ComparisonRun[];
@@ -52,7 +52,8 @@ function StatCard({
 
 export function ComparisonSummaryCards({ runs }: ComparisonSummaryCardsProps) {
     // Best-plan indices for each headline metric (null when not meaningfully best).
-    const successVals = runs.map(r => (r.monteCarlo ? r.monteCarlo.successRate : null));
+    // Whole-percent rates, as shown, so two plans that both read 93% tie.
+    const successVals = runs.map(r => (r.monteCarlo ? wholeSuccessRate(r.monteCarlo.successRate) : null));
     const netEstateVals = runs.map(r => r.metrics.netEstateValue);
     // "Never" (null age) outranks any age, and a later age outranks an earlier
     // one — map Never to +Infinity so a plain 'max' comparison expresses both.
@@ -74,7 +75,7 @@ export function ComparisonSummaryCards({ runs }: ComparisonSummaryCardsProps) {
                 best={bestSuccess}
                 value={(run, isBest) =>
                     run.monteCarlo ? (
-                        <span className={emphasis(isBest)}>{run.monteCarlo.successRate.toFixed(0)}%</span>
+                        <span className={emphasis(isBest)}>{formatSuccessRate(run.monteCarlo.successRate)}</span>
                     ) : (
                         <span className="text-slate-300">…</span>
                     )
