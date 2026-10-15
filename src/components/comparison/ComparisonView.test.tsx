@@ -310,12 +310,44 @@ describe('ComparisonView', () => {
         expect(screen.getByText(/^vs\. Base/)).toBeInTheDocument();
 
         // Net estate: higher is better; plan2 (Rich) is higher → positive & green.
-        const netEstateDelta = screen.getByText('+$850,000');
+        // Queried within each row: the same delta text can appear on more than
+        // one row (e.g. "Tax at death" repeats the Estate group's "Estate tax").
+        const netEstateDelta = within(metricRow('Net estate (after terminal tax)')!).getByText('+$850,000');
         expect(netEstateDelta).toHaveClass('text-emerald-600');
 
         // Lifetime tax paid: lower is better; plan2 (Rich) pays more → positive & red.
-        const lifetimeTaxDelta = screen.getByText('+$35,800');
+        const lifetimeTaxDelta = within(metricRow('Lifetime tax paid (all three)')!).getByText('+$35,800');
         expect(lifetimeTaxDelta).toHaveClass('text-rose-600');
+    });
+
+    it('splits lifetime tax into working, retirement and death rows that add up', () => {
+        const base = makePlan({ name: 'Base', lastSaved: '2026-06-01T00:00:00.000Z' });
+        const rich = makePlan({
+            name: 'Rich',
+            lastSaved: '2026-01-01T00:00:00.000Z',
+            inputs: { ...INITIAL_INPUTS, preRetirementSpend: 120000 },
+        });
+        renderView([base, rich], null);
+
+        const deltaOf = (label: string) => {
+            const cells = metricRow(label)!.querySelectorAll('td');
+            return cells[cells.length - 1].textContent;
+        };
+        const labels = ['Tax while working', 'Tax in retirement', 'Tax at death', 'Lifetime tax paid (all three)'];
+        // Delta text is "+$1,234", "-$1,234" or "—" (zero).
+        const signed = (t: string | null) => {
+            if (!t || t === '—') return 0;
+            const mag = Number(t.replace(/[^0-9]/g, ''));
+            return t.startsWith('-') ? -mag : mag;
+        };
+        const [working, retirement, death, lifetime] = labels.map(l => signed(deltaOf(l)));
+        expect(working + retirement + death).toBe(lifetime);
+        expect(lifetime).toBe(35800);
+
+        // "Tax at death" is the same figure as the Estate group's "Estate tax".
+        expect(deltaOf('Tax at death')).toBe(deltaOf('Estate tax'));
+        expect(metricRow('OAS clawed back (included in tax above)')).not.toBeNull();
+        expect(metricRow('Lifetime tax paid')).toBeNull();
     });
 
     it('omits the delta column when three plans are compared', async () => {

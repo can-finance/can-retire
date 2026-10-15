@@ -23,6 +23,7 @@ describe('computeSummaryMetrics', () => {
             totalShortfall: 0,
             totalSpending: 0,
             lifetimeTaxPaid: 0,
+            workingYearsTax: 0,
             lifetimeOASClawback: 0,
             rrspBalanceAt71: null,
             lifetimeNetCPP: 0,
@@ -173,6 +174,58 @@ describe('computeSummaryMetrics', () => {
 
             expect(row71.inflationFactor).toBeGreaterThan(1);
             expect(real.rrspBalanceAt71).toBeCloseTo(nominal.rrspBalanceAt71! / row71.inflationFactor, 6);
+        });
+    });
+
+    describe('workingYearsTax', () => {
+        const inflated = INITIAL_INPUTS.inflationRate > 0
+            ? INITIAL_INPUTS
+            : { ...INITIAL_INPUTS, inflationRate: 0.025 };
+
+        it.each([false, true])(
+            'working + retirement + estate tax === lifetimeTaxPaid (inflation-adjusted: %s)',
+            (isInflationAdjusted) => {
+                const results = runSimulation(inflated);
+                const m = computeSummaryMetrics(results, inflated, isInflationAdjusted);
+                expect(m.workingYearsTax).toBeGreaterThan(0);
+                expect(m.workingYearsTax + m.annualTaxRetirement + m.estateTax)
+                    .toBeCloseTo(m.lifetimeTaxPaid, 6);
+            }
+        );
+
+        it('sums taxPaid over the rows before the primary retirement age', () => {
+            const results = runSimulation(inflated);
+            const m = computeSummaryMetrics(results, inflated, false);
+            const expected = results
+                .filter(r => r.age < inflated.person.retirementAge)
+                .reduce((acc, r) => acc + r.taxPaid, 0);
+            expect(m.workingYearsTax).toBeCloseTo(expected, 6);
+        });
+
+        it('splits on the primary retirement age for a couple (spouse still working)', () => {
+            const inputs = {
+                ...inflated,
+                spouse: { ...inflated.person, age: inflated.person.age - 5 },
+            };
+            const results = runSimulation(inputs);
+            for (const adjusted of [false, true]) {
+                const m = computeSummaryMetrics(results, inputs, adjusted);
+                expect(m.workingYearsTax + m.annualTaxRetirement + m.estateTax)
+                    .toBeCloseTo(m.lifetimeTaxPaid, 6);
+            }
+        });
+
+        it('is 0 when the person is already retired at plan start', () => {
+            const inputs = {
+                ...inflated,
+                person: { ...inflated.person, age: 70, retirementAge: 60 },
+            };
+            const results = runSimulation(inputs);
+            for (const adjusted of [false, true]) {
+                const m = computeSummaryMetrics(results, inputs, adjusted);
+                expect(m.workingYearsTax).toBe(0);
+                expect(m.annualTaxRetirement + m.estateTax).toBeCloseTo(m.lifetimeTaxPaid, 6);
+            }
         });
     });
 

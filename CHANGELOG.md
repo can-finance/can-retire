@@ -56,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   difference from your savings each year. When that makes today's savings
   figure larger than the one needed at retirement, the answer says why.
 
+### Changed
+- Compare Plans splits lifetime tax into tax while working, in retirement and at
+  death, and each tax total now says what it covers.
+
 ## [0.14.0] - 2026-10-14
 
 ### Added

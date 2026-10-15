@@ -70,6 +70,9 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
     const bestSuccess = bestIndex(successVals, 'max');
     const bestNetEstate = bestIndex(netEstateVals, 'max');
     const bestLifetimeTax = bestIndex(lifetimeTaxVals, 'min');
+    const bestWorkingTax = bestIndex(runs.map(r => r.metrics.workingYearsTax), 'min');
+    const bestRetirementTax = bestIndex(runs.map(r => r.metrics.annualTaxRetirement), 'min');
+    const bestDeathTax = bestIndex(runs.map(r => r.metrics.estateTax), 'min');
     const bestShortfall = anyShortfall ? bestIndex(shortfallVals, 'min') : null;
 
     // Median end-of-plan assets: deflate by each run's OWN last deterministic
@@ -318,16 +321,41 @@ export function ComparisonMetricsTable({ runs, inflationAdjusted }: ComparisonMe
             delta: { kind: 'currency', dir: 'neutral', value: r => r.metrics.deemedGainsAtDeath },
         },
         { kind: 'group', label: 'Taxes' },
+        // The first three rows add up to the fourth: working years (before the
+        // primary person's retirement age) + retirement years + terminal tax.
         {
             kind: 'data',
-            label: 'Lifetime tax paid',
+            label: 'Tax while working',
+            cell: run => formatCurrencyCAD(run.metrics.workingYearsTax),
+            highlight: bestWorkingTax,
+            delta: { kind: 'currency', dir: 'lower', value: r => r.metrics.workingYearsTax },
+        },
+        {
+            kind: 'data',
+            label: 'Tax in retirement',
+            cell: run => formatCurrencyCAD(run.metrics.annualTaxRetirement),
+            highlight: bestRetirementTax,
+            delta: { kind: 'currency', dir: 'lower', value: r => r.metrics.annualTaxRetirement },
+        },
+        {
+            // Same figure as the Estate group's "Estate tax" row, repeated so the
+            // three parts of lifetime tax sit together.
+            kind: 'data',
+            label: 'Tax at death',
+            cell: run => formatCurrencyCAD(run.metrics.estateTax),
+            highlight: bestDeathTax,
+            delta: { kind: 'currency', dir: 'lower', value: r => r.metrics.estateTax },
+        },
+        {
+            kind: 'data',
+            label: 'Lifetime tax paid (all three)',
             cell: run => formatCurrencyCAD(run.metrics.lifetimeTaxPaid),
             highlight: bestLifetimeTax,
             delta: { kind: 'currency', dir: 'lower', value: r => r.metrics.lifetimeTaxPaid },
         },
         {
             kind: 'data',
-            label: 'OAS clawed back (lifetime)',
+            label: 'OAS clawed back (included in tax above)',
             cell: run => formatCurrencyCAD(run.metrics.lifetimeOASClawback),
             delta: { kind: 'currency', dir: 'lower', value: r => r.metrics.lifetimeOASClawback },
         },
