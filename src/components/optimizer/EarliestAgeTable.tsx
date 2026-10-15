@@ -6,7 +6,7 @@ import { HelpTooltip } from '../ui/HelpTooltip';
 /*
  * The "When can I retire?" trade-off table: a row per retirement age around the
  * answer, showing the odds at the planned spending and what each age costs or
- * buys (money left at the end, total tax paid, and how much you could spend instead). Pure
+ * buys (money left at the end, lifetime tax paid, and how much you could spend instead). Pure
  * presentation over EarliestAgeResult, shared with the landing page.
  *
  * The table scrolls sideways inside its own box on narrow screens (min width on
@@ -47,7 +47,11 @@ export function EarliestAgeTable({
                                     <span className="cursor-help border-b border-dashed border-slate-400">Left at the end</span>
                                 </HelpTooltip>
                             </th>
-                            <th className={`${th} text-right pl-4`}>Total tax paid</th>
+                            <th className={`${th} text-right pl-4`}>
+                                <HelpTooltip text="Tax every year, working years included, plus tax at death, in today's dollars. Retiring later means more years of tax on your pay.">
+                                    <span className="cursor-help border-b border-dashed border-slate-400">Lifetime tax paid</span>
+                                </HelpTooltip>
+                            </th>
                             <th className={`${th} text-right pl-4`}>
                                 <HelpTooltip text={`About the most you could spend each year retiring at that age, with the same choices shown for that age, and still meet your ${target}% target.`}>
                                     <span className="cursor-help border-b border-dashed border-slate-400">Could spend</span>
@@ -112,7 +116,7 @@ export function EarliestAgeTable({
             </div>
             <p className="mt-3 text-xs text-slate-500 leading-relaxed">
                 Success is the share of market simulations in which your money lasts, spending {spend};
-                ✓ meets your {target}% target. Left at the end and total tax paid use the best strategy
+                ✓ meets your {target}% target. Left at the end and lifetime tax paid use the best strategy
                 for each age. All amounts are in today's dollars.
             </p>
         </div>

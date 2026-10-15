@@ -856,6 +856,7 @@ function RecommendationCard({ result, netEstateDelta, lifetimeTaxDelta }: {
                 <Headline
                     label="Lifetime tax paid"
                     value={`${lifetimeTaxDelta <= 0 ? '−' : '+'}${formatCurrencyCAD(Math.abs(lifetimeTaxDelta))}`}
+                    sub="Whole plan, including tax at death"
                     tone={lifetimeTaxDelta <= 0 ? 'good' : 'bad'}
                 />
                 <Headline

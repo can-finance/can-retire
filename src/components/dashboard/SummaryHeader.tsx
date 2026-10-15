@@ -80,7 +80,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                     {/* 4. What did it cost? All three rates on the surface, no hover.
                         The Amount COLUMN is a true sum — computeSummaryMetrics defines
                         totalTaxPlusEstate as a literal addition — which is what lets the
-                        rule and the Total row show the combination without a tooltip, and
+                        rule and the "Retirement + estate" row show the combination without a tooltip, and
                         why Amount leads: the column that actually adds up is the one that
                         should sit nearest the row labels.
                         The Rate column is NOT summed: each rate is measured against its
@@ -115,7 +115,7 @@ export function SummaryHeader({ metrics, monteCarlo }: SummaryHeaderProps) {
                                     <td className="text-right font-mono font-semibold text-red-600 pl-2">{metrics.effectiveTaxRateEstate.toFixed(1)}%</td>
                                 </tr>
                                 <tr className="border-t-2 border-slate-300">
-                                    <th scope="row" className="text-left font-bold text-slate-900 pt-1">Total</th>
+                                    <th scope="row" className="text-left font-bold text-slate-900 pt-1">Retirement + estate</th>
                                     <td className="text-right font-mono font-bold text-red-700 pl-2 pt-1">{formatCurrencyCAD(metrics.totalTaxPlusEstate)}</td>
                                     <td className="text-right font-mono font-bold text-red-700 pl-2 pt-1">{metrics.totalEffectiveTaxRate.toFixed(1)}%</td>
                                 </tr>

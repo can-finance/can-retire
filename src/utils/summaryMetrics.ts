@@ -18,6 +18,13 @@ export interface SummaryMetrics {
     totalShortfall: number;
     totalSpending: number; // Lifetime spending actually funded (desired minus shortfall)
     lifetimeTaxPaid: number;
+    // Household income tax (incl. OAS clawback) over the rows BEFORE the primary
+    // person's retirement age — the complement of annualTaxRetirement's span. The
+    // primary's retirement age alone decides the split, so a spouse's working-year
+    // tax after the primary retires falls in annualTaxRetirement. Invariant:
+    // workingYearsTax + annualTaxRetirement + estateTax === lifetimeTaxPaid.
+    // 0 when the primary is already retired at plan start.
+    workingYearsTax: number;
     lifetimeOASClawback: number; // Lifetime OAS recovery tax (already inside lifetimeTaxPaid)
     // Household RRSP/RRIF balance at the END of the year the PRIMARY person turns 71.
     // Age 71 is the last voluntary-melt year (the engine melts while `age < 72`), so this
@@ -55,6 +62,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
             totalShortfall: 0,
             totalSpending: 0,
             lifetimeTaxPaid: 0,
+            workingYearsTax: 0,
             lifetimeOASClawback: 0,
             rrspBalanceAt71: null as number | null,
             lifetimeNetCPP: 0,
@@ -74,6 +82,10 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
     const adj = (val: number, factor: number) => isInflationAdjusted ? val / factor : val;
 
     const annualTaxRetirement = retirementResults.reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0);
+    // Complement of retirementResults (see the interface comment).
+    const workingYearsTax = results
+        .filter(r => r.age < inputs.person.retirementAge)
+        .reduce((acc, curr) => acc + adj(curr.taxPaid, curr.inflationFactor), 0);
     const totalRetirementIncome = retirementResults.reduce((acc, curr) => acc + adj(curr.grossIncome, curr.inflationFactor), 0);
 
     // Terminal tax is now calculated by the engine and includes:
@@ -174,6 +186,7 @@ export function computeSummaryMetrics(results: SimulationResult[], inputs: Simul
         totalShortfall,
         totalSpending,
         lifetimeTaxPaid,
+        workingYearsTax,
         lifetimeOASClawback,
         rrspBalanceAt71,
         lifetimeNetCPP,
