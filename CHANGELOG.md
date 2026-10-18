@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-18
+
+### Added
+- "When can I retire?" and "How much do I need?" note when your spending before
+  retirement is more than your take-home pay, since the calculator takes the
+  difference from your savings each year. When that makes today's savings
+  figure larger than the one needed at retirement, the answer says why.
+
 ### Fixed
 - **Pension splitting no longer drops a working spouse's CPP/EI credit.** In
   years when one spouse still worked and the other split a pension, the split
@@ -56,12 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spending after retirement, ages 59 to 61 showed about $375,000 needed today;
   they now show what is actually needed, often nothing. Ages that need nothing
   read "None", with everything you're on track for to spare.
-
-### Added
-- "When can I retire?" and "How much do I need?" note when your spending before
-  retirement is more than your take-home pay, since the calculator takes the
-  difference from your savings each year. When that makes today's savings
-  figure larger than the one needed at retirement, the answer says why.
 
 ## [0.14.0] - 2026-10-14
 
