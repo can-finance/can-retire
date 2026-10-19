@@ -29,5 +29,8 @@ dist-ssr
 # Tutorial video output
 tutorial-videos/out/
 
+# Tutorial videos copied in for local preview (published via a GitHub Release)
+public/tutorials/*.mp4
+
 # Per-worktree dev settings (e.g. DEV_PORT)
 .env

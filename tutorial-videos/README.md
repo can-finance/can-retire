@@ -77,6 +77,46 @@ docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials
 docker run --rm -v "${PWD}/tutorial-videos:/work/tutorials" can-retire-tutorials node frames.mjs create-a-plan 7.5,18.4,30.2
 ```
 
+## Posters
+
+Each card on the tutorials page shows a poster: one frame of the video, darkened,
+with the tutorial's title on it. `posters.mjs` reads titles and `videoSrc` from
+`src/components/pages/tutorials-data.ts`, takes the frame from
+`public/tutorials/<name>.mp4` (copy the MP4s there first, see below), and writes
+`public/tutorials/posters/<name>.jpg`. It needs the whole repo mounted, not just
+this folder, and fetches Inter from Google Fonts. From the repo root:
+
+```powershell
+docker run --rm -v "${PWD}:/work/repo" -w /work/repo can-retire-tutorials node tutorial-videos/posters.mjs
+# just some
+docker run --rm -v "${PWD}:/work/repo" -w /work/repo can-retire-tutorials node tutorial-videos/posters.mjs create-a-plan cpp-calculator
+```
+
+The frame comes from 45% of the way through; to pick a better one, add the
+video's time in seconds to `FRAME_AT` in the script (find one with `frames.mjs`).
+Re-run after re-recording a video or renaming a tutorial. Posters are committed;
+set `posterSrc` on the entry in `tutorials-data.ts`.
+
+## Publishing
+
+The MP4s are never committed. They are attachments on the `tutorial-videos`
+GitHub Release (a pre-release, so it isn't mistaken for an app version), and the
+deploy workflow downloads them into `dist/tutorials/` next to the page.
+
+Upload a new video or replace one:
+
+```powershell
+gh auth status   # can-finance must be the active account
+gh release upload tutorial-videos tutorial-videos/out/<name>.mp4 --clobber
+```
+
+Then deploy: run the "Deploy to GitHub Pages" workflow by hand (Actions → Run
+workflow), or wait for the next push to main. The deploy fails if a video listed
+in `src/components/pages/tutorials-data.ts` is missing from the release.
+
+To see the videos play locally, copy the MP4s into `public/tutorials/`; Vite
+serves them at `/tutorials/<name>.mp4`. They are gitignored there.
+
 ## Which app version each video shows
 
 Videos show whatever the main checkout is serving, so they go stale as the app

@@ -113,7 +113,7 @@
     }
   },
   "all-inputs": {
-    "joined": "2026-10-14T07:49:00-04:00",
+    "joined": "2026-10-18T20:14:13-04:00",
     "scenes": {
       "title": {
         "appVersion": null,
@@ -123,11 +123,10 @@
         "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
       },
       "intro": {
-        "appVersion": null,
-        "appCommit": null,
-        "dirty": null,
-        "recordedAt": "2026-10-14T07:19:00-04:00",
-        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
+        "dirty": false,
+        "recordedAt": "2026-10-18T20:11:54-04:00"
       },
       "you": {
         "appVersion": null,
@@ -158,11 +157,10 @@
         "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
       },
       "settings": {
-        "appVersion": null,
-        "appCommit": null,
-        "dirty": null,
-        "recordedAt": "2026-10-14T07:22:00-04:00",
-        "note": "recorded before versions were tracked; app was between 12e7e5d and fa30824 (0.14.0)"
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
+        "dirty": false,
+        "recordedAt": "2026-10-18T20:13:38-04:00"
       },
       "returns": {
         "appVersion": null,

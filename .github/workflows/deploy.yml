@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  # Lets a video-only update be deployed by hand from the Actions tab
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -38,8 +40,24 @@ jobs:
           npm test
           npm run build
 
+      # The tutorial videos are too big for git. They live as attachments on the
+      # `tutorial-videos` release and are copied in next to /tutorials/index.html.
+      # dist/tutorials already exists from the build and holds no MP4s, so no
+      # --clobber is needed.
+      - name: Download tutorial videos
+        run: gh release download tutorial-videos --pattern '*.mp4' --dir dist/tutorials
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # Fail the deploy if a video the tutorials page lists isn't in the release
+      - name: Check tutorial videos
+        run: node scripts/check-tutorial-videos.mjs dist
+
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: dist
           branch: gh-pages
+          # gh-pages only ever needs the latest site; squashing it to one commit
+          # keeps the videos and old builds from piling up in its history.
+          single-commit: true
