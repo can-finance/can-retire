@@ -39,6 +39,7 @@ export default defineConfig({
         'cpp-calculator': fileURLToPath(new URL('./src/prerender/cpp-calculator-ssr.tsx', import.meta.url)),
         'when-can-i-retire': fileURLToPath(new URL('./src/prerender/when-can-i-retire-ssr.tsx', import.meta.url)),
         'how-much-do-i-need': fileURLToPath(new URL('./src/prerender/how-much-do-i-need-ssr.tsx', import.meta.url)),
+        'tutorials': fileURLToPath(new URL('./src/prerender/tutorials-ssr.tsx', import.meta.url)),
       },
       output: {
         // Deterministic filenames so the prerender script can import each directly:

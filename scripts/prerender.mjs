@@ -28,6 +28,9 @@ const PAGES = [
     { ssrModule: 'when-can-i-retire-ssr.mjs', route: 'when-can-i-retire' },
     { ssrModule: 'how-much-do-i-need-ssr.mjs', route: 'how-much-do-i-need-to-retire' },
     { ssrModule: 'cpp-calculator-ssr.mjs', route: 'cpp-calculator' },
+    // No FAQ on this page: its SSR entry exports `render` but no `faqItems`,
+    // so step 2 below is skipped for it.
+    { ssrModule: 'tutorials-ssr.mjs', route: 'tutorials' },
 ];
 
 for (const { ssrModule, route } of PAGES) {
@@ -51,7 +54,16 @@ for (const { ssrModule, route } of PAGES) {
         html = html.replace(rootAnchor, `<div id="root">${appHtml}</div>`);
     }
 
-    // 2. Inject the FAQPage JSON-LD, generated from the shared FAQ array.
+    // 2. Inject the FAQPage JSON-LD, generated from the shared FAQ array —
+    //    only for pages whose SSR entry exports `faqItems`.
+    if (!Array.isArray(faqItems)) {
+        writeFileSync(htmlUrl, html);
+        console.log(
+            `prerender: injected ${appHtml.length} chars of HTML into #root of ` +
+            `dist/${route}/index.html (no FAQ JSON-LD)`,
+        );
+        continue;
+    }
     const faqJsonLd = {
         '@context': 'https://schema.org',
         '@type': 'FAQPage',

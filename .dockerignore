@@ -13,3 +13,5 @@ logs
 .claude
 Dockerfile.dev
 docker-compose.yml
+tutorial-videos/out
+public/tutorials/*.mp4

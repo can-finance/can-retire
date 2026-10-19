@@ -273,17 +273,17 @@ signed off.**
 3. **All inputs explained (done).** Walk through every input and explain what
    each one does. Includes changing the retirement age to show the plan rerun,
    which is why the separate "Edit your info" video was dropped (2026-10-14).
-4. **RRSP optimizer.** Open the meltdown optimizer, pick a goal, run it, explain
+4. **RRSP optimizer (done).** Open the meltdown optimizer, pick a goal, run it, explain
    the suggested drawdown.
-5. **CPP calculator.** Enter earnings / start age and compare starting at 60, 65
+5. **CPP calculator (done).** Enter earnings / start age and compare starting at 60, 65
    and 70.
-6. **When can I retire.** Enter a spending target and read the earliest-age
+6. **When can I retire (done).** Enter a spending target and read the earliest-age
    table, including "could spend".
-7. **How much do I need.** Enter target spending and age and read the required
+7. **How much do I need (done).** Enter target spending and age and read the required
    savings.
-8. **Compare plans.** Duplicate a plan, change one thing (e.g. retire at 60
+8. **Compare plans (done).** Duplicate a plan, change one thing (e.g. retire at 60
    instead of 62) and compare the two side by side.
-9. **Planning as a couple.** Turn on the spouse/partner toggle and show how the
+9. **Planning as a couple (done).** Turn on the spouse/partner toggle and show how the
    partner's age, CPP and accounts feed into the plan, and how Pension Income
    Splitting shares eligible pension income to cut tax. Both were left out of
    "All inputs explained" on purpose, so this video carries them.
