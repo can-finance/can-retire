@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Video tutorials page** at /tutorials/: short videos showing how to create a
+  plan, read the dashboard, use each calculator, compare plans and plan as a
+  couple. Click a video to watch it in a pop-up player.
+
 ## [0.15.0] - 2026-10-18
 
 ### Added
