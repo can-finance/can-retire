@@ -1,54 +1,60 @@
 {
   "rrsp-optimizer": {
-    "joined": "2026-10-14T11:08:56-04:00",
+    "joined": "2026-10-18T20:33:13-04:00",
     "scenes": {
       "title": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:24:00-04:00"
+        "recordedAt": "2026-10-18T20:25:47-04:00"
       },
       "intro": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:25:00-04:00"
+        "recordedAt": "2026-10-18T20:26:23-04:00"
       },
       "what": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:26:00-04:00"
+        "recordedAt": "2026-10-18T20:26:59-04:00"
       },
       "goals": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:27:00-04:00"
+        "recordedAt": "2026-10-18T20:27:47-04:00"
       },
       "results": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:28:00-04:00"
+        "recordedAt": "2026-10-18T20:28:32-04:00"
       },
       "compare": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:29:00-04:00"
+        "recordedAt": "2026-10-18T20:29:49-04:00"
       },
       "apply": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T10:30:00-04:00"
+        "recordedAt": "2026-10-18T20:30:38-04:00"
       },
       "end": {
-        "appVersion": "0.14.0",
-        "appCommit": "8b4ce8a",
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
         "dirty": false,
-        "recordedAt": "2026-10-14T11:07:42-04:00"
+        "recordedAt": "2026-10-18T20:30:49-04:00"
+      },
+      "deltas": {
+        "appVersion": "0.15.0",
+        "appCommit": "b3932f0",
+        "dirty": false,
+        "recordedAt": "2026-10-18T20:32:35-04:00"
       }
     }
   },

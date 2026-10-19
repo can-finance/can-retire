@@ -91,7 +91,7 @@ async function expectResult(page) {
     const cell = (label) => row(page, label).locator('td').last().innerText();
     const got = [await cell('RRSP melt amount'), await cell('CPP start age'), await cell('OAS start age'), await cell('Withdrawal order'),
         await page.getByText('Net estate', { exact: true }).first().locator('xpath=following-sibling::p[1]').innerText()];
-    const want = ['$56,750/yr', '70', '70', 'RRSP last', '+$400,002'];
+    const want = ['$56,750/yr', '70', '70', 'RRSP last', '+$399,074'];
     if (got.join('|') !== want.join('|')) throw new Error(`Optimizer result changed: ${got.join(' | ')} (captions expect ${want.join(' | ')})`);
 }
 
@@ -140,7 +140,7 @@ await recordScenes({
                 await explain(t, page.getByText('Net Estate', { exact: true }).first(),
                     'Maria retires at 62 with a $320k RRSP, and melts none of it.', { pos: 'right', dx: 0.97, dy: 2.2 });
                 await explain(t, null,
-                    'Net estate: $2,310,089, after $432,757 of tax at death.', { pos: 'right' });
+                    'Net estate: $2,299,344, after $431,982 of tax at death.', { pos: 'right' });
                 await t.hideCaption();
                 await explain(t, page.getByRole('button', { name: /Optimize Meltdown/ }),
                     'Optimize Meltdown, in Plan Manager, opens the optimizer.', { pos: 'right', dx: 0.45 });
@@ -255,14 +255,26 @@ await recordScenes({
                 await explain(t, sugg('RRSP melt amount'),
                     'The melt is taxed in those years, at lower rates than later.', { dx: 1.01, ms: 700 });
                 await t.hideCaption();
-
                 await t.move(MARGIN_X + 60, 400, { ms: 500 });
                 await scrollTo(t, page, ACTIONS_Y, { ms: 1000 });
+            },
+        },
+
+        // --- 4b. What the recommendation changes ------------------------------
+        // Its own scene: late in one long take after the live search, Playwright's
+        // video stalled and dropped the last seconds, cutting the final caption.
+        {
+            id: 'deltas',
+            async before(t, page) {
+                await runEstate(page);
+                await jump(page, ACTIONS_Y);
+            },
+            async run(t, page) {
                 const tile = (label) => page.getByText(label, { exact: true }).first();
                 await explain(t, tile('Net estate'),
-                    'Net estate: $400,002 more left for heirs, after tax at death.', { dx: 0.85, dy: 1.6 });
+                    'Net estate: $399,074 more left for heirs, after tax at death.', { dx: 0.85, dy: 1.6 });
                 await explain(t, tile('Lifetime tax paid'),
-                    'Lifetime tax paid, including at death: $293,175 less over the plan.', { dx: 0.85, dy: 1.6 });
+                    'Lifetime tax paid, including at death: $292,574 less over the plan.', { dx: 0.85, dy: 1.6 });
                 // Monte Carlo is random: the rates move a point or two between runs.
                 const mc = (await tile('Monte Carlo success').locator('xpath=following-sibling::p[1]').innerText()).match(/(\d+)% → (\d+)%/);
                 if (!mc) throw new Error('Monte Carlo tile not found');
@@ -301,16 +313,16 @@ await recordScenes({
                 await explain(t, null, 'A smaller RRIF means smaller forced withdrawals from 72.', { pos: 'top' });
                 const estTax = row(page, 'Estate tax');
                 await explain(t, estTax.locator('td').nth(2),
-                    'Tax at death falls from $432,757 to $180,524.', { pos: 'top', dx: 1.03 });
+                    'Tax at death falls from $431,982 to $180,197.', { pos: 'top', dx: 1.03 });
                 await t.hideCaption();
 
                 const life = row(page, 'Lifetime tax paid (all three)');
                 await scrollTo(t, page, (await abs(life)) - 260, { ms: 1400 });
                 await explain(t, life.locator('td').nth(2),
-                    'Lifetime tax paid, tax at death included, falls by $293,175.', { pos: 'top', dx: 1.03 });
+                    'Lifetime tax paid, tax at death included, falls by $292,574.', { pos: 'top', dx: 1.03 });
                 const cpp = row(page, 'CPP');
                 await explain(t, cpp.locator('td').nth(2),
-                    'Starting at 70, lifetime CPP and OAS rise by $176k and $89k.', { pos: 'top', dx: 1.03 });
+                    'Starting at 70, lifetime CPP and OAS rise by $174k and $88k.', { pos: 'top', dx: 1.03 });
                 await glide(t, row(page, 'OAS').locator('td').nth(2), { dx: 1.03, ms: 500 });
                 await t.pause(1200);
                 await t.hideCaption();
@@ -365,7 +377,7 @@ await recordScenes({
                 await scrollTo(t, page, meltTop - 339, { ms: 1600 });
                 await explain(t, melt, 'RRSP Melt Amount is now $56,750 a year, from 62.', { pos: 'right' });
                 await explain(t, page.getByText('Net Estate', { exact: true }).first(),
-                    'Net estate is now $2,710,091, after $180,524 of tax at death.', { pos: 'right', dx: 0.97, dy: 2.2 });
+                    'Net estate is now $2,698,418, after $180,197 of tax at death.', { pos: 'right', dx: 0.97, dy: 2.2 });
                 await explain(t, null, 'Change your plan later? Run the optimizer again.', { pos: 'right' });
                 await t.hideCaption();
                 await t.move(PARK_X, 470, { ms: 700 });
